@@ -1,13 +1,18 @@
 from m3util.util.search import in_list
-from m3util.util.h5 import find_groups_with_string
+from m3util.util.h5 import find_groups_with_string, print_tree
 from belearn.dataset.scalers import Raw_Data_Scaler
 from belearn.util.wrappers import static_state_decorator
+from belearn.functions.sho import SHO_nn
 import numpy as np
 from dataclasses import dataclass, field, InitVar
 import h5py
 from sklearn.preprocessing import StandardScaler
+import pyUSID as usid
+from typing import Any, Callable, Dict, Optional
+
+
 # from BGlib import be as belib
-# import pyUSID as usid
+
 # import os
 # import sidpy
 # import numpy as np
@@ -25,7 +30,7 @@ from sklearn.preprocessing import StandardScaler
 # import torch.nn as nn
 # from torch.utils.data import DataLoader
 # from sklearn.model_selection import train_test_split
-# from m3_learning.be.nn import SHO_fit_func_nn
+# from m3_learning.be.nn import SHO_nn
 # import m3_learning
 # from m3_learning.be.loop_fitter import loop_fitting_function_torch
 # from pyUSID.io.usi_data import USIDataset
@@ -35,7 +40,7 @@ from sklearn.preprocessing import StandardScaler
 # from pyUSID.io.hdf_utils import reshape_to_n_dims, get_auxiliary_datasets
 # from m3_learning.be.filters import clean_interpolate
 
-# from typing import Any, Callable, Dict, Optional, Union
+# 
 # from m3_learning.util.h5_util import print_tree, get_tree
 
 
@@ -86,7 +91,7 @@ class BE_Dataset:
     noise_state: int = 0
     cleaned: bool = False
     basegroup: str = '/Measurement_000/Channel_000'
-    SHO_fit_func_LSQF: Callable = field(default=SHO_fit_func_nn)
+    SHO_fit_func_LSQF: Callable = field(default=SHO_nn)
     hysteresis_function: Optional[Callable] = None
     loop_interpolated: bool = False
     tree: Any = field(init=False)
@@ -236,6 +241,42 @@ class BE_Dataset:
         self.SHO_scaler.mean_[3] = 0
         self.SHO_scaler.var_[3] = 1
         self.SHO_scaler.scale_[3] = 1
+        
+    def print_be_tree(self):
+        """Utility file to print the Tree of a BE Dataset
+
+        Code adapted from pyUSID
+
+        Args:
+            path (str): path to the h5 file
+        """
+
+        with h5py.File(self.file, "r+") as h5_f:
+
+            # Inspects the h5 file
+            usid.hdf_utils.print_tree(h5_f)
+
+            # prints the structure and content of the file
+            print(
+                "Datasets and datagroups within the file:\n------------------------------------")
+            print_tree(h5_f.file)
+
+            print("\nThe main dataset:\n------------------------------------")
+            print(h5_f)
+            print("\nThe ancillary datasets:\n------------------------------------")
+            print(h5_f.file["/Measurement_000/Channel_000/Position_Indices"])
+            print(h5_f.file["/Measurement_000/Channel_000/Position_Values"])
+            print(
+                h5_f.file["/Measurement_000/Channel_000/Spectroscopic_Indices"])
+            print(
+                h5_f.file["/Measurement_000/Channel_000/Spectroscopic_Values"])
+
+            print(
+                "\nMetadata or attributes in a datagroup\n------------------------------------")
+
+            for key in h5_f.file["/Measurement_000"].attrs:
+                print("{} : {}".format(
+                    key, h5_f.file["/Measurement_000"].attrs[key]))
         
     # def set_raw_data_resampler(self,
     #                            save_loc='raw_data_resampled',
@@ -440,42 +481,6 @@ class BE_Dataset:
 
     #     with h5py.File(self.file, "r+") as h5_f:
     #         return get_tree(h5_f)
-
-    # def print_be_tree(self):
-    #     """Utility file to print the Tree of a BE Dataset
-
-    #     Code adapted from pyUSID
-
-    #     Args:
-    #         path (str): path to the h5 file
-    #     """
-
-    #     with h5py.File(self.file, "r+") as h5_f:
-
-    #         # Inspects the h5 file
-    #         usid.hdf_utils.print_tree(h5_f)
-
-    #         # prints the structure and content of the file
-    #         print(
-    #             "Datasets and datagroups within the file:\n------------------------------------")
-    #         print_tree(h5_f.file)
-
-    #         print("\nThe main dataset:\n------------------------------------")
-    #         print(h5_f)
-    #         print("\nThe ancillary datasets:\n------------------------------------")
-    #         print(h5_f.file["/Measurement_000/Channel_000/Position_Indices"])
-    #         print(h5_f.file["/Measurement_000/Channel_000/Position_Values"])
-    #         print(
-    #             h5_f.file["/Measurement_000/Channel_000/Spectroscopic_Indices"])
-    #         print(
-    #             h5_f.file["/Measurement_000/Channel_000/Spectroscopic_Values"])
-
-    #         print(
-    #             "\nMetadata or attributes in a datagroup\n------------------------------------")
-
-    #         for key in h5_f.file["/Measurement_000"].attrs:
-    #             print("{} : {}".format(
-    #                 key, h5_f.file["/Measurement_000"].attrs[key]))
 
     # def data_writer(self, base, name, data):
     #     """

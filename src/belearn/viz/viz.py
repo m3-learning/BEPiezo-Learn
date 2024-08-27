@@ -142,192 +142,192 @@ class Viz:
     # Replace Any with the expected type if known
     color_palette: Optional[Any] = None
     
-@static_dataset_decorator
-def raw_data_comparison(
-    self,
-    true,
-    predict=None,
-    filename=None,
-    pixel=None,
-    voltage_step=None,
-    legend=True,
-    **kwargs,
-):
-    """
-    Compare raw spectral data between true and predicted datasets.
-
-    This function plots the real and imaginary components of the resampled data
-    for a specified pixel and voltage step, allowing comparison between the true
-    and predicted datasets. The function can save the plot if a filename is provided.
-
-    Parameters:
-    -----------
-    true : dict
-        Attributes of the true dataset to be set.
-    predict : dict, optional
-        Attributes of the predicted dataset to be set, by default None.
-    filename : str, optional
-        Name of the file to save the figure, by default None.
-    pixel : int, optional
-        Pixel index to plot. If None, a random pixel is selected, by default None.
-    voltage_step : int, optional
-        Voltage step index to plot. If None, it is determined by the dataset, by default None.
-    legend : bool, optional
-        Whether to display a legend on the plot, by default True.
-    **kwargs : dict
-        Additional keyword arguments for the dataset's raw_spectra method.
-
-    Returns:
-    --------
-    None
-    """
-    
-    # Set the attributes for the true dataset
-    self.set_attributes(**true)
-
-    # Initialize figure and axes for plotting
-    fig, axs = layout_fig(2, 2, figsize=(5, 1.25))
-
-    # If a pixel is not provided, select a random pixel
-    if pixel is None:
-        pixel = np.random.randint(0, self.dataset.num_pix)
-
-    # Get the voltage step, considering the current state
-    voltage_step = self.get_voltage_step(voltage_step)
-
-    # Set dataset state to grab the magnitude spectrum
-    self.dataset.raw_format = "magnitude spectrum"
-
-    # Get the raw spectral data for the selected pixel and voltage step
-    data, x = self.dataset.raw_spectra(
-        pixel, voltage_step, frequency=True
-    )
-
-    # Plot amplitude and phase for the true dataset
-    axs[0].plot(x, data[0].flatten(), "b", label=self.dataset.label + " Amplitude")
-    ax1 = axs[0].twinx()
-    ax1.plot(x, data[1].flatten(), "r", label=self.dataset.label + " Phase")
-
-    # If a predicted dataset is provided, plot its amplitude and phase
-    if predict is not None:
-        self.set_attributes(**predict)
-        data, x = self.dataset.raw_spectra(
-            pixel, voltage_step, frequency=True, **kwargs
-        )
-        axs[0].plot(
-            x, data[0].flatten(), "bo", label=self.dataset.label + " Amplitude"
-        )
-        ax1.plot(x, data[1].flatten(), "ro", label=self.dataset.label + " Phase")
-        self.set_attributes(**true)
-
-    # Label the axes for the first subplot
-    axs[0].set_xlabel("Frequency (Hz)")
-    axs[0].set_ylabel("Amplitude (Arb. U.)")
-    ax1.set_ylabel("Phase (rad)")
-
-    # Reset dataset state to complex format
-    self.dataset.raw_format = "complex"
-
-    # Get the complex raw spectral data for the selected pixel and voltage step
-    data, x = self.dataset.raw_spectra(pixel, voltage_step, frequency=True)
-
-    # Plot real and imaginary components for the true dataset
-    axs[1].plot(x, data[0].flatten(), "k", label=self.dataset.label + " Real")
-    axs[1].set_xlabel("Frequency (Hz)")
-    axs[1].set_ylabel("Real (Arb. U.)")
-    ax2 = axs[1].twinx()
-    ax2.set_ylabel("Imag (Arb. U.)")
-    ax2.plot(x, data[1].flatten(), "g", label=self.dataset.label + " Imag")
-
-    # If a predicted dataset is provided, plot its real and imaginary components
-    if predict is not None:
-        self.set_attributes(**predict)
-        data, x = self.dataset.raw_spectra(
-            pixel, voltage_step, frequency=True, **kwargs
-        )
-        axs[1].plot(x, data[0].flatten(), "ko", label=self.dataset.label + " Real")
-        ax2.plot(x, data[1].flatten(), "gs", label=self.dataset.label + " Imag")
-        self.set_attributes(**true)
-
-    # Adjust the format of the tick labels and box aspect for all axes
-    axes = [axs[0], axs[1], ax1, ax2]
-    for ax in axes:
-        ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
-        ax.set_box_aspect(1)
-
-    # Optionally print the dataset states
-    if self.verbose:
-        print("True \n")
-        self.set_attributes(**true)
-        self.dataset.extraction_state
-        if predict is not None:
-            print("predicted \n")
-            self.set_attributes(**predict)
-            self.dataset.extraction_state
-
-    # Display the legend if requested
-    if legend:
-        fig.legend(bbox_to_anchor=(1.0, 1), loc="upper right", borderaxespad=0.1)
-
-    # Save the figure if a Printer object and filename are provided
-    if self.Printer is not None and filename is not None:
-        self.Printer.savefig(fig, filename, label_figs=[axs[0], axs[1]], style="b")
-
-
-    ##### GETTERS #####
-    
-    def get_voltage_step(self, voltage_step):
+    @static_dataset_decorator
+    def raw_data_comparison(
+        self,
+        true,
+        predict=None,
+        filename=None,
+        pixel=None,
+        voltage_step=None,
+        legend=True,
+        **kwargs,
+    ):
         """
-        Determine and return a valid voltage step index.
+        Compare raw spectral data between true and predicted datasets.
 
-        This method checks if a voltage step index is provided. If not, it randomly 
-        selects a valid voltage step index based on the current measurement state of 
-        the dataset. 
+        This function plots the real and imaginary components of the resampled data
+        for a specified pixel and voltage step, allowing comparison between the true
+        and predicted datasets. The function can save the plot if a filename is provided.
 
         Parameters:
         -----------
+        true : dict
+            Attributes of the true dataset to be set.
+        predict : dict, optional
+            Attributes of the predicted dataset to be set, by default None.
+        filename : str, optional
+            Name of the file to save the figure, by default None.
+        pixel : int, optional
+            Pixel index to plot. If None, a random pixel is selected, by default None.
         voltage_step : int, optional
-            The voltage step index to use. If None, a random index is selected based 
-            on the dataset's measurement state.
+            Voltage step index to plot. If None, it is determined by the dataset, by default None.
+        legend : bool, optional
+            Whether to display a legend on the plot, by default True.
+        **kwargs : dict
+            Additional keyword arguments for the dataset's raw_spectra method.
 
         Returns:
         --------
-        int
-            The selected or provided voltage step index.
+        None
         """
         
-        # If voltage_step is not provided, determine a random step
-        if voltage_step is None:
-            # If the measurement state is "on" or "off", select from the first half of the steps
-            if (
-                self.dataset.measurement_state == "on"
-                or self.dataset.measurement_state == "off"
-            ):
-                voltage_step = np.random.randint(
-                    0, self.dataset.voltage_steps // 2
-                )
-            else:
-                # Otherwise, select from the full range of voltage steps
-                voltage_step = np.random.randint(0, self.dataset.voltage_steps)
+        # Set the attributes for the true dataset
+        self.set_attributes(**true)
+
+        # Initialize figure and axes for plotting
+        fig, axs = layout_fig(2, 2, figsize=(5, 1.25))
+
+        # If a pixel is not provided, select a random pixel
+        if pixel is None:
+            pixel = np.random.randint(0, self.dataset.num_pix)
+
+        # Get the voltage step, considering the current state
+        voltage_step = self.get_voltage_step(voltage_step)
+
+        # Set dataset state to grab the magnitude spectrum
+        self.dataset.raw_format = "magnitude spectrum"
+
+        # Get the raw spectral data for the selected pixel and voltage step
+        data, x = self.dataset.raw_spectra(
+            pixel, voltage_step, frequency=True
+        )
+
+        # Plot amplitude and phase for the true dataset
+        axs[0].plot(x, data[0].flatten(), "b", label=self.dataset.label + " Amplitude")
+        ax1 = axs[0].twinx()
+        ax1.plot(x, data[1].flatten(), "r", label=self.dataset.label + " Phase")
+
+        # If a predicted dataset is provided, plot its amplitude and phase
+        if predict is not None:
+            self.set_attributes(**predict)
+            data, x = self.dataset.raw_spectra(
+                pixel, voltage_step, frequency=True, **kwargs
+            )
+            axs[0].plot(
+                x, data[0].flatten(), "bo", label=self.dataset.label + " Amplitude"
+            )
+            ax1.plot(x, data[1].flatten(), "ro", label=self.dataset.label + " Phase")
+            self.set_attributes(**true)
+
+        # Label the axes for the first subplot
+        axs[0].set_xlabel("Frequency (Hz)")
+        axs[0].set_ylabel("Amplitude (Arb. U.)")
+        ax1.set_ylabel("Phase (rad)")
+
+        # Reset dataset state to complex format
+        self.dataset.raw_format = "complex"
+
+        # Get the complex raw spectral data for the selected pixel and voltage step
+        data, x = self.dataset.raw_spectra(pixel, voltage_step, frequency=True)
+
+        # Plot real and imaginary components for the true dataset
+        axs[1].plot(x, data[0].flatten(), "k", label=self.dataset.label + " Real")
+        axs[1].set_xlabel("Frequency (Hz)")
+        axs[1].set_ylabel("Real (Arb. U.)")
+        ax2 = axs[1].twinx()
+        ax2.set_ylabel("Imag (Arb. U.)")
+        ax2.plot(x, data[1].flatten(), "g", label=self.dataset.label + " Imag")
+
+        # If a predicted dataset is provided, plot its real and imaginary components
+        if predict is not None:
+            self.set_attributes(**predict)
+            data, x = self.dataset.raw_spectra(
+                pixel, voltage_step, frequency=True, **kwargs
+            )
+            axs[1].plot(x, data[0].flatten(), "ko", label=self.dataset.label + " Real")
+            ax2.plot(x, data[1].flatten(), "gs", label=self.dataset.label + " Imag")
+            self.set_attributes(**true)
+
+        # Adjust the format of the tick labels and box aspect for all axes
+        axes = [axs[0], axs[1], ax1, ax2]
+        for ax in axes:
+            ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+            ax.set_box_aspect(1)
+
+        # Optionally print the dataset states
+        if self.verbose:
+            print("True \n")
+            self.set_attributes(**true)
+            self.dataset.extraction_state
+            if predict is not None:
+                print("predicted \n")
+                self.set_attributes(**predict)
+                self.dataset.extraction_state
+
+        # Display the legend if requested
+        if legend:
+            fig.legend(bbox_to_anchor=(1.0, 1), loc="upper right", borderaxespad=0.1)
+
+        # Save the figure if a Printer object and filename are provided
+        if self.Printer is not None and filename is not None:
+            self.Printer.savefig(fig, filename, label_figs=[axs[0], axs[1]], style="b")
+
+
+        ##### GETTERS #####
         
-        # Return the determined or provided voltage step index
-        return voltage_step
+        def get_voltage_step(self, voltage_step):
+            """
+            Determine and return a valid voltage step index.
+
+            This method checks if a voltage step index is provided. If not, it randomly 
+            selects a valid voltage step index based on the current measurement state of 
+            the dataset. 
+
+            Parameters:
+            -----------
+            voltage_step : int, optional
+                The voltage step index to use. If None, a random index is selected based 
+                on the dataset's measurement state.
+
+            Returns:
+            --------
+            int
+                The selected or provided voltage step index.
+            """
+            
+            # If voltage_step is not provided, determine a random step
+            if voltage_step is None:
+                # If the measurement state is "on" or "off", select from the first half of the steps
+                if (
+                    self.dataset.measurement_state == "on"
+                    or self.dataset.measurement_state == "off"
+                ):
+                    voltage_step = np.random.randint(
+                        0, self.dataset.voltage_steps // 2
+                    )
+                else:
+                    # Otherwise, select from the full range of voltage steps
+                    voltage_step = np.random.randint(0, self.dataset.voltage_steps)
+            
+            # Return the determined or provided voltage step index
+            return voltage_step
 
 
-    # def static_dataset_decorator(func):
-    #     """Decorator that stops the function from changing the state
+    def static_dataset_decorator(func):
+        """Decorator that stops the function from changing the state
 
-    #     Args:
-    #         func (method): any method
-    #     """
+        Args:
+            func (method): any method
+        """
 
-    #     def wrapper(*args, **kwargs):
-    #         current_state = args[0].dataset.get_state
-    #         out = func(*args, **kwargs)
-    #         args[0].dataset.set_attributes(**current_state)
-    #         return out
+        def wrapper(*args, **kwargs):
+            current_state = args[0].dataset.get_state
+            out = func(*args, **kwargs)
+            args[0].dataset.set_attributes(**current_state)
+            return out
 
-    #     return wrapper
+        return wrapper
 
 #     def static_scale_decorator(func):
 #         """Decorator that stops the function from changing the state

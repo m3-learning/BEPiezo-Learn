@@ -1,11 +1,16 @@
-# from m3_learning.util.h5_util import print_tree, get_tree
 from m3util.util.search import in_list
+from m3util.util.h5 import find_groups_with_string
+from belearn.dataset.scalers import Raw_Data_Scaler
+from belearn.util.wrappers import static_state_decorator
+import numpy as np
+from dataclasses import dataclass, field, InitVar
+import h5py
+from sklearn.preprocessing import StandardScaler
 # from BGlib import be as belib
 # import pyUSID as usid
 # import os
 # import sidpy
 # import numpy as np
-import h5py
 # import time
 # from m3_learning.util.rand_util import extract_number
 # from m3_learning.util.h5_util import make_dataset, make_group, find_groups_with_string, find_measurement
@@ -15,7 +20,6 @@ import h5py
 # # from scipy.signal import resample
 # from scipy.interpolate import interp1d
 # from scipy import fftpack
-# from sklearn.preprocessing import StandardScaler
 # from m3_learning.util.preprocessing import GlobalScaler
 # import torch
 # import torch.nn as nn
@@ -30,8 +34,10 @@ import h5py
 #     get_dimensionality, get_sort_order, get_unit_values, reshape_to_n_dims, write_main_dataset, reshape_from_n_dims
 # from pyUSID.io.hdf_utils import reshape_to_n_dims, get_auxiliary_datasets
 # from m3_learning.be.filters import clean_interpolate
-from dataclasses import dataclass, field, InitVar
+
 # from typing import Any, Callable, Dict, Optional, Union
+# from m3_learning.util.h5_util import print_tree, get_tree
+
 
 
 # def resample(y, num_points, axis=0):
@@ -162,7 +168,7 @@ class BE_Dataset:
         # self.set_raw_data_resampler()
 
         # computes the scalar on the raw data
-        self.raw_data_scaler = self.Raw_Data_Scaler(self.raw_data())
+        self.raw_data_scaler = Raw_Data_Scaler(self.raw_data())
 
         try:
             # gets the LSQF results
@@ -172,7 +178,65 @@ class BE_Dataset:
             self.SHO_Scaler()
         except:
             pass
-    
+        
+    def set_SHO_LSQF(self):
+        """
+        set_SHO_LSQF Sets the SHO Scaler data to make accessible
+        """
+
+        # initializes the dictionary
+        self.SHO_LSQF_data = {}
+
+        for dataset in self.raw_datasets:
+
+            # data groups in file
+            SHO_fits = find_groups_with_string(
+                self.file, f'{dataset}-SHO_Fit_000')[0]
+
+            with h5py.File(self.file, "r+") as h5_f:
+
+                # extract the name of the fit
+                name = SHO_fits.split('/')[-1]
+
+                # create a list for parameters
+                SHO_LSQF_list = []
+                for sublist in np.array(
+                    h5_f[f'{SHO_fits}/Fit']
+                ):
+                    for item in sublist:
+                        for i in item:
+                            SHO_LSQF_list.append(i)
+
+                data_ = np.array(SHO_LSQF_list).reshape(
+                    -1, 5)
+
+                # saves the SHO LSQF data as an attribute of the dataset object
+                self.SHO_LSQF_data[name] = data_.reshape(
+                    self.num_pix, self.voltage_steps, 5)[:, :, :-1]
+                
+    @static_state_decorator
+    def SHO_Scaler(self,
+                   noise=0):
+        """
+        SHO_Scaler SHO scaler function
+
+        Args:
+            noise (int, optional): noise level to apply the scaler. Defaults to 0.
+        """
+
+        # set the noise and the dataset
+        self.noise = noise
+
+        self.SHO_scaler = StandardScaler()
+        data = self.SHO_LSQF().reshape(-1, 4)
+
+        self.SHO_scaler.fit(data)
+
+        # sets the phase not to scale
+        self.SHO_scaler.mean_[3] = 0
+        self.SHO_scaler.var_[3] = 1
+        self.SHO_scaler.scale_[3] = 1
+        
     # def set_raw_data_resampler(self,
     #                            save_loc='raw_data_resampled',
     #                            **kwargs):
@@ -911,29 +975,6 @@ class BE_Dataset:
 
     #         return data
 
-    # @static_state_decorator
-    # def SHO_Scaler(self,
-    #                noise=0):
-    #     """
-    #     SHO_Scaler SHO scaler function
-
-    #     Args:
-    #         noise (int, optional): noise level to apply the scaler. Defaults to 0.
-    #     """
-
-    #     # set the noise and the dataset
-    #     self.noise = noise
-
-    #     self.SHO_scaler = StandardScaler()
-    #     data = self.SHO_LSQF().reshape(-1, 4)
-
-    #     self.SHO_scaler.fit(data)
-
-    #     # sets the phase not to scale
-    #     self.SHO_scaler.mean_[3] = 0
-    #     self.SHO_scaler.var_[3] = 1
-    #     self.SHO_scaler.scale_[3] = 1
-
     # def LoopParmScaler(self):
 
     #     self.loop_param_scaler = StandardScaler()
@@ -964,28 +1005,7 @@ class BE_Dataset:
     #         else:
     #             return self.get_data_w_voltage_state(dataset_[:])
 
-    # @staticmethod
-    # def is_complex(data):
-    #     """
-    #     is_complex function to check if data is complex. If not complex makes it a complex number
 
-    #     Args:
-    #         data (any): input data
-
-    #     Returns:
-    #         any: array or tensor as a complex number
-    #     """
-
-    #     data = data[0]
-
-    #     if type(data) == torch.Tensor:
-    #         complex_ = data.is_complex()
-
-    #     if type(data) == np.ndarray:
-    #         complex_ = np.iscomplex(data)
-    #         complex_ = complex_.any()
-
-    #     return complex_
 
     # @staticmethod
     # def to_magnitude(data):
@@ -1033,7 +1053,7 @@ class BE_Dataset:
     #         data = np.array(data)
 
     #     # if the data is already in complex form return
-    #     if BE_Dataset.is_complex(data):
+    #     if BE_Dataset.to_complex(data):
     #         return data
 
     #     # if axis is not provided take the last axis
@@ -1041,41 +1061,6 @@ class BE_Dataset:
     #         axis = data.ndim - 1
 
     #     return np.take(data, 0, axis=axis) + 1j * np.take(data, 1, axis=axis)
-
-    # def set_SHO_LSQF(self):
-    #     """
-    #     set_SHO_LSQF Sets the SHO Scaler data to make accessible
-    #     """
-
-    #     # initializes the dictionary
-    #     self.SHO_LSQF_data = {}
-
-    #     for dataset in self.raw_datasets:
-
-    #         # data groups in file
-    #         SHO_fits = find_groups_with_string(
-    #             self.file, f'{dataset}-SHO_Fit_000')[0]
-
-    #         with h5py.File(self.file, "r+") as h5_f:
-
-    #             # extract the name of the fit
-    #             name = SHO_fits.split('/')[-1]
-
-    #             # create a list for parameters
-    #             SHO_LSQF_list = []
-    #             for sublist in np.array(
-    #                 h5_f[f'{SHO_fits}/Fit']
-    #             ):
-    #                 for item in sublist:
-    #                     for i in item:
-    #                         SHO_LSQF_list.append(i)
-
-    #             data_ = np.array(SHO_LSQF_list).reshape(
-    #                 -1, 5)
-
-    #             # saves the SHO LSQF data as an attribute of the dataset object
-    #             self.SHO_LSQF_data[name] = data_.reshape(
-    #                 self.num_pix, self.voltage_steps, 5)[:, :, :-1]
 
     # @staticmethod
     # def shift_phase(phase, shift_=None):
@@ -1743,110 +1728,7 @@ class BE_Dataset:
 
     #     return self.X_train, self.X_test, self.y_train, self.y_test
 
-    # class Raw_Data_Scaler():
-    #     """
-    #     Raw_Data_Scaler class that defines the scaler for band excitation data
-
-    #     """
-
-    #     def __init__(self, raw_data):
-    #         """
-    #         __init__ Initialization function
-
-    #         Args:
-    #             raw_data (np.array): raw band excitation data to scale
-    #         """
-
-    #         self.raw_data = raw_data
-
-    #         # conduct the fit on initialization
-    #         self.fit()
-
-    #     @staticmethod
-    #     def complex_data_converter(data):
-    #         """
-    #         complex_data_converter converter that converts the dataset to complex
-
-    #         Args:
-    #             data (np.array): band excitation data to convert
-
-    #         Returns:
-    #             np.array: band excitation data as a complex number
-    #         """
-    #         if BE_Dataset.is_complex(data):
-    #             return data
-    #         else:
-    #             return BE_Dataset.to_complex(data)
-
-    #     def fit(self):
-    #         """
-    #         fit function to fit the scaler
-    #         """
-
-    #         # gets the raw data
-    #         data = self.raw_data
-    #         data = self.complex_data_converter(data)
-
-    #         # extracts the real and imaginary components
-    #         real = np.real(data)
-    #         imag = np.imag(data)
-
-    #         # does a global scaler on the data
-    #         self.real_scaler = GlobalScaler()
-    #         self.imag_scaler = GlobalScaler()
-
-    #         # computes global scaler on the real and imaginary parts
-    #         self.real_scaler.fit(real)
-    #         self.imag_scaler.fit(imag)
-
-    #     def transform(self, data):
-    #         """
-    #         transform Function to transform the data
-
-    #         Args:
-    #             data (np.array): band excitation data
-
-    #         Returns:
-    #             np.array: scaled band excitation data_
-    #         """
-
-    #         # converts the data to a complex number
-    #         data = self.complex_data_converter(data)
-
-    #         # extracts the real and imaginary components
-    #         real = np.real(data)
-    #         imag = np.imag(data)
-
-    #         # computes the transform
-    #         real = self.real_scaler.transform(real)
-    #         imag = self.imag_scaler.transform(imag)
-
-    #         # returns the complex number
-    #         return real + 1j*imag
-
-    #     def inverse_transform(self, data):
-    #         """
-    #         inverse_transform Computes the inverse transform
-
-    #         Args:
-    #             data (np.array): band excitation data
-
-    #         Returns:
-    #             np.array: unscaled band excitation data
-    #         """
-
-    #         # converts the data to complex
-    #         data = self.complex_data_converter(data)
-
-    #         # extracts the real and imaginary componets
-    #         real = np.real(data)
-    #         imag = np.imag(data)
-
-    #         # computes the inverse transform
-    #         real = self.real_scaler.inverse_transform(real)
-    #         imag = self.imag_scaler.inverse_transform(imag)
-
-    #         return real + 1j*imag
+    
 
     # def get_loop_path(self):
     #     """

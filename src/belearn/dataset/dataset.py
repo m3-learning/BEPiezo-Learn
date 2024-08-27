@@ -1,5 +1,5 @@
 from m3util.util.search import in_list
-from m3util.util.h5 import find_groups_with_string, print_tree
+from m3util.util.h5 import find_groups_with_string, print_tree, get_tree
 from belearn.dataset.scalers import Raw_Data_Scaler
 from belearn.util.wrappers import static_state_decorator
 from belearn.functions.sho import SHO_nn
@@ -139,12 +139,6 @@ class BE_Dataset:
         self.set_raw_data()
         self.SHO_preprocessing()
         
-    @property
-    def num_bins(self):
-        """Number of frequency bins in the data"""
-        with h5py.File(self.file, "r+") as h5_f:
-            return h5_f["Measurement_000"].attrs["num_bins"]
-        
     def set_preprocessing(self):
         """
         set_preprocessing searches the dataset to see what preprocessing is required.
@@ -277,6 +271,187 @@ class BE_Dataset:
             for key in h5_f.file["/Measurement_000"].attrs:
                 print("{} : {}".format(
                     key, h5_f.file["/Measurement_000"].attrs[key]))
+                
+    def get_tree(self):
+        """
+        get_tree reads the tree from the H5 file
+
+        Returns:
+            list: list of the tree from the H5 file
+        """
+
+        with h5py.File(self.file, "r+") as h5_f:
+            return get_tree(h5_f)
+        
+    @static_state_decorator
+    def set_raw_data(self):
+        """
+        set_raw_data Function that parses the datafile and extracts the raw data names
+        """
+
+        with h5py.File(self.file, "r+") as h5_f:
+            # initializes the dictionary
+            self.raw_data_reshaped = {}
+
+            # list of datasets to be read
+            datasets = []
+            self.raw_datasets = []
+
+            # Finds all the datasets
+            datasets.extend(usid.hdf_utils.find_dataset(
+                h5_f['Measurement_000/Channel_000'], 'Noisy'))
+            datasets.extend(usid.hdf_utils.find_dataset(
+                h5_f['Measurement_000/Channel_000'], 'Raw_Data'))
+
+            # loops around all the datasets and stores them reshaped in a dictionary
+            for dataset in datasets:
+                self.raw_data_reshaped[dataset.name.split(
+                    '/')[-1]] = dataset[:].reshape(self.num_pix, self.voltage_steps, self.num_bins)
+
+                self.raw_datasets.extend([dataset.name.split('/')[-1]])
+                
+                
+    ##### GETTERS #####
+                
+    @property
+    def get_state(self):
+        """
+        get_state function that return the dictionary of the current state
+
+        Returns:
+            dict: dictionary of the current state
+        """
+        return {'raw_format': self.raw_format,
+                'fitter': self.fitter,
+                'scaled': self.scaled,
+                'output_shape': self.output_shape,
+                'measurement_state': self.measurement_state,
+                'LSQF_phase_shift': self.LSQF_phase_shift,
+                'NN_phase_shift': self.NN_phase_shift,
+                "noise": self.noise,
+                "loop_interpolated": self.loop_interpolated}
+        
+    @property
+    def num_pix(self):
+        """Number of pixels in the data"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"].attrs["num_pix"]
+        
+    @property
+    def num_pix_1d(self):
+        """Number of pixels in the data"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return int(np.sqrt(self.num_pix))
+        
+    @property
+    def num_bins(self):
+        """Number of frequency bins in the data"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"].attrs["num_bins"]
+        
+    @property
+    def voltage_steps(self):
+        """Number of DC voltage steps"""
+        with h5py.File(self.file, "r+") as h5_f:
+            try:
+                return h5_f["Measurement_000"].attrs["num_udvs_steps"]
+            except:
+                # computes the number of voltage steps for datasets that do not contain the attribute
+                return h5_f["Measurement_000"].attrs["VS_steps_per_full_cycle"]*h5_f["Measurement_000"].attrs["VS_number_of_cycles"]*(2 if h5_f["Measurement_000"].attrs["VS_measure_in_field_loops"] == 'in and out-of-field' else 1)
+            
+    def raw_data(self, pixel=None, voltage_step=None):
+        """
+        Extracts raw data from the specified dataset, optionally resampled with noise consideration.
+        
+        This function allows retrieval of raw data from a dataset stored in an HDF5 file. 
+        If specific `pixel` and `voltage_step` are provided, the function extracts the data 
+        corresponding to those indices. Otherwise, it returns the entire dataset. 
+        Optionally, noise can be taken into account during the extraction process.
+
+        Args:
+            pixel (int, optional): The pixel index to extract data from. If None, all pixels are selected.
+                                Defaults to None.
+            voltage_step (int, optional): The voltage step index to extract data from. If None, all voltage steps
+                                        are selected. Defaults to None.
+
+        Returns:
+            np.array: The extracted BE data as a complex number array.
+
+        Example:
+            data = obj.raw_data(pixel=5, voltage_step=10)
+            This will extract the data for the 5th pixel and the 10th voltage step.
+        """
+
+        # Open the HDF5 file in read+write mode
+        with h5py.File(self.file, "r+") as h5_f:
+            # Extract data based on provided pixel and voltage_step indices
+            if pixel is not None and voltage_step is not None:
+                # Specific pixel and voltage_step provided
+                return self.raw_data_reshaped[self.dataset][[pixel], :, :][:, [voltage_step], :]
+            else:
+                # Return the entire dataset if pixel or voltage_step is not specified
+                return self.raw_data_reshaped[self.dataset][:]
+
+        #TODO Modification
+        # # Check if both pixel and voltage_step are provided
+        # if pixel is not None and voltage_step is not None:
+        #     # Open the HDF5 file in read+write mode
+        #     with h5py.File(self.file, "r+") as h5_f:
+        #         # Extract and return data for the specific pixel and voltage step
+        #         return self.raw_data_reshaped[self.dataset][[pixel], :, :][:, [voltage_step], :]
+        # else:
+        #     # Open the HDF5 file in read+write mode
+        #     with h5py.File(self.file, "r+") as h5_f:
+        #         # Extract and return the entire dataset
+        #         return self.raw_data_reshaped[self.dataset][:]
+            
+    ##### SETTERS #####
+    
+    def set_attributes(self, **kwargs):
+        """
+        Sets multiple attributes of the object using key-value pairs provided as keyword arguments.
+        
+        This method allows for dynamic setting of object attributes based on the provided
+        dictionary of keyword arguments (`kwargs`). Each key in the dictionary corresponds
+        to an attribute name, and the associated value is assigned to that attribute.
+        
+        If the keyword 'noise' is present in the arguments, it will trigger the setter 
+        method for the 'noise' attribute, allowing for any associated logic to be executed.
+
+        Args:
+            **kwargs: Arbitrary keyword arguments where keys are the attribute names and
+                    values are the attribute values to be set.
+
+        Example:
+            obj.set_attributes(attr1=value1, attr2=value2, noise=some_noise_value)
+            This will set `obj.attr1` to `value1`, `obj.attr2` to `value2`, and `obj.noise` 
+            to `some_noise_value` (while invoking any custom logic in the `noise` setter).
+        """
+
+        # Iterate over each key-value pair in kwargs and set the corresponding attribute
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+        # If 'noise' is present in kwargs, this explicitly calls the setter for 'noise'
+        if 'noise' in kwargs:
+            self.noise = kwargs['noise']
+            
+    ##### NOISE GETTER and SETTER #####
+    
+    @property
+    def noise(self):
+        """Noise value"""
+        return self._noise
+            
+    @noise.setter
+    def noise(self, noise):
+        """Sets the noise value"""
+        self._noise = noise
+        self.set_noise_state(noise)
+        
+
+
+    
         
     # def set_raw_data_resampler(self,
     #                            save_loc='raw_data_resampled',
@@ -380,20 +555,20 @@ class BE_Dataset:
     #                                               h5_spec_vals=h5_main.h5_spec_vals,
     #                                               compression='gzip')
 
-    # def set_noise_state(self, noise):
-    #     """function that uses the noise state to set the current dataset
+    def set_noise_state(self, noise):
+        """function that uses the noise state to set the current dataset
 
-    #     Args:
-    #         noise (int): noise value in multiples of the standard deviation
+        Args:
+            noise (int): noise value in multiples of the standard deviation
 
-    #     Raises:
-    #         ValueError: error if the noise value does not exist in the dataset
-    #     """
+        Raises:
+            ValueError: error if the noise value does not exist in the dataset
+        """
 
-    #     if noise == 0:
-    #         self.dataset = "Raw_Data"
-    #     else:
-    #         self.dataset = f"Noisy_Data_{noise}"
+        if noise == 0:
+            self.dataset = "Raw_Data"
+        else:
+            self.dataset = f"Noisy_Data_{noise}"
 
 
 
@@ -470,17 +645,6 @@ class BE_Dataset:
 
     #     # sets the atributes to the default state
     #     self.set_attributes(**default_state_)
-
-    # def get_tree(self):
-    #     """
-    #     get_tree reads the tree from the H5 file
-
-    #     Returns:
-    #         list: list of the tree from the H5 file
-    #     """
-
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return get_tree(h5_f)
 
     # def data_writer(self, base, name, data):
     #     """
@@ -757,17 +921,6 @@ class BE_Dataset:
     #         return h5_f['Measurement_000'].attrs["grid_num_rows"]
 
     # @property
-    # def noise(self):
-    #     """Noise value"""
-    #     return self._noise
-
-    # @noise.setter
-    # def noise(self, noise):
-    #     """Sets the noise value"""
-    #     self._noise = noise
-    #     self.set_noise_state(noise)
-
-    # @property
     # def spectroscopic_values(self):
     #     """Spectroscopic values"""
     #     with h5py.File(self.file, "r+") as h5_f:
@@ -787,11 +940,7 @@ class BE_Dataset:
     #     with h5py.File(self.file, "r+") as h5_f:
     #         return h5_f[f"Raw_Data-SHO_Fit_000/Spectroscopic_Values"][0, 1::2]
 
-    # @property
-    # def num_pix(self):
-    #     """Number of pixels in the data"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return h5_f["Measurement_000"].attrs["num_pix"]
+
 
     # @property
     # def num_cycles(self):
@@ -804,21 +953,9 @@ class BE_Dataset:
 
     #         return cycles
 
-    # @property
-    # def num_pix_1d(self):
-    #     """Number of pixels in the data"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return int(np.sqrt(self.num_pix))
+    
 
-    # @property
-    # def voltage_steps(self):
-    #     """Number of DC voltage steps"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         try:
-    #             return h5_f["Measurement_000"].attrs["num_udvs_steps"]
-    #         except:
-    #             # computes the number of voltage steps for datasets that do not contain the attribute
-    #             return h5_f["Measurement_000"].attrs["VS_steps_per_full_cycle"]*h5_f["Measurement_000"].attrs["VS_number_of_cycles"]*(2 if h5_f["Measurement_000"].attrs["VS_measure_in_field_loops"] == 'in and out-of-field' else 1)
+    
 
     # @property
     # def sampling_rate(self):
@@ -887,51 +1024,7 @@ class BE_Dataset:
     #                                     group=self.basegroup)
     #             return h5_f["Measurement_000"]["Channel_000"][name][:]
 
-    # def raw_data(self, pixel=None, voltage_step=None, noise=None):
-    #     """
-    #     raw_data function that extracts the raw data with consideration of the noise. Will return the resampled data
 
-    #     Args:
-    #         pixel (int, optional): pixel position to get data. Defaults to None.
-    #         voltage_step (int, optional): voltage position to get data. Defaults to None.
-    #         noise (int, optional): Noise value. Defaults to None.
-
-    #     Returns:
-    #         np.array: BE data as a complex number
-    #     """
-    #     if pixel is not None and voltage_step is not None:
-    #         with h5py.File(self.file, "r+") as h5_f:
-    #             return self.raw_data_reshaped[self.dataset][[pixel], :, :][:, [voltage_step], :]
-    #     else:
-    #         with h5py.File(self.file, "r+") as h5_f:
-    #             return self.raw_data_reshaped[self.dataset][:]
-
-    # @static_state_decorator
-    # def set_raw_data(self):
-    #     """
-    #     set_raw_data Function that parses the datafile and extracts the raw data names
-    #     """
-
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         # initializes the dictionary
-    #         self.raw_data_reshaped = {}
-
-    #         # list of datasets to be read
-    #         datasets = []
-    #         self.raw_datasets = []
-
-    #         # Finds all the datasets
-    #         datasets.extend(usid.hdf_utils.find_dataset(
-    #             h5_f['Measurement_000/Channel_000'], 'Noisy'))
-    #         datasets.extend(usid.hdf_utils.find_dataset(
-    #             h5_f['Measurement_000/Channel_000'], 'Raw_Data'))
-
-    #         # loops around all the datasets and stores them reshaped in a dictionary
-    #         for dataset in datasets:
-    #             self.raw_data_reshaped[dataset.name.split(
-    #                 '/')[-1]] = dataset[:].reshape(self.num_pix, self.voltage_steps, self.num_bins)
-
-    #             self.raw_datasets.extend([dataset.name.split('/')[-1]])
 
     # @static_state_decorator
     # def LSQF_hysteresis_params(self, output_shape=None, scaled=None, measurement_state=None):
@@ -1326,17 +1419,6 @@ class BE_Dataset:
 
     #     return pred_data, params
 
-    # def set_attributes(self, **kwargs):
-    #     """
-    #     set_attributes sets attributes of the object from a dictionary
-    #     """
-    #     for key, value in kwargs.items():
-    #         setattr(self, key, value)
-
-    #     # if noise is included this calls the setter function
-    #     if kwargs.get("noise"):
-    #         self.noise = kwargs.get("noise")
-
     # @property
     # def get_pos_dims(self):
     #     """Gets the position dimensions"""
@@ -1611,27 +1693,6 @@ class BE_Dataset:
     #     Noise Level = {self.noise}
     #     loop interpolated = {self.loop_interpolated}
     #                 ''')
-
-    # @property
-    # def get_state(self):
-    #     """
-    #     get_state function that return the dictionary of the current state
-
-    #     Returns:
-    #         dict: dictionary of the current state
-    #     """
-    #     return {'resampled': self.resampled,
-    #             'raw_format': self.raw_format,
-    #             'fitter': self.fitter,
-    #             'scaled': self.scaled,
-    #             'output_shape': self.output_shape,
-    #             'measurement_state': self.measurement_state,
-    #             'resampled': self.resampled,
-    #             'resampled_bins': self.resampled_bins,
-    #             'LSQF_phase_shift': self.LSQF_phase_shift,
-    #             'NN_phase_shift': self.NN_phase_shift,
-    #             "noise": self.noise,
-    #             "loop_interpolated": self.loop_interpolated}
 
     # @static_state_decorator
     # def NN_data(self, resampled=None, scaled=True):

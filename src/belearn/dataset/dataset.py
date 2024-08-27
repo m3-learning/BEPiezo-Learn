@@ -1,5 +1,5 @@
 from m3util.util.search import in_list
-from m3util.util.h5 import find_groups_with_string, print_tree, get_tree
+from m3util.util.h5 import find_groups_with_string, print_tree, get_tree, find_measurement
 from belearn.dataset.scalers import Raw_Data_Scaler
 from belearn.util.wrappers import static_state_decorator
 from belearn.functions.sho import SHO_nn
@@ -236,6 +236,82 @@ class BE_Dataset:
         self.SHO_scaler.var_[3] = 1
         self.SHO_scaler.scale_[3] = 1
         
+    def generate_noisy_data_records(self,
+                                    noise_levels,
+                                    basegroup='/Measurement_000/Channel_000',
+                                    verbose=False,
+                                    noise_STD=None):
+        """
+        Generates noisy data records and saves them to an HDF5 file.
+
+        This function creates new datasets with added noise based on the provided noise levels 
+        and saves these noisy datasets to the specified group in the HDF5 file. The noise 
+        can be generated with a provided standard deviation or calculated from the original data.
+
+        Args:
+            noise_levels (list): A list of noise levels (multipliers) to apply to the dataset.
+            basegroup (str, optional): The HDF5 group where the noisy datasets will be saved. 
+                                    Defaults to '/Measurement_000/Channel_000'.
+            verbose (bool, optional): If True, the function will print additional information 
+                                    during execution. Defaults to False.
+            noise_STD (float, optional): A manually provided standard deviation for the noise. 
+                                        If not provided, it will be calculated from the original data. 
+                                        Defaults to None.
+
+        Example:
+            obj.generate_noisy_data_records(noise_levels=[0.1, 0.2, 0.5], verbose=True)
+            This will generate and save noisy datasets for the specified noise levels.
+        """
+
+        # Compute the noise standard deviation if it is not provided
+        if noise_STD is None:
+            noise_STD = np.std(self.get_original_data)
+
+        if verbose:
+            print(f"The STD of the data is: {noise_STD}")
+
+        # Open the HDF5 file in read+write mode
+        with h5py.File(self.file, "r+") as h5_f:
+
+            # Iterate through each noise level provided in the list
+            for noise_level in noise_levels:
+
+                if verbose:
+                    print(f"Adding noise level {noise_level}")
+
+                # Calculate the actual noise level to be applied
+                noise_level_ = noise_STD * noise_level
+
+                # Generate random noise for the real and imaginary parts
+                noise_real = np.random.uniform(-1 * noise_level_,
+                                            noise_level_, (self.num_pix, self.spectroscopic_length))
+                noise_imag = np.random.uniform(-1 * noise_level_,
+                                            noise_level_, (self.num_pix, self.spectroscopic_length))
+
+                # Combine real and imaginary components to create complex noise
+                noise = noise_real + noise_imag * 1.0j
+
+                # Add the generated noise to the original data
+                data = self.get_original_data + noise
+
+                # Find the original dataset in the HDF5 file
+                h5_main = usid.hdf_utils.find_dataset(h5_f, "Raw_Data")[0]
+
+                # Write the noisy data to the HDF5 file
+                usid.hdf_utils.write_main_dataset(h5_f[basegroup],  # Parent group where data is saved
+                                                data,  # Noisy data to be written
+                                                f'Noisy_Data_{noise_level}',  # Name for the noisy dataset
+                                                'Piezoresponse',  # Physical quantity being measured
+                                                'V',  # Units of the measurement
+                                                self.get_pos_dims,  # Position dimensions
+                                                self.get_spec_dims,  # Spectroscopic dimensions
+                                                h5_pos_inds=h5_main.h5_pos_inds,  # Position indices
+                                                h5_pos_vals=h5_main.h5_pos_vals,  # Position values
+                                                h5_spec_inds=h5_main.h5_spec_inds,  # Spectroscopic indices
+                                                h5_spec_vals=h5_main.h5_spec_vals,  # Spectroscopic values
+                                                compression='gzip')  # Compression type for storage
+
+        
     def print_be_tree(self):
         """Utility file to print the Tree of a BE Dataset
 
@@ -350,6 +426,11 @@ class BE_Dataset:
             return h5_f["Measurement_000"].attrs["num_bins"]
         
     @property
+    def spectroscopic_length(self):
+        """Gets the length of the spectroscopic vector"""
+        return self.num_bins*self.voltage_steps
+        
+    @property
     def voltage_steps(self):
         """Number of DC voltage steps"""
         with h5py.File(self.file, "r+") as h5_f:
@@ -358,6 +439,75 @@ class BE_Dataset:
             except:
                 # computes the number of voltage steps for datasets that do not contain the attribute
                 return h5_f["Measurement_000"].attrs["VS_steps_per_full_cycle"]*h5_f["Measurement_000"].attrs["VS_number_of_cycles"]*(2 if h5_f["Measurement_000"].attrs["VS_measure_in_field_loops"] == 'in and out-of-field' else 1)
+            
+    @property
+    def get_pos_dims(self):
+        """
+        Retrieves the position dimensions of the main dataset from the HDF5 file.
+
+        This property accesses the specified HDF5 file and extracts the position dimension
+        information from the main dataset. It returns a list of `usid.Dimension` objects
+        that describe each positional dimension in terms of its descriptor, label, and size.
+
+        Returns:
+            list of usid.Dimension: A list containing the position dimensions of the dataset.
+
+        Example:
+            pos_dims = obj.get_pos_dims
+            for dim in pos_dims:
+                print(f"Dimension Name: {dim.name}, Size: {dim.size}, Units: {dim.units}")
+        """
+        # Open the HDF5 file in read+write mode
+        with h5py.File(self.file, "r+") as h5_f:
+            # Find the main dataset named 'Raw_Data' within the HDF5 file
+            h5_main = usid.hdf_utils.find_dataset(h5_f, "Raw_Data")[0]
+            
+            # Extract position dimension descriptors, labels, and sizes from the main dataset
+            pos_dim_descriptors = h5_main.pos_dim_descriptors
+            pos_dim_labels = h5_main.pos_dim_labels
+            pos_dim_sizes = h5_main.pos_dim_sizes
+            
+            # Create the list of usid.Dimension objects
+            pos_dim = [usid.Dimension(descriptor, label, size)
+                       for descriptor, label, size in zip(pos_dim_descriptors, pos_dim_labels, pos_dim_sizes)]
+            
+            # Return the list of position dimensions
+            return pos_dim
+    
+    @property
+    def get_spec_dims(self):
+        """
+        Retrieves the spectroscopic dimensions of the main dataset from the HDF5 file.
+
+        This property accesses the specified HDF5 file and extracts the spectroscopic dimension
+        information from the main dataset. It returns a list of `usid.Dimension` objects
+        that describe each spectroscopic dimension in terms of its descriptor, label, and size.
+
+        Returns:
+            list of usid.Dimension: A list containing the spectroscopic dimensions of the dataset.
+
+        Example:
+            spec_dims = obj.get_spec_dims
+            for dim in spec_dims:
+                print(f"Dimension Name: {dim.name}, Size: {dim.size}, Units: {dim.units}")
+        """
+
+        # Open the HDF5 file in read+write mode
+        with h5py.File(self.file, "r+") as h5_f:
+            # Find the main dataset named 'Raw_Data' within the HDF5 file
+            h5_main = usid.hdf_utils.find_dataset(h5_f, "Raw_Data")[0]
+
+            # Extract spectroscopic dimension descriptors, labels, and sizes from the main dataset
+            spec_dim_descriptors = h5_main.spec_dim_descriptors
+            spec_dim_labels = h5_main.spec_dim_labels
+            spec_dim_sizes = h5_main.spec_dim_sizes
+
+            # Create the list of usid.Dimension objects
+            spec_dim = [usid.Dimension(descriptor, label, size)
+                        for descriptor, label, size in zip(spec_dim_descriptors, spec_dim_labels, spec_dim_sizes)]
+
+            return spec_dim
+
             
     def raw_data(self, pixel=None, voltage_step=None):
         """
@@ -391,6 +541,38 @@ class BE_Dataset:
             else:
                 # Return the entire dataset if pixel or voltage_step is not specified
                 return self.raw_data_reshaped[self.dataset][:]
+            
+    @property
+    def get_original_data(self):
+        """
+        Retrieves the original raw Band Excitation (BE) data as a complex number array.
+
+        This property accesses the raw data from an HDF5 file. Depending on the dataset
+        specified, it either retrieves the data directly from the 'Raw_Data' dataset or
+        searches for a dataset that matches a noise-specific naming convention.
+
+        Returns:
+            np.array: The BE data as a complex number array.
+
+        Example:
+            data = obj.get_original_data
+            This will retrieve the raw BE data from the HDF5 file.
+        """
+
+        # Open the HDF5 file in read+write mode
+        with h5py.File(self.file, "r+") as h5_f:
+            # Check if the dataset is 'Raw_Data'
+            if self.dataset == 'Raw_Data':
+                # Directly return the 'Raw_Data' from the HDF5 file
+                return h5_f["Measurement_000"]["Channel_000"]["Raw_Data"][:]
+            else:
+                # If not 'Raw_Data', find the dataset that matches the noise-specific name
+                name = find_measurement(self.file,
+                                        f"original_data_{self.noise}STD",
+                                        group=self.basegroup)
+                # Return the matched dataset
+                return h5_f["Measurement_000"]["Channel_000"][name][:]
+
 
         #TODO Modification
         # # Check if both pixel and voltage_step are provided
@@ -494,66 +676,6 @@ class BE_Dataset:
     #                             self.resampled_bins, axis=axis)
     #         except ValueError:
     #             print("Resampling failed, check that the number of bins is defined")
-
-    # def generate_noisy_data_records(self,
-    #                                 noise_levels,
-    #                                 basegroup='/Measurement_000/Channel_000',
-    #                                 verbose=False,
-    #                                 noise_STD=None):
-    #     """
-    #     generate_noisy_data_records Function that generates noisy data records and saves them to the H5 file
-
-    #     Args:
-    #         noise_levels (list): list of noise levels to be applied to the dataset
-    #         basegroup (str, optional): basegroup where the data will be saved. Defaults to '/Measurement_000/Channel_000'.
-    #         verbose (bool, optional): sets the verbosity of the function. Defaults to False.
-    #         noise_STD (float, optional): manually provides a standard deviation value for the noise. Defaults to None.
-    #     """
-
-    #     # computes the noise state if a value is not provided
-    #     if noise_STD is None:
-    #         noise_STD = np.std(self.get_original_data)
-
-    #     if verbose:
-    #         print(f"The STD of the data is: {noise_STD}")
-
-    #     with h5py.File(self.file, "r+") as h5_f:
-
-    #         # iterates through the noise levels provided
-    #         for noise_level in noise_levels:
-
-    #             if verbose:
-    #                 print(f"Adding noise level {noise_level}")
-
-    #             # computes the noise level
-    #             noise_level_ = noise_STD * noise_level
-
-    #             # computes the real and imaginary components of the noise
-    #             noise_real = np.random.uniform(-1*noise_level_,
-    #                                            noise_level_, (self.num_pix, self.spectroscopic_length))
-    #             noise_imag = np.random.uniform(-1*noise_level_,
-    #                                            noise_level_, (self.num_pix, self.spectroscopic_length))
-
-    #             # adds the noise to the original data
-    #             noise = noise_real+noise_imag*1.0j
-    #             data = self.get_original_data + noise
-
-    #             h5_main = usid.hdf_utils.find_dataset(h5_f, "Raw_Data")[0]
-
-    #             # writes the noise record to the pyUSID file
-    #             usid.hdf_utils.write_main_dataset(h5_f[basegroup],  # parent group
-    #                                               data,  # data to be written
-    #                                               # Name of the main dataset
-    #                                               f'Noisy_Data_{noise_level}',
-    #                                               'Piezoresponse',  # quantity
-    #                                               'V',  # units
-    #                                               self.get_pos_dims,  # position dimensions
-    #                                               self.get_spec_dims,  # spectroscopic dimensions
-    #                                               h5_pos_inds=h5_main.h5_pos_inds,
-    #                                               h5_pos_vals=h5_main.h5_pos_vals,
-    #                                               h5_spec_inds=h5_main.h5_spec_inds,
-    #                                               h5_spec_vals=h5_main.h5_spec_vals,
-    #                                               compression='gzip')
 
     def set_noise_state(self, noise):
         """function that uses the noise state to set the current dataset
@@ -1002,28 +1124,6 @@ class BE_Dataset:
     #     """Gets the resampled frequency"""
     #     return resample(self.frequency_bin, self.resampled_bins)
 
-    # @property
-    # def spectroscopic_length(self):
-    #     """Gets the length of the spectroscopic vector"""
-    #     return self.num_bins*self.voltage_steps
-
-    # @property
-    # def get_original_data(self):
-    #     """
-    #     get_original_data gets the raw BE data as a complex value
-
-    #     Returns:
-    #         np.array: BE data as a complex number
-    #     """
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         if self.dataset == 'Raw_Data':
-    #             return h5_f["Measurement_000"]["Channel_000"]["Raw_Data"][:]
-    #         else:
-    #             name = find_measurement(self.file,
-    #                                     f"original_data_{self.noise}STD",
-    #                                     group=self.basegroup)
-    #             return h5_f["Measurement_000"]["Channel_000"][name][:]
-
 
 
     # @static_state_decorator
@@ -1419,39 +1519,9 @@ class BE_Dataset:
 
     #     return pred_data, params
 
-    # @property
-    # def get_pos_dims(self):
-    #     """Gets the position dimensions"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         h5_main = usid.hdf_utils.find_dataset(h5_f, "Raw_Data")[0]
+   
 
-    #         # Extract the spec_dim_descriptors, spec_dim_labels, and spec_dim_sizes
-    #         pos_dim_descriptors = h5_main.pos_dim_descriptors
-    #         pos_dim_labels = h5_main.pos_dim_labels
-    #         pos_dim_sizes = h5_main.pos_dim_sizes
-
-    #         # Create the list of usid.Dimension objects
-    #         pos_dim = [usid.Dimension(descriptor, label, size)
-    #                    for descriptor, label, size in zip(pos_dim_descriptors, pos_dim_labels, pos_dim_sizes)]
-
-    #         return pos_dim
-
-    # @property
-    # def get_spec_dims(self):
-    #     """Gets the position dimensions"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         h5_main = usid.hdf_utils.find_dataset(h5_f, "Raw_Data")[0]
-
-    #         # Extract the spec_dim_descriptors, spec_dim_labels, and spec_dim_sizes
-    #         spec_dim_descriptors = h5_main.spec_dim_descriptors
-    #         spec_dim_labels = h5_main.spec_dim_labels
-    #         spec_dim_sizes = h5_main.spec_dim_sizes
-
-    #         # Create the list of usid.Dimension objects
-    #         spec_dim = [usid.Dimension(descriptor, label, size)
-    #                     for descriptor, label, size in zip(spec_dim_descriptors, spec_dim_labels, spec_dim_sizes)]
-
-    #         return spec_dim
+    
 
     # @static_state_decorator
     # def raw_spectra(self,

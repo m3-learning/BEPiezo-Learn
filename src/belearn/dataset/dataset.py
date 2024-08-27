@@ -1,22 +1,26 @@
 from m3util.util.search import in_list
-from m3util.util.h5 import find_groups_with_string, print_tree, get_tree, find_measurement
+from m3util.util.h5 import find_groups_with_string, print_tree, get_tree, find_measurement, make_group
 from belearn.dataset.scalers import Raw_Data_Scaler
 from belearn.util.wrappers import static_state_decorator
 from belearn.functions.sho import SHO_nn
 import numpy as np
 from dataclasses import dataclass, field, InitVar
 import h5py
+import time
+import sidpy
+import os
 from sklearn.preprocessing import StandardScaler
 import pyUSID as usid
 from typing import Any, Callable, Dict, Optional
+from BGlib import be as belib
 
 
-# from BGlib import be as belib
+# 
 
-# import os
-# import sidpy
+# 
+
 # import numpy as np
-# import time
+
 # from m3_learning.util.rand_util import extract_number
 # from m3_learning.util.h5_util import make_dataset, make_group, find_groups_with_string, find_measurement
 # import matplotlib.pyplot as plt
@@ -311,6 +315,124 @@ class BE_Dataset:
                                                 h5_spec_vals=h5_main.h5_spec_vals,  # Spectroscopic values
                                                 compression='gzip')  # Compression type for storage
 
+    ##### SHO FITTERS #####
+    
+    def SHO_Fitter(self, force=False, max_cores=-1, max_mem=1024*8,
+                   dataset="Raw_Data",
+                   h5_sho_targ_grp=None,
+                   fit_group=False):
+        """Function that computes the SHO fit results
+
+        This function is adapted from BGlib
+
+        Args:
+            force (bool, optional): forces the SHO results to be computed from scratch. Defaults to False.
+            max_cores (int, optional): number of processor cores to use. Defaults to -1.
+            max_mem (_type_, optional): maximum ram to use. Defaults to 1024*8.
+        """
+
+        with h5py.File(self.file, "r+") as h5_file:
+
+            # the start time of the fit
+            start_time_lsqf = time.time()
+
+            # splits the directory path and the file name
+            (data_dir, filename) = os.path.split(self.file)
+
+            if self.file.endswith(".h5"):
+                # No translation here
+                h5_path = self.file
+
+            else:
+                pass
+
+            # splits the path and the folder name
+            folder_path, h5_raw_file_name = os.path.split(h5_path)
+
+            # h5_file = h5py.File(h5_path, "r+")
+            print("Working on:\n" + h5_path)
+
+            # get the main dataset
+            h5_main = usid.hdf_utils.find_dataset(h5_file, dataset)[0]
+
+            # grabs some useful parameters from the dataset
+            pos_ind = h5_main.h5_pos_inds
+            pos_dims = h5_main.pos_dim_sizes
+            pos_labels = h5_main.pos_dim_labels
+            print(pos_labels, pos_dims)
+
+            # gets the measurement group name
+            h5_meas_grp = h5_main.parent.parent
+
+            # gets all of the attributes of the grout
+            parm_dict = sidpy.hdf_utils.get_attributes(h5_meas_grp)
+
+            # gets the data type of the dataset
+            expt_type = usid.hdf_utils.get_attr(h5_file, "data_type")
+
+            # code for using cKPFM Data
+            is_ckpfm = expt_type == "cKPFMData"
+
+            if is_ckpfm:
+                num_write_steps = parm_dict["VS_num_DC_write_steps"]
+                num_read_steps = parm_dict["VS_num_read_steps"]
+                num_fields = 2
+
+            if expt_type != "BELineData":
+                vs_mode = usid.hdf_utils.get_attr(h5_meas_grp, "VS_mode")
+                try:
+                    field_mode = usid.hdf_utils.get_attr(
+                        h5_meas_grp, "VS_measure_in_field_loops")
+                except KeyError:
+                    print("field mode could not be found. Setting to default value")
+                    field_mode = "out-of-field"
+                try:
+                    vs_cycle_frac = usid.hdf_utils.get_attr(
+                        h5_meas_grp, "VS_cycle_fraction")
+                except KeyError:
+                    print(
+                        "VS cycle fraction could not be found. Setting to default value")
+                    vs_cycle_frac = "full"
+
+            sho_fit_points = 5  # The number of data points at each step to use when fitting
+            sho_override = force  # Force recompute if True
+
+            # h5_sho_targ_grp = None
+            h5_sho_file_path = os.path.join(
+                folder_path, h5_raw_file_name)
+
+            print("\n\nSHO Fits will be written to:\n" +
+                  h5_sho_file_path + "\n\n")
+            f_open_mode = "w"
+            if os.path.exists(h5_sho_file_path):
+                f_open_mode = "r+"
+            h5_sho_file = h5py.File(h5_sho_file_path, mode=f_open_mode)
+
+            if h5_sho_targ_grp is None:
+                h5_sho_targ_grp = h5_sho_file
+            else:
+                h5_sho_targ_grp = make_group(h5_file, h5_sho_targ_grp)
+
+            sho_fitter = belib.analysis.BESHOfitter(
+                h5_main, cores=max_cores, verbose=False, h5_target_group=h5_sho_targ_grp
+            )
+            sho_fitter.set_up_guess(
+                guess_func=belib.analysis.be_sho_fitter.SHOGuessFunc.complex_gaussian,
+                num_points=sho_fit_points,
+            )
+            h5_sho_guess = sho_fitter.do_guess(override=sho_override)
+            sho_fitter.set_up_fit()
+            h5_sho_fit = sho_fitter.do_fit(override=sho_override)
+            parms_dict = sidpy.hdf_utils.get_attributes(
+                h5_main.parent.parent)
+
+            print(
+                f"LSQF method took {time.time() - start_time_lsqf} seconds to compute parameters")
+
+            if fit_group:
+                return sho_fitter, h5_sho_fit
+            else:
+                return sho_fitter
         
     def print_be_tree(self):
         """Utility file to print the Tree of a BE Dataset
@@ -573,6 +695,145 @@ class BE_Dataset:
                 # Return the matched dataset
                 return h5_f["Measurement_000"]["Channel_000"][name][:]
 
+    @static_state_decorator
+    def raw_spectra(
+        self,
+        pixel=None,
+        voltage_step=None,
+        fit_results=None,
+        frequency=False,
+        noise=None,
+        state=None
+    ):
+        """
+        Simplifies the retrieval of raw band excitation data.
+
+        This method retrieves the raw spectral data for a given pixel and voltage step, 
+        with options for using resampled data, fit results, and frequency bins. It also 
+        allows the setting of noise levels and the extraction state.
+
+        Parameters:
+        -----------
+        pixel : int, optional
+            The pixel value to retrieve data for. If None, the data for all pixels is considered.
+        voltage_step : int, optional
+            The voltage step to retrieve data for. If None, a step is chosen based on the dataset state.
+        fit_results : np.array, optional
+            Provided fit results used to generate the raw spectra. If None, raw data is used directly.
+        frequency : bool, optional
+            Whether to return the frequency bins along with the data. Defaults to False.
+        noise : int, optional
+            Noise level to use in data extraction. If None, no noise adjustment is made.
+        state : dict, optional
+            A dictionary defining the extraction state. If provided, attributes are set accordingly.
+
+        Returns:
+        --------
+        np.array
+            The band excitation data. If `frequency=True`, returns a tuple of the data and frequency bins.
+        """
+
+        # Set the noise level if provided
+        if noise is not None:
+            self.noise = noise
+
+        # Set the extraction state attributes if provided
+        if state is not None:
+            self.set_attributes(**state)
+
+        # Open the HDF5 file for reading and writing
+        with h5py.File(self.file, "r+") as h5_f:
+
+            # Flag to determine if data reshaping is needed
+            shaper_ = True
+
+            # Determine the voltage step considering the current measurement state
+            voltage_step = self.measurement_state_voltage(voltage_step)
+
+            # Determine the number of bins and frequency values based on resampling status
+            if self.resampled:
+                bins = self.resampled_bins
+                frequency_bins = self.get_freq_values(bins)
+            else:
+                bins = self.num_bins
+                frequency_bins = self.get_freq_values(bins)
+
+            # Retrieve the raw data based on whether fit results are provided
+            if fit_results is None:
+                if self.resampled:
+                    data = self.raw_data_resampled(
+                        pixel=pixel, voltage_step=voltage_step
+                    )
+                else:
+                    data = self.raw_data(
+                        pixel=pixel, voltage_step=voltage_step
+                    )
+            else:
+                # Process the fit results to obtain raw spectra
+                params_shape = fit_results.shape
+
+                if isinstance(fit_results, np.ndarray):
+                    fit_results = torch.from_numpy(fit_results)
+
+                # Reshape the fit results for fitting functions
+                params = fit_results.reshape(-1, 4)
+
+                #TODO: DELETE IF WORKS
+                # # Evaluate the fitting function to generate data
+                # data = eval(
+                #     f"self.SHO_fit_func_{self.fitter}(params, frequency_bins)"
+                # )
+                
+                data = SHO_nn(params, frequency_bins)
+
+                # Check if the full dataset was used and determine if reshaping is needed
+                if bins * self.num_pix * self.voltage_steps * 2 == len(data.flatten()):
+                    pass
+                else:
+                    shaper_ = False
+
+                if shaper_:
+                    data = self.shaper(data, pixel, voltage_step)
+
+            # Further processing based on pixel and voltage_step conditions
+            if shaper_:
+                if pixel is None or voltage_step is None:
+                    data = self.get_data_w_voltage_state(data)
+
+            # Handle different raw data formats (complex, magnitude spectrum)
+            if self.raw_format == 'complex':
+                # Apply scaling if enabled
+                if self.scaled:
+                    data = self.raw_data_scaler.transform(
+                        data.reshape(-1, bins)
+                    )
+
+                if shaper_:
+                    data = self.shaper(data, pixel, voltage_step)
+
+                # Separate real and imaginary components
+                data = [np.real(data), np.imag(data)]
+
+            elif self.raw_format == "magnitude spectrum":
+                if shaper_:
+                    data = self.shaper(data, pixel, voltage_step)
+
+                # Calculate magnitude and phase
+                data = [np.abs(data), np.angle(data)]
+
+            # Convert tensors to numpy arrays if necessary
+            try:
+                data[0] = data[0].numpy()
+                data[1] = data[1].numpy()
+            except:
+                pass
+
+            # Return the data and optionally the frequency bins
+            if frequency:
+                return data, frequency_bins
+            else:
+                return data
+
 
         #TODO Modification
         # # Check if both pixel and voltage_step are provided
@@ -618,6 +879,164 @@ class BE_Dataset:
         if 'noise' in kwargs:
             self.noise = kwargs['noise']
             
+    ##### Data Transformers ######
+    
+    def shaper(self, data, pixel=None, voltage_steps=None):
+        """
+        Reshapes band excitation (BE) data based on the current measurement state and specified parameters.
+
+        This utility function reshapes the provided band excitation data according to the 
+        pixel and voltage step specifications, taking into account the current measurement 
+        state of the dataset. It handles different output shapes, including reshaping by 
+        pixels or by index.
+
+        Parameters:
+        -----------
+        data : np.array
+            The band excitation data to be reshaped. This is typically a multidimensional array.
+        pixel : int or list of ints, optional
+            The pixel(s) to reshape the data for. If None, all pixels are considered. 
+            Defaults to None.
+        voltage_steps : int or list of ints, optional
+            The voltage step(s) to reshape the data for. If None, all voltage steps 
+            are considered, adjusting for the measurement state. Defaults to None.
+
+        Raises:
+        -------
+        ValueError
+            If an invalid output shape is provided. The output shape must be either 'pixels' or 'index'.
+
+        Returns:
+        --------
+        np.array
+            The reshaped band excitation data.
+        """
+
+        # Determine the number of pixels to reshape for, handling cases where a single pixel or list of pixels is provided
+        if pixel is not None:
+            try:
+                num_pix = len(pixel)  # If a list of pixels is provided, get the length
+            except:
+                num_pix = 1  # If a single pixel is provided, set the number of pixels to 1
+        else:
+            num_pix = int(self.num_pix.copy())  # If no pixel is specified, use the total number of pixels
+
+        # Determine the number of voltage steps to reshape for, handling cases where a single step or list of steps is provided
+        if voltage_steps is not None:
+            try:
+                voltage_steps = len(voltage_steps)  # If a list of voltage steps is provided, get the length
+            except:
+                voltage_steps = 1  # If a single voltage step is provided, set the number of voltage steps to 1
+        else:
+            voltage_steps = int(self.voltage_steps.copy())  # If no voltage step is specified, use the total number of voltage steps
+
+            # Adjust the number of voltage steps if the measurement state is "on" or "off"
+            if self.measurement_state in ["on", "off"]:
+                voltage_steps /= 2  # Halve the number of voltage steps if the measurement state is "on" or "off"
+                voltage_steps = int(voltage_steps)
+
+        # Reshape the data based on the specified output shape
+        if self.output_shape == "pixels":
+            data = data.reshape(num_pix, voltage_steps, -1)  # Reshape by pixels
+        elif self.output_shape == "index":
+            data = data.reshape(num_pix * voltage_steps, -1)  # Reshape by index
+        else:
+            raise ValueError("output_shape must be either 'pixel' or 'index'")  # Raise an error if an invalid output shape is specified
+        
+        return data
+
+    
+    def set_raw_data_resampler(self, save_loc='raw_data_resampled', **kwargs):
+        """
+        Compute the resampled raw data and save it to the specified location in the USID file.
+
+        This method resamples the raw data if the number of resampled bins differs from 
+        the original number of bins. It then saves the resampled data to the provided 
+        location within the HDF5 (USID) file.
+
+        Parameters:
+        -----------
+        save_loc : str, optional
+            The file path where the resampled data should be saved within the USID file. 
+            Defaults to 'raw_data_resampled'.
+        **kwargs : dict
+            Additional keyword arguments, including 'basepath' to specify the base path 
+            for saving the data within the file.
+
+        Returns:
+        --------
+        None
+        """
+        
+        # Open the HDF5 file for reading and writing
+        with h5py.File(self.file, "r+") as h5_f:
+            
+            # Check if resampling is needed by comparing the number of bins
+            if self.resampled_bins != self.num_bins:
+                
+                # Loop through each dataset to perform resampling
+                for data in self.raw_datasets:
+                    
+                    # Resample the data using the provided resampler function
+                    resampled_ = self.resampler(
+                        self.raw_data_reshaped[data].reshape(-1, self.num_bins), axis=2
+                    )
+                    
+                    # Reshape the resampled data to match the original dimensions
+                    self.resampled_data[data] = resampled_.reshape(
+                        self.num_pix, self.voltage_steps, self.resampled_bins
+                    )
+            else:
+                # If no resampling is needed, use the original reshaped data
+                self.resampled_data = self.raw_data_reshaped
+
+            # Write the resampled data to the specified location within the HDF5 file
+            if kwargs.get("basepath"):
+                self.data_writer(kwargs.get("basepath"), save_loc, resampled_)
+
+                
+    def resampler(self, data, axis=2):
+        """
+        Resamples the given band excitation data to a specified number of bins.
+
+        This method takes in a band excitation (BE) dataset and resamples it along 
+        the specified axis to match the desired number of bins. The resampling is 
+        typically performed along the third axis (axis=2) by default.
+
+        Parameters:
+        -----------
+        data : np.array
+            The band excitation dataset to be resampled. This should be a multidimensional 
+            array, typically with dimensions corresponding to pixels, voltage steps, and bins.
+        axis : int, optional
+            The axis along which to perform the resampling. Defaults to 2.
+
+        Returns:
+        --------
+        np.array
+            The resampled band excitation data.
+
+        Raises:
+        -------
+        ValueError
+            If the resampling fails, typically due to an issue with the number of bins 
+            being undefined or incorrectly specified.
+        """
+        
+        # Open the HDF5 file for reading and writing
+        with h5py.File(self.file, "r+") as h5_f:
+            try:
+                # Perform the resampling operation on the data
+                return resample(
+                    data.reshape(self.num_pix, -1, self.num_bins),
+                    self.resampled_bins, 
+                    axis=axis
+                )
+            except ValueError:
+                # Print an error message if resampling fails
+                print("Resampling failed, check that the number of bins is defined")
+
+            
     ##### NOISE GETTER and SETTER #####
     
     @property
@@ -631,51 +1050,7 @@ class BE_Dataset:
         self._noise = noise
         self.set_noise_state(noise)
         
-
-
     
-        
-    # def set_raw_data_resampler(self,
-    #                            save_loc='raw_data_resampled',
-    #                            **kwargs):
-    #     """
-    #     set_raw_data_resampler function to compute the resampled raw data and save it to the USID file. 
-
-    #     Args:
-    #         save_loc (str, optional): filepath where the resampled data should be saved. Defaults to 'raw_data_resampled'.
-    #     """
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         if self.resampled_bins != self.num_bins:
-    #             for data in self.raw_datasets:
-    #                 # resamples the data
-    #                 resampled_ = self.resampler(
-    #                     self.raw_data_reshaped[data].reshape(-1, self.num_bins), axis=2)
-    #                 self.resampled_data[data] = resampled_.reshape(
-    #                     self.num_pix, self.voltage_steps, self.resampled_bins)
-    #         else:
-    #             self.resampled_data = self.raw_data_reshaped
-
-    #         # writes the data within the basepath
-    #         if kwargs.get("basepath"):
-    #             self.data_writer(kwargs.get("basepath"), save_loc, resampled_)
-                
-    # def resampler(self, data, axis=2):
-    #     """
-    #     resampler Resamples the data to a given number of bins
-
-    #     Args:
-    #         data (np.array): BE dataset
-    #         axis (int, optional): axis which to resample along. Defaults to 2.
-
-    #     Returns:
-    #         np.array: resampled band excitation data
-    #     """
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         try:
-    #             return resample(data.reshape(self.num_pix, -1, self.num_bins),
-    #                             self.resampled_bins, axis=axis)
-    #         except ValueError:
-    #             print("Resampling failed, check that the number of bins is defined")
 
     def set_noise_state(self, noise):
         """function that uses the noise state to set the current dataset
@@ -807,123 +1182,6 @@ class BE_Dataset:
     #             del h5_f[name]
     #         except KeyError:
     #             print("Dataset not found, could not be deleted")
-
-    # def SHO_Fitter(self, force=False, max_cores=-1, max_mem=1024*8,
-    #                dataset="Raw_Data",
-    #                h5_sho_targ_grp=None,
-    #                fit_group=False):
-    #     """Function that computes the SHO fit results
-
-    #     This function is adapted from BGlib
-
-    #     Args:
-    #         force (bool, optional): forces the SHO results to be computed from scratch. Defaults to False.
-    #         max_cores (int, optional): number of processor cores to use. Defaults to -1.
-    #         max_mem (_type_, optional): maximum ram to use. Defaults to 1024*8.
-    #     """
-
-    #     with h5py.File(self.file, "r+") as h5_file:
-
-    #         # the start time of the fit
-    #         start_time_lsqf = time.time()
-
-    #         # splits the directory path and the file name
-    #         (data_dir, filename) = os.path.split(self.file)
-
-    #         if self.file.endswith(".h5"):
-    #             # No translation here
-    #             h5_path = self.file
-
-    #         else:
-    #             pass
-
-    #         # splits the path and the folder name
-    #         folder_path, h5_raw_file_name = os.path.split(h5_path)
-
-    #         # h5_file = h5py.File(h5_path, "r+")
-    #         print("Working on:\n" + h5_path)
-
-    #         # get the main dataset
-    #         h5_main = usid.hdf_utils.find_dataset(h5_file, dataset)[0]
-
-    #         # grabs some useful parameters from the dataset
-    #         pos_ind = h5_main.h5_pos_inds
-    #         pos_dims = h5_main.pos_dim_sizes
-    #         pos_labels = h5_main.pos_dim_labels
-    #         print(pos_labels, pos_dims)
-
-    #         # gets the measurement group name
-    #         h5_meas_grp = h5_main.parent.parent
-
-    #         # gets all of the attributes of the grout
-    #         parm_dict = sidpy.hdf_utils.get_attributes(h5_meas_grp)
-
-    #         # gets the data type of the dataset
-    #         expt_type = usid.hdf_utils.get_attr(h5_file, "data_type")
-
-    #         # code for using cKPFM Data
-    #         is_ckpfm = expt_type == "cKPFMData"
-
-    #         if is_ckpfm:
-    #             num_write_steps = parm_dict["VS_num_DC_write_steps"]
-    #             num_read_steps = parm_dict["VS_num_read_steps"]
-    #             num_fields = 2
-
-    #         if expt_type != "BELineData":
-    #             vs_mode = usid.hdf_utils.get_attr(h5_meas_grp, "VS_mode")
-    #             try:
-    #                 field_mode = usid.hdf_utils.get_attr(
-    #                     h5_meas_grp, "VS_measure_in_field_loops")
-    #             except KeyError:
-    #                 print("field mode could not be found. Setting to default value")
-    #                 field_mode = "out-of-field"
-    #             try:
-    #                 vs_cycle_frac = usid.hdf_utils.get_attr(
-    #                     h5_meas_grp, "VS_cycle_fraction")
-    #             except KeyError:
-    #                 print(
-    #                     "VS cycle fraction could not be found. Setting to default value")
-    #                 vs_cycle_frac = "full"
-
-    #         sho_fit_points = 5  # The number of data points at each step to use when fitting
-    #         sho_override = force  # Force recompute if True
-
-    #         # h5_sho_targ_grp = None
-    #         h5_sho_file_path = os.path.join(
-    #             folder_path, h5_raw_file_name)
-
-    #         print("\n\nSHO Fits will be written to:\n" +
-    #               h5_sho_file_path + "\n\n")
-    #         f_open_mode = "w"
-    #         if os.path.exists(h5_sho_file_path):
-    #             f_open_mode = "r+"
-    #         h5_sho_file = h5py.File(h5_sho_file_path, mode=f_open_mode)
-
-    #         if h5_sho_targ_grp is None:
-    #             h5_sho_targ_grp = h5_sho_file
-    #         else:
-    #             h5_sho_targ_grp = make_group(h5_file, h5_sho_targ_grp)
-
-    #         sho_fitter = belib.analysis.BESHOfitter(
-    #             h5_main, cores=max_cores, verbose=False, h5_target_group=h5_sho_targ_grp
-    #         )
-    #         sho_fitter.set_up_guess(
-    #             guess_func=belib.analysis.be_sho_fitter.SHOGuessFunc.complex_gaussian,
-    #             num_points=sho_fit_points,
-    #         )
-    #         h5_sho_guess = sho_fitter.do_guess(override=sho_override)
-    #         sho_fitter.set_up_fit()
-    #         h5_sho_fit = sho_fitter.do_fit(override=sho_override)
-    #         parms_dict = sidpy.hdf_utils.get_attributes(
-    #             h5_main.parent.parent)
-
-    #         print(
-    #             f"LSQF method took {time.time() - start_time_lsqf} seconds to compute parameters")
-
-    #         if fit_group:
-    #             return sho_fitter, h5_sho_fit
-    #         else:
-    #             return sho_fitter
 
     # def measure_group(self):
     #     """
@@ -1523,136 +1781,7 @@ class BE_Dataset:
 
     
 
-    # @static_state_decorator
-    # def raw_spectra(self,
-    #                 pixel=None,
-    #                 voltage_step=None,
-    #                 fit_results=None,
-    #                 frequency=False,
-    #                 noise=None,
-    #                 state=None):
-    #     """
-    #     raw_spectra Function that simplifies getting the raw band excitation data
 
-    #     Args:
-    #         pixel (int, optional): pixel value to get. Defaults to None.
-    #         voltage_step (int, optional): voltage step to get. Defaults to None.
-    #         fit_results (np.array, optional): provided fit results to get raw spectra with. Defaults to None.
-    #         frequency (bool, optional): option to return the frequency bins. Defaults to False.
-    #         noise (int, optional): noise level to extract . Defaults to None.
-    #         state (dict, optional): dictionary that defines what data is extracted. Defaults to None.
-
-    #     Returns:
-    #         np.array: band excitation data (if frequency == True will return the frequency bins)
-    #     """
-
-    #     # set the noise
-    #     if noise is not None:
-    #         self.noise = noise
-
-    #     # sets the state if it is provided
-    #     if state is not None:
-    #         self.set_attributes(**state)
-
-    #     with h5py.File(self.file, "r+") as h5_f:
-
-    #         # sets the shaper_ equal to true to correct the shape
-    #         shaper_ = True
-
-    #         # gets the voltage steps to consider given the voltage state
-    #         voltage_step = self.measurement_state_voltage(voltage_step)
-
-    #         # if to get the resampled data
-    #         if self.resampled:
-
-    #             # get the number of bins to resample
-    #             bins = self.resampled_bins
-
-    #             # gets the frequency values based on the resampled bins
-    #             frequency_bins = self.get_freq_values(bins)
-
-    #         else:
-
-    #             # gets the unresampled bins
-    #             bins = self.num_bins
-
-    #             # gets the raw frequency bins
-    #             frequency_bins = self.get_freq_values(bins)
-
-    #         # if a fit_result is not provided get the raw data
-    #         if fit_results is None:
-
-    #             # gets the resampled data if resampled is set to true
-    #             if self.resampled:
-
-    #                 # gets the data
-    #                 data = self.raw_data_resampled(
-    #                     pixel=pixel, voltage_step=voltage_step)
-
-    #             else:
-
-    #                 # if not resampled gets the raw data
-    #                 data = self.raw_data(
-    #                     pixel=pixel, voltage_step=voltage_step)
-
-    #         else:
-
-    #             # if a fit result is provided gets the shape of the parameters
-    #             params_shape = fit_results.shape
-
-    #             if isinstance(fit_results, np.ndarray):
-    #                 fit_results = torch.from_numpy(fit_results)
-
-    #             # reshapes the parameters for fitting functions
-    #             params = fit_results.reshape(-1, 4)
-
-    #             # gets the data from the fitting function
-    #             data = eval(
-    #                 f"self.SHO_fit_func_{self.fitter}(params, frequency_bins)")
-
-    #             # checks if the full dataset was used and thus the data can be reshaped
-    #             if bins*self.num_pix*self.voltage_steps*2 == len(data.flatten()):
-    #                 pass
-    #             else:
-    #                 shaper_ = False
-
-    #             if shaper_:
-    #                 data = self.shaper(data, pixel, voltage_step)
-
-    #         if shaper_:
-    #             # does not sample if just a pixel is returned
-    #             if pixel is None or voltage_step is None:
-    #                 data = self.get_data_w_voltage_state(data)
-
-    #         if self.raw_format == 'complex':
-    #             # computes the scaler on the raw data
-    #             if self.scaled:
-    #                 data = self.raw_data_scaler.transform(
-    #                     data.reshape(-1, bins))
-
-    #             if shaper_:
-    #                 data = self.shaper(data, pixel, voltage_step)
-
-    #             data = [np.real(data), np.imag(data)]
-
-    #         elif self.raw_format == "magnitude spectrum":
-
-    #             if shaper_:
-    #                 data = self.shaper(data, pixel, voltage_step)
-
-    #             data = [np.abs(data), np.angle(data)]
-
-    #         # if a tensor converts to a numpy array
-    #         try:
-    #             data[0] = data[0].numpy()
-    #             data[1] = data[1].numpy()
-    #         except:
-    #             pass
-
-    #         if frequency:
-    #             return data, frequency_bins
-    #         else:
-    #             return data
 
     # def get_freq_values(self, data):
     #     """
@@ -1689,55 +1818,7 @@ class BE_Dataset:
     #             "original data must be the same length as the frequency bins or the resampled frequency bins")
     #     return x
 
-    # def shaper(self,
-    #            data,
-    #            pixel=None,
-    #            voltage_steps=None):
-    #     """
-    #     shaper Utility to help reshape band excitation data based on the current measurement state
 
-    #     Args:
-    #         data (np.array): band excitation data
-    #         pixel (int, optional): _description_. Defaults to None.
-    #         voltage_steps (int, optional): _description_. Defaults to None.
-
-    #     Raises:
-    #         ValueError: Invalid output shape is provided
-
-    #     Returns:
-    #         np.array: reshaped BE data
-    #     """
-
-    #     # reshapes if you just grab a pixel.
-    #     if pixel is not None:
-    #         try:
-    #             num_pix = len(pixel)
-    #         except:
-    #             num_pix = 1
-    #     else:
-    #         num_pix = int(self.num_pix.copy())
-
-    #     if voltage_steps is not None:
-    #         try:
-    #             voltage_steps = len(voltage_steps)
-    #         except:
-    #             voltage_steps = 1
-    #     else:
-    #         # computes the number of voltage steps in the data
-    #         voltage_steps = int(self.voltage_steps.copy())
-
-    #         if self.measurement_state in ["on", "off"]:
-    #             voltage_steps /= 2
-    #             voltage_steps = int(voltage_steps)
-
-    #     # reshapes the data to be the correct output shape
-    #     if self.output_shape == "pixels":
-    #         data = data.reshape(num_pix, voltage_steps, -1)
-    #     elif self.output_shape == "index":
-    #         data = data.reshape(num_pix * voltage_steps, -1)
-    #     else:
-    #         raise ValueError("output_shape must be either 'pixel' or 'index'")
-    #     return data
 
     
 

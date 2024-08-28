@@ -35,7 +35,7 @@ from BGlib import be as belib
 # from m3_learning.viz.layout import layout_fig
 # #
 # from scipy.interpolate import interp1d
-# from scipy import fftpack
+# 
 # from m3_learning.util.preprocessing import GlobalScaler
 # import torch
 # import torch.nn as nn
@@ -593,6 +593,18 @@ class BE_Dataset:
     def spectroscopic_length(self):
         """Gets the length of the spectroscopic vector"""
         return self.num_bins * self.voltage_steps
+    
+    @property
+    def be_repeats(self):
+        """Number of BE repeats"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f['Measurement_000'].attrs["BE_repeats"]
+        
+    @property
+    def sampling_rate(self):
+        """Sampling rate in Hz"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"].attrs["IO_rate_[Hz]"]
 
     @property
     def voltage_steps(self):
@@ -1531,11 +1543,7 @@ class BE_Dataset:
 
     
 
-    # @property
-    # def be_repeats(self):
-    #     """Number of BE repeats"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return h5_f['Measurement_000'].attrs["BE_repeats"]
+    
 
     # @property
     # def dc_voltage(self):
@@ -1554,11 +1562,6 @@ class BE_Dataset:
 
     #         return cycles
 
-    # @property
-    # def sampling_rate(self):
-    #     """Sampling rate in Hz"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return h5_f["Measurement_000"].attrs["IO_rate_[Hz]"]
 
     # @property
     # def be_bandwidth(self):

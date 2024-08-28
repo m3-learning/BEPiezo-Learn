@@ -31,11 +31,12 @@
 # from m3_learning.viz.Movies import make_movie
 # import os
 
-from m3util.viz.layout import layout_fig
+from m3util.viz.layout import layout_fig, add_box, inset_connector
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Type
 import numpy as np
+from scipy import fftpack
 
 
 # color_palette = {
@@ -443,7 +444,7 @@ class Viz:
 
         return fig
 
-        ##### GETTERS #####
+    ##### GETTERS #####
         
     def get_voltage_step(self, voltage_step):
         """

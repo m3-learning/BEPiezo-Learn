@@ -218,27 +218,38 @@ class BE_Dataset:
                     self.num_pix, self.voltage_steps, 5)[:, :, :-1]
                 
     @static_state_decorator
-    def SHO_Scaler(self,
-                   noise=0):
+    def SHO_Scaler(self, noise=0):
         """
-        SHO_Scaler SHO scaler function
+            Applies scaling to the SHO (Simple Harmonic Oscillator) fit data using a standard scaler.
 
-        Args:
-            noise (int, optional): noise level to apply the scaler. Defaults to 0.
+            This function initializes a standard scaler for the SHO fit data, applies noise if specified, 
+            and ensures that the phase component (typically the third component in the data) is not scaled.
+
+            Args:
+                noise (int, optional): 
+                    Noise level to be applied before scaling the data. Defaults to 0.
+
+            Returns:
+                None
         """
 
-        # set the noise and the dataset
+        # Set the noise level and dataset attributes
         self.noise = noise
 
+        # Initialize the standard scaler for the SHO data
         self.SHO_scaler = StandardScaler()
+
+        # Retrieve the SHO least squares fit (LSQF) data and reshape it for scaling
         data = self.SHO_LSQF().reshape(-1, 4)
 
+        # Fit the scaler to the SHO data
         self.SHO_scaler.fit(data)
 
-        # sets the phase not to scale
-        self.SHO_scaler.mean_[3] = 0
-        self.SHO_scaler.var_[3] = 1
-        self.SHO_scaler.scale_[3] = 1
+        # Ensure that the phase component (fourth column in data) is not scaled
+        self.SHO_scaler.mean_[3] = 0    # Set mean for phase to 0
+        self.SHO_scaler.var_[3] = 1     # Set variance for phase to 1 (no scaling)
+        self.SHO_scaler.scale_[3] = 1   # Set scale factor for phase to 1 (no scaling)
+
         
     def generate_noisy_data_records(self,
                                     noise_levels,
@@ -318,121 +329,152 @@ class BE_Dataset:
     ##### SHO FITTERS #####
     
     def SHO_Fitter(self, force=False, max_cores=-1, max_mem=1024*8,
-                   dataset="Raw_Data",
-                   h5_sho_targ_grp=None,
-                   fit_group=False):
-        """Function that computes the SHO fit results
+               dataset="Raw_Data", h5_sho_targ_grp=None, fit_group=False):
+        """
+        Computes the SHO (Simple Harmonic Oscillator) fit results for a given dataset.
 
-        This function is adapted from BGlib
+        This function performs fitting of band excitation data using a SHO model. It 
+        leverages the BGlib library to handle the fitting process and saves the results 
+        to an HDF5 file. The function can be configured to use multiple cores and 
+        limit memory usage.
 
         Args:
-            force (bool, optional): forces the SHO results to be computed from scratch. Defaults to False.
-            max_cores (int, optional): number of processor cores to use. Defaults to -1.
-            max_mem (_type_, optional): maximum ram to use. Defaults to 1024*8.
+            force (bool, optional): 
+                If True, forces the SHO results to be recomputed from scratch. Defaults to False.
+            max_cores (int, optional): 
+                Number of processor cores to use for the fitting process. If -1, all available 
+                cores are used. Defaults to -1.
+            max_mem (int, optional): 
+                Maximum amount of RAM (in MB) to use. Defaults to 1024*8 (8 GB).
+            dataset (str, optional): 
+                Name of the dataset within the HDF5 file to be fitted. Defaults to "Raw_Data".
+            h5_sho_targ_grp (h5py.Group, optional): 
+                The HDF5 group where the SHO fit results should be saved. If None, results 
+                are saved in the root group. Defaults to None.
+            fit_group (bool, optional): 
+                If True, returns the SHO fitter object and fit results group. Defaults to False.
+
+        Returns:
+            belib.analysis.BESHOfitter: 
+                The SHO fitter object used to perform the fitting.
+            h5py.Group, optional: 
+                The HDF5 group containing the SHO fit results. Returned only if `fit_group=True`.
+
+        Raises:
+            ValueError: 
+                If the fitting process encounters an error or if the necessary attributes 
+                cannot be found in the dataset.
         """
+
 
         with h5py.File(self.file, "r+") as h5_file:
 
-            # the start time of the fit
+            # Record the start time for the fitting process
             start_time_lsqf = time.time()
 
-            # splits the directory path and the file name
+            # Split the directory path and the file name from the full file path
             (data_dir, filename) = os.path.split(self.file)
 
             if self.file.endswith(".h5"):
-                # No translation here
+                # If the file is an HDF5 file, set the HDF5 path
                 h5_path = self.file
-
             else:
-                pass
+                pass  # Handle non-HDF5 files if necessary
 
-            # splits the path and the folder name
+            # Split the path to get the folder and raw file name
             folder_path, h5_raw_file_name = os.path.split(h5_path)
 
-            # h5_file = h5py.File(h5_path, "r+")
             print("Working on:\n" + h5_path)
 
-            # get the main dataset
+            # Get the main dataset to be fitted
             h5_main = usid.hdf_utils.find_dataset(h5_file, dataset)[0]
 
-            # grabs some useful parameters from the dataset
+            # Extract useful parameters from the dataset
             pos_ind = h5_main.h5_pos_inds
             pos_dims = h5_main.pos_dim_sizes
             pos_labels = h5_main.pos_dim_labels
             print(pos_labels, pos_dims)
 
-            # gets the measurement group name
+            # Get the measurement group containing the dataset
             h5_meas_grp = h5_main.parent.parent
 
-            # gets all of the attributes of the grout
+            # Get all attributes of the measurement group
             parm_dict = sidpy.hdf_utils.get_attributes(h5_meas_grp)
 
-            # gets the data type of the dataset
+            # Get the data type of the dataset
             expt_type = usid.hdf_utils.get_attr(h5_file, "data_type")
 
-            # code for using cKPFM Data
+            # Check if the dataset is cKPFMData and set relevant parameters
             is_ckpfm = expt_type == "cKPFMData"
-
             if is_ckpfm:
                 num_write_steps = parm_dict["VS_num_DC_write_steps"]
                 num_read_steps = parm_dict["VS_num_read_steps"]
                 num_fields = 2
 
+            # Handle non-BELineData types
             if expt_type != "BELineData":
                 vs_mode = usid.hdf_utils.get_attr(h5_meas_grp, "VS_mode")
                 try:
                     field_mode = usid.hdf_utils.get_attr(
                         h5_meas_grp, "VS_measure_in_field_loops")
                 except KeyError:
-                    print("field mode could not be found. Setting to default value")
+                    print("Field mode could not be found. Setting to default value.")
                     field_mode = "out-of-field"
                 try:
                     vs_cycle_frac = usid.hdf_utils.get_attr(
                         h5_meas_grp, "VS_cycle_fraction")
                 except KeyError:
-                    print(
-                        "VS cycle fraction could not be found. Setting to default value")
+                    print("VS cycle fraction could not be found. Setting to default value.")
                     vs_cycle_frac = "full"
 
-            sho_fit_points = 5  # The number of data points at each step to use when fitting
-            sho_override = force  # Force recompute if True
+            # Set parameters for the SHO fitting process
+            sho_fit_points = 5  # Number of data points to use when fitting
+            sho_override = force  # Whether to force recompute if True
 
-            # h5_sho_targ_grp = None
-            h5_sho_file_path = os.path.join(
-                folder_path, h5_raw_file_name)
+            # Determine the file path for saving the SHO fit results
+            h5_sho_file_path = os.path.join(folder_path, h5_raw_file_name)
+            print("\n\nSHO Fits will be written to:\n" + h5_sho_file_path + "\n\n")
 
-            print("\n\nSHO Fits will be written to:\n" +
-                  h5_sho_file_path + "\n\n")
-            f_open_mode = "w"
-            if os.path.exists(h5_sho_file_path):
-                f_open_mode = "r+"
+            # Determine the file opening mode
+            f_open_mode = "w" if not os.path.exists(h5_sho_file_path) else "r+"
             h5_sho_file = h5py.File(h5_sho_file_path, mode=f_open_mode)
 
+            # Set the target group for saving SHO results
             if h5_sho_targ_grp is None:
                 h5_sho_targ_grp = h5_sho_file
             else:
                 h5_sho_targ_grp = make_group(h5_file, h5_sho_targ_grp)
 
+            # Initialize the SHO fitter using the specified parameters
             sho_fitter = belib.analysis.BESHOfitter(
                 h5_main, cores=max_cores, verbose=False, h5_target_group=h5_sho_targ_grp
             )
+
+            # Set up the initial guess for the SHO fitting
             sho_fitter.set_up_guess(
                 guess_func=belib.analysis.be_sho_fitter.SHOGuessFunc.complex_gaussian,
                 num_points=sho_fit_points,
             )
+
+            # Perform the initial guess fitting
             h5_sho_guess = sho_fitter.do_guess(override=sho_override)
+
+            # Set up the actual fitting process
             sho_fitter.set_up_fit()
+
+            # Perform the SHO fitting
             h5_sho_fit = sho_fitter.do_fit(override=sho_override)
-            parms_dict = sidpy.hdf_utils.get_attributes(
-                h5_main.parent.parent)
 
-            print(
-                f"LSQF method took {time.time() - start_time_lsqf} seconds to compute parameters")
+            # Retrieve and print the fitting parameters
+            parms_dict = sidpy.hdf_utils.get_attributes(h5_main.parent.parent)
+            print(f"LSQF method took {time.time() - start_time_lsqf} seconds to compute parameters")
 
+            # Return the fitter and fit results if requested
             if fit_group:
                 return sho_fitter, h5_sho_fit
             else:
                 return sho_fitter
+
         
     def print_be_tree(self):
         """Utility file to print the Tree of a BE Dataset
@@ -712,26 +754,25 @@ class BE_Dataset:
         with options for using resampled data, fit results, and frequency bins. It also 
         allows the setting of noise levels and the extraction state.
 
-        Parameters:
-        -----------
-        pixel : int, optional
-            The pixel value to retrieve data for. If None, the data for all pixels is considered.
-        voltage_step : int, optional
-            The voltage step to retrieve data for. If None, a step is chosen based on the dataset state.
-        fit_results : np.array, optional
-            Provided fit results used to generate the raw spectra. If None, raw data is used directly.
-        frequency : bool, optional
-            Whether to return the frequency bins along with the data. Defaults to False.
-        noise : int, optional
-            Noise level to use in data extraction. If None, no noise adjustment is made.
-        state : dict, optional
-            A dictionary defining the extraction state. If provided, attributes are set accordingly.
+        Args:
+            pixel (int, optional): 
+                The pixel value to retrieve data for. If None, the data for all pixels is considered.
+            voltage_step (int, optional): 
+                The voltage step to retrieve data for. If None, a step is chosen based on the dataset state.
+            fit_results (np.array, optional): 
+                Provided fit results used to generate the raw spectra. If None, raw data is used directly.
+            frequency (bool, optional): 
+                Whether to return the frequency bins along with the data. Defaults to False.
+            noise (int, optional): 
+                Noise level to use in data extraction. If None, no noise adjustment is made.
+            state (dict, optional): 
+                A dictionary defining the extraction state. If provided, attributes are set accordingly.
 
         Returns:
-        --------
-        np.array
-            The band excitation data. If `frequency=True`, returns a tuple of the data and frequency bins.
+            np.array: 
+                The band excitation data. If `frequency=True`, returns a tuple of the data and frequency bins.
         """
+
 
         # Set the noise level if provided
         if noise is not None:
@@ -890,27 +931,25 @@ class BE_Dataset:
         state of the dataset. It handles different output shapes, including reshaping by 
         pixels or by index.
 
-        Parameters:
-        -----------
-        data : np.array
-            The band excitation data to be reshaped. This is typically a multidimensional array.
-        pixel : int or list of ints, optional
-            The pixel(s) to reshape the data for. If None, all pixels are considered. 
-            Defaults to None.
-        voltage_steps : int or list of ints, optional
-            The voltage step(s) to reshape the data for. If None, all voltage steps 
-            are considered, adjusting for the measurement state. Defaults to None.
+        Args:
+            data (np.array): 
+                The band excitation data to be reshaped. This is typically a multidimensional array.
+            pixel (int or list of ints, optional): 
+                The pixel(s) to reshape the data for. If None, all pixels are considered. 
+                Defaults to None.
+            voltage_steps (int or list of ints, optional): 
+                The voltage step(s) to reshape the data for. If None, all voltage steps 
+                are considered, adjusting for the measurement state. Defaults to None.
 
         Raises:
-        -------
-        ValueError
-            If an invalid output shape is provided. The output shape must be either 'pixels' or 'index'.
+            ValueError: 
+                If an invalid output shape is provided. The output shape must be either 'pixels' or 'index'.
 
         Returns:
-        --------
-        np.array
-            The reshaped band excitation data.
+            np.array: 
+                The reshaped band excitation data.
         """
+
 
         # Determine the number of pixels to reshape for, handling cases where a single pixel or list of pixels is provided
         if pixel is not None:
@@ -954,19 +993,18 @@ class BE_Dataset:
         the original number of bins. It then saves the resampled data to the provided 
         location within the HDF5 (USID) file.
 
-        Parameters:
-        -----------
-        save_loc : str, optional
-            The file path where the resampled data should be saved within the USID file. 
-            Defaults to 'raw_data_resampled'.
-        **kwargs : dict
-            Additional keyword arguments, including 'basepath' to specify the base path 
-            for saving the data within the file.
+        Args:
+            save_loc (str, optional): 
+                The file path where the resampled data should be saved within the USID file. 
+                Defaults to 'raw_data_resampled'.
+            **kwargs (dict): 
+                Additional keyword arguments, including 'basepath' to specify the base path 
+                for saving the data within the file.
 
         Returns:
-        --------
-        None
+            None
         """
+
         
         # Open the HDF5 file for reading and writing
         with h5py.File(self.file, "r+") as h5_f:
@@ -1003,25 +1041,23 @@ class BE_Dataset:
         the specified axis to match the desired number of bins. The resampling is 
         typically performed along the third axis (axis=2) by default.
 
-        Parameters:
-        -----------
-        data : np.array
-            The band excitation dataset to be resampled. This should be a multidimensional 
-            array, typically with dimensions corresponding to pixels, voltage steps, and bins.
-        axis : int, optional
-            The axis along which to perform the resampling. Defaults to 2.
+        Args:
+            data (np.array): 
+                The band excitation dataset to be resampled. This should be a multidimensional 
+                array, typically with dimensions corresponding to pixels, voltage steps, and bins.
+            axis (int, optional): 
+                The axis along which to perform the resampling. Defaults to 2.
 
         Returns:
-        --------
-        np.array
-            The resampled band excitation data.
+            np.array: 
+                The resampled band excitation data.
 
         Raises:
-        -------
-        ValueError
-            If the resampling fails, typically due to an issue with the number of bins 
-            being undefined or incorrectly specified.
+            ValueError: 
+                If the resampling fails, typically due to an issue with the number of bins 
+                being undefined or incorrectly specified.
         """
+
         
         # Open the HDF5 file for reading and writing
         with h5py.File(self.file, "r+") as h5_f:

@@ -142,6 +142,42 @@ class Viz:
     # Replace Any with the expected type if known
     color_palette: Optional[Any] = None
     
+    ##### Decorators #####
+    
+    def static_dataset_decorator(func):
+        """
+        Decorator that preserves the dataset's state before and after a function call.
+
+        This decorator ensures that the state of the dataset remains unchanged after 
+        the decorated function is executed. It captures the current state before the 
+        function is called and restores it afterward.
+
+        Args:
+            func (method): 
+                The method to be decorated. This can be any method that interacts with 
+                the dataset and might alter its state.
+
+        Returns:
+            method: 
+                The wrapped function that preserves the dataset's state.
+        """
+
+
+        def wrapper(*args, **kwargs):
+            # Capture the current state of the dataset
+            current_state = args[0].dataset.get_state
+            
+            # Execute the decorated function and capture its output
+            out = func(*args, **kwargs)
+            
+            # Restore the dataset's state to what it was before the function was called
+            args[0].dataset.set_attributes(**current_state)
+            
+            # Return the output of the function
+            return out
+
+        return wrapper
+    
     @static_dataset_decorator
     def raw_data_comparison(
         self,
@@ -160,27 +196,26 @@ class Viz:
         for a specified pixel and voltage step, allowing comparison between the true
         and predicted datasets. The function can save the plot if a filename is provided.
 
-        Parameters:
-        -----------
-        true : dict
-            Attributes of the true dataset to be set.
-        predict : dict, optional
-            Attributes of the predicted dataset to be set, by default None.
-        filename : str, optional
-            Name of the file to save the figure, by default None.
-        pixel : int, optional
-            Pixel index to plot. If None, a random pixel is selected, by default None.
-        voltage_step : int, optional
-            Voltage step index to plot. If None, it is determined by the dataset, by default None.
-        legend : bool, optional
-            Whether to display a legend on the plot, by default True.
-        **kwargs : dict
-            Additional keyword arguments for the dataset's raw_spectra method.
+        Args:
+            true (dict): 
+                Attributes of the true dataset to be set.
+            predict (dict, optional): 
+                Attributes of the predicted dataset to be set. Defaults to None.
+            filename (str, optional): 
+                Name of the file to save the figure. Defaults to None.
+            pixel (int, optional): 
+                Pixel index to plot. If None, a random pixel is selected. Defaults to None.
+            voltage_step (int, optional): 
+                Voltage step index to plot. If None, it is determined by the dataset. Defaults to None.
+            legend (bool, optional): 
+                Whether to display a legend on the plot. Defaults to True.
+            **kwargs (dict): 
+                Additional keyword arguments for the dataset's raw_spectra method.
 
         Returns:
-        --------
-        None
+            None
         """
+
         
         # Set the attributes for the true dataset
         self.set_attributes(**true)
@@ -282,19 +317,18 @@ class Viz:
 
             This method checks if a voltage step index is provided. If not, it randomly 
             selects a valid voltage step index based on the current measurement state of 
-            the dataset. 
+            the dataset.
 
-            Parameters:
-            -----------
-            voltage_step : int, optional
-                The voltage step index to use. If None, a random index is selected based 
-                on the dataset's measurement state.
+            Args:
+                voltage_step (int, optional): 
+                    The voltage step index to use. If None, a random index is selected based 
+                    on the dataset's measurement state.
 
             Returns:
-            --------
-            int
-                The selected or provided voltage step index.
+                int: 
+                    The selected or provided voltage step index.
             """
+
             
             # If voltage_step is not provided, determine a random step
             if voltage_step is None:
@@ -313,21 +347,33 @@ class Viz:
             # Return the determined or provided voltage step index
             return voltage_step
 
+    ###### SETTERS ######
+    
+    def set_attributes(self, **kwargs):
+        """
+        Sets the attributes of the dataset using key-value pairs from a dictionary.
 
-    def static_dataset_decorator(func):
-        """Decorator that stops the function from changing the state
+        This utility function iterates over the provided keyword arguments and sets 
+        the corresponding attributes of the dataset object. It also ensures that any 
+        necessary setters are triggered, such as for the 'noise' attribute.
 
         Args:
-            func (method): any method
+            **kwargs: 
+                Arbitrary keyword arguments representing the attributes to set on the dataset. 
+                The keys represent attribute names, and the values represent the values to be set.
+        
+        Returns:
+            None
         """
+        
+        # Iterate over the key-value pairs in kwargs and set the corresponding attributes on the dataset
+        for key, value in kwargs.items():
+            setattr(self.dataset, key, value)
 
-        def wrapper(*args, **kwargs):
-            current_state = args[0].dataset.get_state
-            out = func(*args, **kwargs)
-            args[0].dataset.set_attributes(**current_state)
-            return out
+        # Ensure that the setter for 'noise' is called if the 'noise' attribute is provided in kwargs
+        if kwargs.get("noise"):
+            self.noise = kwargs.get("noise")
 
-        return wrapper
 
 #     def static_scale_decorator(func):
 #         """Decorator that stops the function from changing the state
@@ -573,16 +619,6 @@ class Viz:
 #         if self.Printer is not None:
 #             self.Printer.savefig(fig, filename, label_figs=axs, style="b")
 
-#     def set_attributes(self, **kwargs):
-#         """
-#         set_attributes utility function to set the attributes of the dataset from a dictionary
-#         """
-#         for key, value in kwargs.items():
-#             setattr(self.dataset, key, value)
-
-#         # this makes sure the setter is called
-#         if kwargs.get("noise"):
-#             self.noise = kwargs.get("noise")
 
 #     def get_freq_values(self, data):
 #         data = data.flatten()

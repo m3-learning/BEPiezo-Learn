@@ -436,13 +436,12 @@ class Viz:
                  1].flatten(), "r", label="Imaginary")
         ax3.set(xlabel="Frequency (Hz)",
                 ylabel="Imag (Arb. U.)", facecolor="none")
-        ax[4].set_zorder(ax3.get_zorder() + 1)
+        # TODO: Delete if not needed
+        # ax[4].set_zorder(ax3.get_zorder() + 1)
 
         # prints the figure
         if self.Printer is not None:
             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
-
-        return fig
 
     ##### GETTERS #####
         

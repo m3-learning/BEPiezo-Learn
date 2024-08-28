@@ -605,6 +605,18 @@ class BE_Dataset:
         """Sampling rate in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"].attrs["IO_rate_[Hz]"]
+        
+    @property
+    def be_center_frequency(self):
+        """BE center frequency in Hz"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"].attrs["BE_center_frequency_[Hz]"]
+        
+    @property
+    def be_bandwidth(self):
+        """BE bandwidth in Hz"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"].attrs["BE_band_width_[Hz]"]
 
     @property
     def voltage_steps(self):
@@ -1563,17 +1575,9 @@ class BE_Dataset:
     #         return cycles
 
 
-    # @property
-    # def be_bandwidth(self):
-    #     """BE bandwidth in Hz"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return h5_f["Measurement_000"].attrs["BE_band_width_[Hz]"]
+    
 
-    # @property
-    # def be_center_frequency(self):
-    #     """BE center frequency in Hz"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return h5_f["Measurement_000"].attrs["BE_center_frequency_[Hz]"]
+    
 
    
 

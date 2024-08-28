@@ -692,6 +692,12 @@ class BE_Dataset:
 
             return spec_dim
         
+    @property
+    def frequency_bin(self):
+        """Frequency bin vector in Hz"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"]["Channel_000"]["Bin_Frequencies"][:]
+        
     def get_freq_values(self, data):
         """
         get_freq_values Function that gets the frequency bins
@@ -1488,11 +1494,7 @@ class BE_Dataset:
     #     with h5py.File(self.file, "r+") as h5_f:
     #         return h5_f["Measurement_000"].attrs["BE_center_frequency_[Hz]"]
 
-    # @property
-    # def frequency_bin(self):
-    #     """Frequency bin vector in Hz"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return h5_f["Measurement_000"]["Channel_000"]["Bin_Frequencies"][:]
+
 
     # @property
     # def be_waveform(self):

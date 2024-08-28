@@ -311,41 +311,41 @@ class Viz:
 
         ##### GETTERS #####
         
-        def get_voltage_step(self, voltage_step):
-            """
-            Determine and return a valid voltage step index.
+    def get_voltage_step(self, voltage_step):
+        """
+        Determine and return a valid voltage step index.
 
-            This method checks if a voltage step index is provided. If not, it randomly 
-            selects a valid voltage step index based on the current measurement state of 
-            the dataset.
+        This method checks if a voltage step index is provided. If not, it randomly 
+        selects a valid voltage step index based on the current measurement state of 
+        the dataset.
 
-            Args:
-                voltage_step (int, optional): 
-                    The voltage step index to use. If None, a random index is selected based 
-                    on the dataset's measurement state.
+        Args:
+            voltage_step (int, optional): 
+                The voltage step index to use. If None, a random index is selected based 
+                on the dataset's measurement state.
 
-            Returns:
-                int: 
-                    The selected or provided voltage step index.
-            """
+        Returns:
+            int: 
+                The selected or provided voltage step index.
+        """
 
-            
-            # If voltage_step is not provided, determine a random step
-            if voltage_step is None:
-                # If the measurement state is "on" or "off", select from the first half of the steps
-                if (
-                    self.dataset.measurement_state == "on"
-                    or self.dataset.measurement_state == "off"
-                ):
-                    voltage_step = np.random.randint(
-                        0, self.dataset.voltage_steps // 2
-                    )
-                else:
-                    # Otherwise, select from the full range of voltage steps
-                    voltage_step = np.random.randint(0, self.dataset.voltage_steps)
-            
-            # Return the determined or provided voltage step index
-            return voltage_step
+        
+        # If voltage_step is not provided, determine a random step
+        if voltage_step is None:
+            # If the measurement state is "on" or "off", select from the first half of the steps
+            if (
+                self.dataset.measurement_state == "on"
+                or self.dataset.measurement_state == "off"
+            ):
+                voltage_step = np.random.randint(
+                    0, self.dataset.voltage_steps // 2
+                )
+            else:
+                # Otherwise, select from the full range of voltage steps
+                voltage_step = np.random.randint(0, self.dataset.voltage_steps)
+        
+        # Return the determined or provided voltage step index
+        return voltage_step
 
     ###### SETTERS ######
     

@@ -178,6 +178,8 @@ class Viz:
 
         return wrapper
     
+    ##### GRAPHS #####
+    
     @static_dataset_decorator
     def raw_data_comparison(
         self,
@@ -308,6 +310,138 @@ class Viz:
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename, label_figs=[axs[0], axs[1]], style="b")
 
+    @static_dataset_decorator
+    def raw_be(self, dataset, filename="Figure_1_random_cantilever_resonance_results"):
+        """Plots the raw data and the BE waveform
+
+        Args:
+            dataset (BE.dataset): BE dataset
+            filename (str, optional): Name to save the file. Defaults to "Figure_1_random_cantilever_resonance_results".
+        """
+
+        # Select a random point and time step to plot
+        pixel = np.random.randint(0, dataset.num_pix)
+        voltagestep = np.random.randint(0, dataset.voltage_steps)
+
+        # Plots the amplitude and phase for the selected pixel and time step
+        fig, ax = layout_fig(5, 5, figsize=(5 * (5 / 3), 1.3))
+
+        # constructs the BE waveform and plot
+        be_voltagesteps = len(dataset.be_waveform) / dataset.be_repeats
+
+        # plots the BE waveform
+        ax[0].plot(dataset.be_waveform[: int(be_voltagesteps)])
+        ax[0].set(xlabel="Time (sec)", ylabel="Voltage (V)")
+
+        # plots the resonance graph
+        resonance_graph = np.fft.fft(
+            dataset.be_waveform[: int(be_voltagesteps)])
+        fftfreq = fftpack.fftfreq(int(be_voltagesteps)) * dataset.sampling_rate
+
+        ax[1].plot(
+            fftfreq[: int(be_voltagesteps) // 2],
+            np.abs(resonance_graph[: int(be_voltagesteps) // 2]),
+        )
+        ax[1].axvline(
+            x=dataset.be_center_frequency,
+            ymax=np.max(resonance_graph[: int(be_voltagesteps) // 2]),
+            linestyle="--",
+            color="r",
+        )
+        ax[1].set(xlabel="Frequency (Hz)", ylabel="Amplitude (Arb. U.)")
+        ax[1].set_xlim(
+            dataset.be_center_frequency
+            - dataset.be_bandwidth
+            - dataset.be_bandwidth * 0.25,
+            dataset.be_center_frequency
+            + dataset.be_bandwidth
+            + dataset.be_bandwidth * 0.25,
+        )
+
+        # TODO: Should make this generalized not hard coded
+
+        # manually set the x limits
+        x_start = 120
+        x_end = 140
+
+        # plots the hysteresis waveform and zooms in
+        ax[2].plot(dataset.hysteresis_waveform)
+
+        ax_new = ax[2].inset_axes([0.5, 0.65, 0.48, 0.33])
+        ax_new.plot(dataset.hysteresis_waveform)
+        ax_new.set_xlim(x_start, x_end)
+        ax_new.set_ylim(0, -15)
+
+        # drows the inset connector
+        inset_connector(
+            fig,
+            ax[2],
+            ax_new,
+            [(x_start, 0), (x_end, 0)],
+            [(x_start, 0), (x_end, 0)],
+            color="k",
+            linestyle="--",
+            linewidth=0.5,
+        )
+
+        # adds a box on the figure
+        add_box(
+            ax[2],
+            (x_start, 0, x_end, -15),
+            edgecolor="k",
+            linestyle="--",
+            facecolor="none",
+            linewidth=0.5,
+            zorder=10,
+        )
+
+        ax[2].set_xlabel("Voltage Steps")
+        ax[2].set_ylabel("Voltage (V)")
+
+        # changes the state to get the magnitude spectrum
+        dataset.scaled = False
+        dataset.raw_format = "magnitude spectrum"
+        dataset.measurement_state = "all"
+        dataset.resampled = False
+
+        # gets the data for the selected pixel and time step
+        data_ = dataset.raw_spectra(pixel, voltagestep)
+
+        # plots the magnitude spectrum for and phase for the selected pixel and time step
+        ax[3].plot(
+            dataset.frequency_bin,
+            data_[0].flatten(),
+        )
+        ax[3].set(
+            xlabel="Frequency (Hz)", ylabel="Amplitude (Arb. U.)", facecolor="none"
+        )
+        ax2 = ax[3].twinx()
+        ax2.plot(
+            dataset.frequency_bin,
+            data_[1].flatten(),
+            "r",
+        )
+        ax2.set(xlabel="Frequency (Hz)", ylabel="Phase (rad)")
+        ax[3].set_zorder(ax2.get_zorder() + 1)
+
+        dataset.raw_format = "complex"
+        data_ = dataset.raw_spectra(pixel, voltagestep)
+
+        # plots the real and imaginary components for the selected pixel and time step
+        ax[4].plot(dataset.frequency_bin, data_[0].flatten(), label="Real")
+        ax[4].set(xlabel="Frequency (Hz)", ylabel="Real (Arb. U.)")
+        ax3 = ax[4].twinx()
+        ax3.plot(dataset.frequency_bin, data_[
+                 1].flatten(), "r", label="Imaginary")
+        ax3.set(xlabel="Frequency (Hz)",
+                ylabel="Imag (Arb. U.)", facecolor="none")
+        ax[4].set_zorder(ax3.get_zorder() + 1)
+
+        # prints the figure
+        if self.Printer is not None:
+            self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+
+        return fig
 
         ##### GETTERS #####
         
@@ -407,138 +541,7 @@ class Viz:
 
 #         return wrapper
 
-#     @static_state_decorator
-#     def raw_be(self, dataset, filename="Figure_1_random_cantilever_resonance_results"):
-#         """Plots the raw data and the BE waveform
 
-#         Args:
-#             dataset (BE.dataset): BE dataset
-#             filename (str, optional): Name to save the file. Defaults to "Figure_1_random_cantilever_resonance_results".
-#         """
-
-#         # Select a random point and time step to plot
-#         pixel = np.random.randint(0, dataset.num_pix)
-#         voltagestep = np.random.randint(0, dataset.voltage_steps)
-
-#         # Plots the amplitude and phase for the selected pixel and time step
-#         fig, ax = layout_fig(5, 5, figsize=(5 * (5 / 3), 1.3))
-
-#         # constructs the BE waveform and plot
-#         be_voltagesteps = len(dataset.be_waveform) / dataset.be_repeats
-
-#         # plots the BE waveform
-#         ax[0].plot(dataset.be_waveform[: int(be_voltagesteps)])
-#         ax[0].set(xlabel="Time (sec)", ylabel="Voltage (V)")
-
-#         # plots the resonance graph
-#         resonance_graph = np.fft.fft(
-#             dataset.be_waveform[: int(be_voltagesteps)])
-#         fftfreq = fftpack.fftfreq(int(be_voltagesteps)) * dataset.sampling_rate
-
-#         ax[1].plot(
-#             fftfreq[: int(be_voltagesteps) // 2],
-#             np.abs(resonance_graph[: int(be_voltagesteps) // 2]),
-#         )
-#         ax[1].axvline(
-#             x=dataset.be_center_frequency,
-#             ymax=np.max(resonance_graph[: int(be_voltagesteps) // 2]),
-#             linestyle="--",
-#             color="r",
-#         )
-#         ax[1].set(xlabel="Frequency (Hz)", ylabel="Amplitude (Arb. U.)")
-#         ax[1].set_xlim(
-#             dataset.be_center_frequency
-#             - dataset.be_bandwidth
-#             - dataset.be_bandwidth * 0.25,
-#             dataset.be_center_frequency
-#             + dataset.be_bandwidth
-#             + dataset.be_bandwidth * 0.25,
-#         )
-
-#         # TODO: Should make this generalized not hard coded
-
-#         # manually set the x limits
-#         x_start = 120
-#         x_end = 140
-
-#         # plots the hysteresis waveform and zooms in
-#         ax[2].plot(dataset.hysteresis_waveform)
-
-#         ax_new = ax[2].inset_axes([0.5, 0.65, 0.48, 0.33])
-#         ax_new.plot(dataset.hysteresis_waveform)
-#         ax_new.set_xlim(x_start, x_end)
-#         ax_new.set_ylim(0, -15)
-
-#         # drows the inset connector
-#         inset_connector(
-#             fig,
-#             ax[2],
-#             ax_new,
-#             [(x_start, 0), (x_end, 0)],
-#             [(x_start, 0), (x_end, 0)],
-#             color="k",
-#             linestyle="--",
-#             linewidth=0.5,
-#         )
-
-#         # adds a box on the figure
-#         add_box(
-#             ax[2],
-#             (x_start, 0, x_end, -15),
-#             edgecolor="k",
-#             linestyle="--",
-#             facecolor="none",
-#             linewidth=0.5,
-#             zorder=10,
-#         )
-
-#         ax[2].set_xlabel("Voltage Steps")
-#         ax[2].set_ylabel("Voltage (V)")
-
-#         # changes the state to get the magnitude spectrum
-#         dataset.scaled = False
-#         dataset.raw_format = "magnitude spectrum"
-#         dataset.measurement_state = "all"
-#         dataset.resampled = False
-
-#         # gets the data for the selected pixel and time step
-#         data_ = dataset.raw_spectra(pixel, voltagestep)
-
-#         # plots the magnitude spectrum for and phase for the selected pixel and time step
-#         ax[3].plot(
-#             dataset.frequency_bin,
-#             data_[0].flatten(),
-#         )
-#         ax[3].set(
-#             xlabel="Frequency (Hz)", ylabel="Amplitude (Arb. U.)", facecolor="none"
-#         )
-#         ax2 = ax[3].twinx()
-#         ax2.plot(
-#             dataset.frequency_bin,
-#             data_[1].flatten(),
-#             "r",
-#         )
-#         ax2.set(xlabel="Frequency (Hz)", ylabel="Phase (rad)")
-#         ax[3].set_zorder(ax2.get_zorder() + 1)
-
-#         dataset.raw_format = "complex"
-#         data_ = dataset.raw_spectra(pixel, voltagestep)
-
-#         # plots the real and imaginary components for the selected pixel and time step
-#         ax[4].plot(dataset.frequency_bin, data_[0].flatten(), label="Real")
-#         ax[4].set(xlabel="Frequency (Hz)", ylabel="Real (Arb. U.)")
-#         ax3 = ax[4].twinx()
-#         ax3.plot(dataset.frequency_bin, data_[
-#                  1].flatten(), "r", label="Imaginary")
-#         ax3.set(xlabel="Frequency (Hz)",
-#                 ylabel="Imag (Arb. U.)", facecolor="none")
-#         ax[4].set_zorder(ax3.get_zorder() + 1)
-
-#         # prints the figure
-#         if self.Printer is not None:
-#             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
-
-#         return fig
 
 #     @static_scale_decorator
 #     def SHO_hist(self, SHO_data, filename=None, scaled=False):

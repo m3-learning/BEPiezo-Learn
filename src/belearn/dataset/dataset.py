@@ -33,7 +33,7 @@ from BGlib import be as belib
 # import matplotlib.pyplot as plt
 # from matplotlib.patches import ConnectionPatch
 # from m3_learning.viz.layout import layout_fig
-# # 
+# #
 # from scipy.interpolate import interp1d
 # from scipy import fftpack
 # from m3_learning.util.preprocessing import GlobalScaler
@@ -53,9 +53,6 @@ from BGlib import be as belib
 
 #
 # from m3_learning.util.h5_util import print_tree, get_tree
-
-
-
 
 
 @dataclass
@@ -691,13 +688,35 @@ class BE_Dataset:
             ]
 
             return spec_dim
-        
+
     @property
     def frequency_bin(self):
         """Frequency bin vector in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"]["Channel_000"]["Bin_Frequencies"][:]
         
+    @property
+    def spectroscopic_values(self):
+        """Spectroscopic values"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"]["Channel_000"]["Spectroscopic_Values"][:]
+        
+    @property
+    def be_waveform(self):
+        """BE excitation waveform"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"]["Channel_000"]["Excitation_Waveform"][:]
+        
+    @property
+    def hysteresis_waveform(self, loop_number=2):
+        """Gets the hysteresis waveform"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return (
+                self.spectroscopic_values[1, ::len(self.frequency_bin)][int(self.voltage_steps/loop_number):] *
+                self.spectroscopic_values[2, ::len(
+                    self.frequency_bin)][int(self.voltage_steps/loop_number):]
+            )
+
     def get_freq_values(self, data):
         """
         get_freq_values Function that gets the frequency bins
@@ -726,11 +745,11 @@ class BE_Dataset:
         if length == self.num_bins:
             x = self.frequency_bin
         elif length == self.resampled_bins:
-            x = resample(self.frequency_bin,
-                         self.resampled_bins)
+            x = resample(self.frequency_bin, self.resampled_bins)
         else:
             raise ValueError(
-                "original data must be the same length as the frequency bins or the resampled frequency bins")
+                "original data must be the same length as the frequency bins or the resampled frequency bins"
+            )
         return x
 
     def raw_data(self, pixel=None, voltage_step=None):
@@ -944,6 +963,42 @@ class BE_Dataset:
         #     with h5py.File(self.file, "r+") as h5_f:
         #         # Extract and return the entire dataset
         #         return self.raw_data_reshaped[self.dataset][:]
+        
+        
+    @property
+    def extraction_state(self):
+        """
+        Prints the current extraction state of the dataset.
+
+        This property method outputs a summary of the current settings and parameters 
+        related to the extraction state of the dataset. It includes information such 
+        as whether the data is resampled, the format of the raw data, the fitting method 
+        used, and various other state-related attributes.
+        
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        
+        # Print a formatted string that summarizes the current extraction state of the dataset
+        print(f'''
+        Dataset = {self.dataset}
+        Resample = {self.resampled}
+        Raw Format = {self.raw_format}
+        Fitter = {self.fitter}
+        Scaled = {self.scaled}
+        Output Shape = {self.output_shape}
+        Measurement State = {self.measurement_state}
+        Resample Resampled = {self.resampled}
+        Resample Bins = {self.resampled_bins}
+        LSQF Phase Shift = {self.LSQF_phase_shift}
+        NN Phase Shift = {self.NN_phase_shift}
+        Noise Level = {self.noise}
+        Loop Interpolated = {self.loop_interpolated}
+        ''')
+
 
     ##### SETTERS #####
 
@@ -977,6 +1032,33 @@ class BE_Dataset:
             self.noise = kwargs["noise"]
 
     ##### Data Transformers ######
+    
+    def waveform_constructor(self):
+        """
+        Constructs a combined waveform by adding elements from a hysteresis waveform and 
+        a band excitation (BE) waveform.
+
+        This method creates a new waveform by repeating and tiling the elements of the 
+        `hysteresis_waveform` and `be_waveform` arrays, respectively. Each element of 
+        the hysteresis waveform is combined with all elements of the BE waveform.
+
+        Returns:
+            np.array: 
+                The resulting combined waveform array.
+        """
+        
+        # Repeat each element of 'hysteresis_waveform' for the length of 'be_waveform'
+        hysteresis_waveform_repeated = np.repeat(self.hysteresis_waveform, len(self.be_waveform))
+
+        # Tile 'be_waveform' so that it repeats for each element in 'hysteresis_waveform'
+        be_waveform_tiled = np.tile(self.be_waveform, len(self.hysteresis_waveform))
+
+        # Combine the repeated and tiled arrays by adding them element-wise
+        result = hysteresis_waveform_repeated + be_waveform_tiled
+        
+        # Return the resulting combined waveform
+        return result
+
 
     def measurement_state_voltage(self, voltage_step):
         """
@@ -1160,7 +1242,7 @@ class BE_Dataset:
             except ValueError:
                 # Print an error message if resampling fails
                 print("Resampling failed, check that the number of bins is defined")
-                
+
     def resample(y, num_points, axis=0):
         """
         resample function to resample the data
@@ -1182,7 +1264,7 @@ class BE_Dataset:
         new_x = np.linspace(x.min(), x.max(), num_points)
 
         # Use cubic spline interpolation to estimate the y values of the curve at the new x values
-        f = interp1d(x, y, kind='linear', axis=0)
+        f = interp1d(x, y, kind="linear", axis=0)
         new_y = f(new_x)
 
         # Swap the first axis back with the selected axis
@@ -1447,11 +1529,7 @@ class BE_Dataset:
     #     with h5py.File(self.file, "r+") as h5_f:
     #         return h5_f['Measurement_000'].attrs["grid_num_rows"]
 
-    # @property
-    # def spectroscopic_values(self):
-    #     """Spectroscopic values"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return h5_f["Measurement_000"]["Channel_000"]["Spectroscopic_Values"][:]
+    
 
     # @property
     # def be_repeats(self):
@@ -1494,23 +1572,7 @@ class BE_Dataset:
     #     with h5py.File(self.file, "r+") as h5_f:
     #         return h5_f["Measurement_000"].attrs["BE_center_frequency_[Hz]"]
 
-
-
-    # @property
-    # def be_waveform(self):
-    #     """BE excitation waveform"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return h5_f["Measurement_000"]["Channel_000"]["Excitation_Waveform"][:]
-
-    # @property
-    # def hysteresis_waveform(self, loop_number=2):
-    #     """Gets the hysteresis waveform"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return (
-    #             self.spectroscopic_values[1, ::len(self.frequency_bin)][int(self.voltage_steps/loop_number):] *
-    #             self.spectroscopic_values[2, ::len(
-    #                 self.frequency_bin)][int(self.voltage_steps/loop_number):]
-    #         )
+   
 
     # @property
     # def resampled_freq(self):
@@ -1885,28 +1947,6 @@ class BE_Dataset:
     #         params = params_shifted[[index]]
 
     #     return pred_data, params
-
-
-    # @property
-    # def extraction_state(self):
-    #     """
-    #     extraction_state Function that prints the current extraction state
-    #     """
-    #     print(f'''
-    #     Dataset = {self.dataset}
-    #     Resample = {self.resampled}
-    #     Raw Format = {self.raw_format}
-    #     fitter = {self.fitter}
-    #     scaled = {self.scaled}
-    #     Output Shape = {self.output_shape}
-    #     Measurement State = {self.measurement_state}
-    #     Resample Resampled = {self.resampled}
-    #     Resample Bins = {self.resampled_bins}
-    #     LSQF Phase Shift = {self.LSQF_phase_shift}
-    #     NN Phase Shift = {self.NN_phase_shift}
-    #     Noise Level = {self.noise}
-    #     loop interpolated = {self.loop_interpolated}
-    #                 ''')
 
     # @static_state_decorator
     # def NN_data(self, resampled=None, scaled=True):

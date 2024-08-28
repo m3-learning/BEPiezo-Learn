@@ -17,6 +17,7 @@ import sidpy
 import os
 from sklearn.preprocessing import StandardScaler
 import pyUSID as usid
+from scipy.signal import resample
 from typing import Any, Callable, Dict, Optional
 from BGlib import be as belib
 
@@ -32,7 +33,7 @@ from BGlib import be as belib
 # import matplotlib.pyplot as plt
 # from matplotlib.patches import ConnectionPatch
 # from m3_learning.viz.layout import layout_fig
-# # from scipy.signal import resample
+# # 
 # from scipy.interpolate import interp1d
 # from scipy import fftpack
 # from m3_learning.util.preprocessing import GlobalScaler
@@ -54,34 +55,7 @@ from BGlib import be as belib
 # from m3_learning.util.h5_util import print_tree, get_tree
 
 
-# def resample(y, num_points, axis=0):
-#     """
-#     resample function to resample the data
 
-#     Args:
-#         y (np.array): data to resample
-#         num_points (int): number of points to resample
-#         axis (int, optional): axis to apply resampling. Defaults to 0.
-#     """
-
-#     # Get the shape of the input array
-#     shape = y.shape
-
-#     # Swap the selected axis with the first axis
-#     y = np.swapaxes(y, axis, 0)
-
-#     # Create a new array of x values that covers the range of the original x values with the desired number of points
-#     x = np.arange(shape[axis])
-#     new_x = np.linspace(x.min(), x.max(), num_points)
-
-#     # Use cubic spline interpolation to estimate the y values of the curve at the new x values
-#     f = interp1d(x, y, kind='linear', axis=0)
-#     new_y = f(new_x)
-
-#     # Swap the first axis back with the selected axis
-#     new_y = np.swapaxes(new_y, axis, 0)
-
-#     return new_y
 
 
 @dataclass
@@ -717,6 +691,41 @@ class BE_Dataset:
             ]
 
             return spec_dim
+        
+    def get_freq_values(self, data):
+        """
+        get_freq_values Function that gets the frequency bins
+
+        Args:
+            data (np.array): BE data
+
+        Raises:
+            ValueError: original data and frequency bin mismatch
+
+        Returns:
+            np.array: frequency bins for the data
+        """
+
+        try:
+            data = data.flatten()
+        except:
+            pass
+
+        if np.isscalar(data) or len(data) == 1:
+            length = data
+        else:
+            length = len(data)
+
+        # checks if the length of the data is the raw length, or the resampled length
+        if length == self.num_bins:
+            x = self.frequency_bin
+        elif length == self.resampled_bins:
+            x = resample(self.frequency_bin,
+                         self.resampled_bins)
+        else:
+            raise ValueError(
+                "original data must be the same length as the frequency bins or the resampled frequency bins")
+        return x
 
     def raw_data(self, pixel=None, voltage_step=None):
         """
@@ -1145,6 +1154,35 @@ class BE_Dataset:
             except ValueError:
                 # Print an error message if resampling fails
                 print("Resampling failed, check that the number of bins is defined")
+                
+    def resample(y, num_points, axis=0):
+        """
+        resample function to resample the data
+
+        Args:
+            y (np.array): data to resample
+            num_points (int): number of points to resample
+            axis (int, optional): axis to apply resampling. Defaults to 0.
+        """
+
+        # Get the shape of the input array
+        shape = y.shape
+
+        # Swap the selected axis with the first axis
+        y = np.swapaxes(y, axis, 0)
+
+        # Create a new array of x values that covers the range of the original x values with the desired number of points
+        x = np.arange(shape[axis])
+        new_x = np.linspace(x.min(), x.max(), num_points)
+
+        # Use cubic spline interpolation to estimate the y values of the curve at the new x values
+        f = interp1d(x, y, kind='linear', axis=0)
+        new_y = f(new_x)
+
+        # Swap the first axis back with the selected axis
+        new_y = np.swapaxes(new_y, axis, 0)
+
+        return new_y
 
     ##### NOISE GETTER and SETTER #####
 
@@ -1846,40 +1884,6 @@ class BE_Dataset:
 
     #     return pred_data, params
 
-    # def get_freq_values(self, data):
-    #     """
-    #     get_freq_values Function that gets the frequency bins
-
-    #     Args:
-    #         data (np.array): BE data
-
-    #     Raises:
-    #         ValueError: original data and frequency bin mismatch
-
-    #     Returns:
-    #         np.array: frequency bins for the data
-    #     """
-
-    #     try:
-    #         data = data.flatten()
-    #     except:
-    #         pass
-
-    #     if np.isscalar(data) or len(data) == 1:
-    #         length = data
-    #     else:
-    #         length = len(data)
-
-    #     # checks if the length of the data is the raw length, or the resampled length
-    #     if length == self.num_bins:
-    #         x = self.frequency_bin
-    #     elif length == self.resampled_bins:
-    #         x = resample(self.frequency_bin,
-    #                      self.resampled_bins)
-    #     else:
-    #         raise ValueError(
-    #             "original data must be the same length as the frequency bins or the resampled frequency bins")
-    #     return x
 
     # @property
     # def extraction_state(self):

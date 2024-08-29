@@ -988,6 +988,43 @@ class BE_Dataset:
         #         # Extract and return the entire dataset
         #         return self.raw_data_reshaped[self.dataset][:]
         
+    def SHO_LSQF(self, pixel=None, voltage_step=None):
+        """
+        Retrieves the Simple Harmonic Oscillator (SHO) fit results using the Least Squares Fitting (LSQF) method.
+
+        This function extracts the SHO fit results from the dataset stored in an HDF5 file. The results can be 
+        retrieved for a specific pixel and voltage step, or for the entire dataset, depending on the provided arguments.
+
+        Args:
+            pixel (int, optional): The index of the pixel for which the SHO fit results are to be extracted. 
+                                If None, results for all pixels will be returned. Defaults to None.
+            voltage_step (int, optional): The index of the voltage step for which the SHO fit results are to be extracted. 
+                                        If None, results for all voltage steps will be returned. Defaults to None.
+
+        Returns:
+            np.array: The extracted SHO LSQF results. The shape of the returned array depends on the 
+                    combination of the pixel and voltage_step parameters.
+        """
+
+        # Open the HDF5 file containing the SHO LSQF data
+        with h5py.File(self.file, "r+") as h5_f:
+
+            # Copy the SHO LSQF data for the specific dataset
+            dataset_ = self.SHO_LSQF_data[f"{self.dataset}-SHO_Fit_000"].copy()
+
+            # If both pixel and voltage_step are provided, return the data for the specific pixel and voltage step
+            if pixel is not None and voltage_step is not None:
+                return self.get_data_w_voltage_state(dataset_[[pixel], :, :])[:, [voltage_step], :]
+            
+            # If only pixel is provided, return the data for the specific pixel across all voltage steps
+            elif pixel is not None:
+                return self.get_data_w_voltage_state(dataset_[[pixel], :, :])
+            
+            # If neither pixel nor voltage_step are provided, return the entire dataset
+            else:
+                return self.get_data_w_voltage_state(dataset_[:])
+
+        
     @static_state_decorator
     def SHO_fit_results(self,
                         state=None,
@@ -1730,28 +1767,6 @@ class BE_Dataset:
 
     #     self.loop_param_scaler.fit(data)
 
-    # def SHO_LSQF(self, pixel=None, voltage_step=None):
-    #     """
-    #     SHO_LSQF Gets the least squares SHO fit results
-
-    #     Args:
-    #         pixel (int, optional): selected pixel index to extract. Defaults to None.
-    #         voltage_step (int, optional): selected voltage index to extract. Defaults to None.
-
-    #     Returns:
-    #         np.array: SHO LSQF results
-    #     """
-
-    #     with h5py.File(self.file, "r+") as h5_f:
-
-    #         dataset_ = self.SHO_LSQF_data[f"{self.dataset}-SHO_Fit_000"].copy()
-
-    #         if pixel is not None and voltage_step is not None:
-    #             return self.get_data_w_voltage_state(dataset_[[pixel], :, :])[:, [voltage_step], :]
-    #         elif pixel is not None:
-    #             return self.get_data_w_voltage_state(dataset_[[pixel], :, :])
-    #         else:
-    #             return self.get_data_w_voltage_state(dataset_[:])
 
     # @staticmethod
     # def to_magnitude(data):

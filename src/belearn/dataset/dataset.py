@@ -35,7 +35,7 @@ from BGlib import be as belib
 # from m3_learning.viz.layout import layout_fig
 # #
 # from scipy.interpolate import interp1d
-# 
+#
 # from m3_learning.util.preprocessing import GlobalScaler
 # import torch
 # import torch.nn as nn
@@ -593,25 +593,25 @@ class BE_Dataset:
     def spectroscopic_length(self):
         """Gets the length of the spectroscopic vector"""
         return self.num_bins * self.voltage_steps
-    
+
     @property
     def be_repeats(self):
         """Number of BE repeats"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f['Measurement_000'].attrs["BE_repeats"]
-        
+            return h5_f["Measurement_000"].attrs["BE_repeats"]
+
     @property
     def sampling_rate(self):
         """Sampling rate in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"].attrs["IO_rate_[Hz]"]
-        
+
     @property
     def be_center_frequency(self):
         """BE center frequency in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"].attrs["BE_center_frequency_[Hz]"]
-        
+
     @property
     def be_bandwidth(self):
         """BE bandwidth in Hz"""
@@ -718,28 +718,55 @@ class BE_Dataset:
         """Frequency bin vector in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"]["Channel_000"]["Bin_Frequencies"][:]
-        
+
     @property
     def spectroscopic_values(self):
         """Spectroscopic values"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"]["Channel_000"]["Spectroscopic_Values"][:]
-        
+
     @property
     def be_waveform(self):
         """BE excitation waveform"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"]["Channel_000"]["Excitation_Waveform"][:]
-        
+
     @property
     def hysteresis_waveform(self, loop_number=2):
         """Gets the hysteresis waveform"""
         with h5py.File(self.file, "r+") as h5_f:
             return (
-                self.spectroscopic_values[1, ::len(self.frequency_bin)][int(self.voltage_steps/loop_number):] *
-                self.spectroscopic_values[2, ::len(
-                    self.frequency_bin)][int(self.voltage_steps/loop_number):]
+                self.spectroscopic_values[1, :: len(self.frequency_bin)][
+                    int(self.voltage_steps / loop_number) :
+                ]
+                * self.spectroscopic_values[2, :: len(self.frequency_bin)][
+                    int(self.voltage_steps / loop_number) :
+                ]
             )
+
+    def state_num_voltage_steps(self):
+        """
+        Retrieves the number of voltage steps based on the current measurement state.
+
+        This function determines the number of voltage steps to use depending on whether
+        the current measurement state is set to 'all' or a subset. If the measurement state
+        is 'all', it returns the total number of voltage steps; otherwise, it returns half
+        the total number.
+
+        Returns:
+            int: The number of voltage steps corresponding to the current measurement state.
+        """
+
+        # Check if the current measurement state is set to 'all'
+        if self.measurement_state == "all":
+            # If 'all', return the full number of voltage steps
+            voltage_step = self.voltage_steps
+        else:
+            # If not 'all', return half the number of voltage steps
+            voltage_step = int(self.voltage_steps / 2)
+
+        # Return the computed number of voltage steps
+        return voltage_step
 
     def get_freq_values(self, data):
         """
@@ -987,22 +1014,22 @@ class BE_Dataset:
         #     with h5py.File(self.file, "r+") as h5_f:
         #         # Extract and return the entire dataset
         #         return self.raw_data_reshaped[self.dataset][:]
-        
+
     def SHO_LSQF(self, pixel=None, voltage_step=None):
         """
         Retrieves the Simple Harmonic Oscillator (SHO) fit results using the Least Squares Fitting (LSQF) method.
 
-        This function extracts the SHO fit results from the dataset stored in an HDF5 file. The results can be 
+        This function extracts the SHO fit results from the dataset stored in an HDF5 file. The results can be
         retrieved for a specific pixel and voltage step, or for the entire dataset, depending on the provided arguments.
 
         Args:
-            pixel (int, optional): The index of the pixel for which the SHO fit results are to be extracted. 
+            pixel (int, optional): The index of the pixel for which the SHO fit results are to be extracted.
                                 If None, results for all pixels will be returned. Defaults to None.
-            voltage_step (int, optional): The index of the voltage step for which the SHO fit results are to be extracted. 
+            voltage_step (int, optional): The index of the voltage step for which the SHO fit results are to be extracted.
                                         If None, results for all voltage steps will be returned. Defaults to None.
 
         Returns:
-            np.array: The extracted SHO LSQF results. The shape of the returned array depends on the 
+            np.array: The extracted SHO LSQF results. The shape of the returned array depends on the
                     combination of the pixel and voltage_step parameters.
         """
 
@@ -1014,17 +1041,18 @@ class BE_Dataset:
 
             # If both pixel and voltage_step are provided, return the data for the specific pixel and voltage step
             if pixel is not None and voltage_step is not None:
-                return self.get_data_w_voltage_state(dataset_[[pixel], :, :])[:, [voltage_step], :]
-            
+                return self.get_data_w_voltage_state(dataset_[[pixel], :, :])[
+                    :, [voltage_step], :
+                ]
+
             # If only pixel is provided, return the data for the specific pixel across all voltage steps
             elif pixel is not None:
                 return self.get_data_w_voltage_state(dataset_[[pixel], :, :])
-            
+
             # If neither pixel nor voltage_step are provided, return the entire dataset
             else:
                 return self.get_data_w_voltage_state(dataset_[:])
 
-    
     def get_data_w_voltage_state(self, data):
         """
         get_data_w_voltage_state function to extract data given a voltage state either the on or off state
@@ -1037,41 +1065,37 @@ class BE_Dataset:
         """
 
         # only does this if getting the full dataset, will reduce to off and on state
-        if self.measurement_state == 'all':
+        if self.measurement_state == "all":
             data = data
-        elif self.measurement_state == 'on':
+        elif self.measurement_state == "on":
             data = data[:, 1::2, :]
-        elif self.measurement_state == 'off':
+        elif self.measurement_state == "off":
             data = data[:, ::2, :]
 
         return data
-    
+
     @static_state_decorator
-    def SHO_fit_results(self,
-                        state=None,
-                        model=None,
-                        phase_shift=None,
-                        X_data=None):
+    def SHO_fit_results(self, state=None, model=None, phase_shift=None, X_data=None):
         """
-        Retrieves the SHO (Simple Harmonic Oscillator) fit results from the dataset, either 
+        Retrieves the SHO (Simple Harmonic Oscillator) fit results from the dataset, either
         by using a specified neural network model or a least squares fitting method.
 
         Args:
-            state (dict, optional): A dictionary representing a specific measurement state. 
+            state (dict, optional): A dictionary representing a specific measurement state.
                                     If provided, the dataset will be adjusted to this state before fitting.
                                     Defaults to None.
-            model (nn.Module, optional): A neural network model to predict the SHO fit results. 
+            model (nn.Module, optional): A neural network model to predict the SHO fit results.
                                         If not provided, a least squares fitting method is used.
                                         Defaults to None.
-            phase_shift (float, optional): A value to shift the phase of the resulting data. 
+            phase_shift (float, optional): A value to shift the phase of the resulting data.
                                         If None, the default phase shift from the dataset's configuration is used.
                                         Defaults to None.
-            X_data (np.array, optional): The frequency bins used for model prediction. 
+            X_data (np.array, optional): The frequency bins used for model prediction.
                                         If None and a model is provided, it will be generated from the dataset.
                                         Defaults to None.
 
         Returns:
-            np.array: The SHO fit parameters, either in the shape of (index, SHO_params) or 
+            np.array: The SHO fit parameters, either in the shape of (index, SHO_params) or
                     (num_pix, num_voltage_steps, SHO_params), depending on the dataset configuration.
         """
 
@@ -1096,19 +1120,24 @@ class BE_Dataset:
                 # Reshape the data to a 2D array with 4 columns (assumed to be the SHO parameters)
                 data = data.reshape(-1, 4)
 
-                # If a phase shift is specified in the dataset's fitter configuration and no 
+                # If a phase shift is specified in the dataset's fitter configuration and no
                 # external phase shift is provided, apply the default phase shift
-                if eval(f"self.{self.fitter}_phase_shift") is not None and phase_shift is None:
+                if (
+                    eval(f"self.{self.fitter}_phase_shift") is not None
+                    and phase_shift is None
+                ):
                     data[:, 3] = eval(
-                        f"self.shift_phase(data[:, 3], self.{self.fitter}_phase_shift)")
+                        f"self.shift_phase(data[:, 3], self.{self.fitter}_phase_shift)"
+                    )
 
                 # Reshape the data back to its original shape
                 data = data.reshape(data_shape)
 
                 # If the dataset is scaled, apply the scaling transformation to the data
                 if self.scaled:
-                    data = self.SHO_scaler.transform(
-                        data.reshape(-1, 4)).reshape(data_shape)
+                    data = self.SHO_scaler.transform(data.reshape(-1, 4)).reshape(
+                        data_shape
+                    )
 
         else:
             # If a model is provided, use it to predict the SHO parameters
@@ -1136,26 +1165,26 @@ class BE_Dataset:
             # Return data as a 3D array (num_pix, num_voltage_steps, SHO_params)
             return data.reshape(self.num_pix, self.state_num_voltage_steps(), 4)
 
-        
     @property
     def extraction_state(self):
         """
         Prints the current extraction state of the dataset.
 
-        This property method outputs a summary of the current settings and parameters 
-        related to the extraction state of the dataset. It includes information such 
-        as whether the data is resampled, the format of the raw data, the fitting method 
+        This property method outputs a summary of the current settings and parameters
+        related to the extraction state of the dataset. It includes information such
+        as whether the data is resampled, the format of the raw data, the fitting method
         used, and various other state-related attributes.
-        
+
         Args:
             None
 
         Returns:
             None
         """
-        
+
         # Print a formatted string that summarizes the current extraction state of the dataset
-        print(f'''
+        print(
+            f"""
         Dataset = {self.dataset}
         Resample = {self.resampled}
         Raw Format = {self.raw_format}
@@ -1169,8 +1198,8 @@ class BE_Dataset:
         NN Phase Shift = {self.NN_phase_shift}
         Noise Level = {self.noise}
         Loop Interpolated = {self.loop_interpolated}
-        ''')
-
+        """
+        )
 
     ##### SETTERS #####
 
@@ -1204,17 +1233,17 @@ class BE_Dataset:
             self.noise = kwargs["noise"]
 
     ##### Data Transformers ######
-    
+
     @staticmethod
     def shift_phase(phase, shift_=None):
         """
-        Shifts the phase of the dataset by a specified amount. This function adjusts the phase 
-        values to account for any phase shift, ensuring the phase values are wrapped correctly 
+        Shifts the phase of the dataset by a specified amount. This function adjusts the phase
+        values to account for any phase shift, ensuring the phase values are wrapped correctly
         within the range of -π to π or π to 3π depending on the shift direction.
 
         Args:
             phase (np.array): Array of phase data to be shifted.
-            shift_ (float, optional): The phase shift to apply, in radians. If None or 0, 
+            shift_ (float, optional): The phase shift to apply, in radians. If None or 0,
                                     no shift is applied. Defaults to None.
 
         Returns:
@@ -1253,33 +1282,33 @@ class BE_Dataset:
 
         return phase__
 
-    
     def waveform_constructor(self):
         """
-        Constructs a combined waveform by adding elements from a hysteresis waveform and 
+        Constructs a combined waveform by adding elements from a hysteresis waveform and
         a band excitation (BE) waveform.
 
-        This method creates a new waveform by repeating and tiling the elements of the 
-        `hysteresis_waveform` and `be_waveform` arrays, respectively. Each element of 
+        This method creates a new waveform by repeating and tiling the elements of the
+        `hysteresis_waveform` and `be_waveform` arrays, respectively. Each element of
         the hysteresis waveform is combined with all elements of the BE waveform.
 
         Returns:
-            np.array: 
+            np.array:
                 The resulting combined waveform array.
         """
-        
+
         # Repeat each element of 'hysteresis_waveform' for the length of 'be_waveform'
-        hysteresis_waveform_repeated = np.repeat(self.hysteresis_waveform, len(self.be_waveform))
+        hysteresis_waveform_repeated = np.repeat(
+            self.hysteresis_waveform, len(self.be_waveform)
+        )
 
         # Tile 'be_waveform' so that it repeats for each element in 'hysteresis_waveform'
         be_waveform_tiled = np.tile(self.be_waveform, len(self.hysteresis_waveform))
 
         # Combine the repeated and tiled arrays by adding them element-wise
         result = hysteresis_waveform_repeated + be_waveform_tiled
-        
+
         # Return the resulting combined waveform
         return result
-
 
     def measurement_state_voltage(self, voltage_step):
         """
@@ -1750,10 +1779,6 @@ class BE_Dataset:
     #     with h5py.File(self.file, "r+") as h5_f:
     #         return h5_f['Measurement_000'].attrs["grid_num_rows"]
 
-    
-
-    
-
     # @property
     # def dc_voltage(self):
     #     """Gets the DC voltage vector"""
@@ -1770,13 +1795,6 @@ class BE_Dataset:
     #             cycles *= 2
 
     #         return cycles
-
-
-    
-
-    
-
-   
 
     # @property
     # def resampled_freq(self):
@@ -1837,7 +1855,6 @@ class BE_Dataset:
 
     #     self.loop_param_scaler.fit(data)
 
-
     # @staticmethod
     # def to_magnitude(data):
     #     """
@@ -1893,8 +1910,6 @@ class BE_Dataset:
 
     #     return np.take(data, 0, axis=axis) + 1j * np.take(data, 1, axis=axis)
 
-
-
     # def raw_data_resampled(self, pixel=None, voltage_step=None):
     #     """
     #     raw_data_resampled Resampled real part of the complex data resampled
@@ -1912,24 +1927,6 @@ class BE_Dataset:
     #     else:
     #         with h5py.File(self.file, "r+") as h5_f:
     #             return self.resampled_data[self.dataset][:]
-
-    # def state_num_voltage_steps(self):
-    #     """
-    #     state_num_voltage_steps gets the number of voltage steps given the current measurement state
-
-    #     Returns:
-    #         int: number of voltage steps
-    #     """
-
-    #     if self.measurement_state == 'all':
-    #         voltage_step = self.voltage_steps
-    #     else:
-    #         voltage_step = int(self.voltage_steps/2)
-
-    #     return voltage_step
-
-    
-
 
     # def get_cycle(self, data, axis=0,  **kwargs):
     #     """

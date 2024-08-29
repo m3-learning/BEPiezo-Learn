@@ -179,6 +179,58 @@ class Viz:
             return out
 
         return wrapper
+    
+    def static_scale_decorator(func):
+        """
+        Decorator that preserves the state of the `SHO_ranges` and the dataset attributes 
+        before the decorated function is called and restores them afterward. This ensures 
+        that the function does not alter the state of the object it operates on.
+
+        Args:
+            func (method): The method to be decorated.
+
+        Returns:
+            method: The wrapped method with state-preservation functionality.
+        """
+
+        def wrapper(self, SHO_data, *args, **kwargs):
+            """
+            Wrapper function that preserves the current `SHO_ranges` and dataset state, 
+            calls the original function, and then restores the preserved state.
+
+            Args:
+                self: Instance of the class containing the method.
+                SHO_data: Data to be processed by the wrapped function.
+                *args: Additional positional arguments passed to the wrapped function.
+                **kwargs: Additional keyword arguments passed to the wrapped function.
+
+            Returns:
+                Any: The output of the wrapped function.
+            """
+
+            # Preserve the current SHO_ranges
+            current_SHO_ranges = self.SHO_ranges
+
+            # Preserve the current state of the dataset (assuming get_state returns a dictionary)
+            current_dataset_state = self.dataset.get_state  # Assume this returns a dict of the dataset state
+
+            # Debugging output to verify the preserved state
+            print('current_SHO_ranges:', current_SHO_ranges)
+            print('current_dataset_state:', current_dataset_state)
+
+            # Call the original function with the given arguments
+            out = func(self, SHO_data, *args, **kwargs)
+
+            # Restore the preserved SHO_ranges
+            self.SHO_ranges = current_SHO_ranges
+
+            # Restore the preserved dataset state by setting the attributes back to their original values
+            self.dataset.set_attributes(**current_dataset_state)
+
+            return out
+
+        return wrapper
+
 
     ##### GRAPHS #####
 
@@ -452,6 +504,58 @@ class Viz:
         # Save the figure if a Printer object is available
         if self.Printer is not None:
             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+            
+    @static_scale_decorator
+    def SHO_hist(self, SHO_data, filename=None, scaled=False):
+        """Plots the SHO hysteresis parameters
+
+        Args:
+            SHO_data (numpy): SHO fit results
+            filename (str, optional): filename where to save the results. Defaults to "".
+        """
+
+        # if the scale is False will not use the scale in the viz
+        if self.dataset.scaled or scaled:
+            print('dataset is scaled')
+            self.SHO_ranges = None
+
+        # if the SHO data is not a list it will make it a list
+        if type(SHO_data) is not list:
+            SHO_data = [SHO_data]
+
+        # check distributions of each parameter before and after scaling
+        fig, axs = layout_fig(
+            4 * len(SHO_data), 4, figsize=(5.25, 1.25 * len(SHO_data))
+        )
+
+        for k, SHO_data_ in enumerate(SHO_data):
+            axs_ = axs[k * 4: (k + 1) * 4]
+
+            SHO_data_ = SHO_data_.reshape(-1, 4)
+
+            for i, (ax, label) in enumerate(zip(axs_.flat, self.SHO_labels)):
+                ax.hist(
+                    SHO_data_[:, i].flatten(),
+                    100,
+                    range=self.SHO_ranges[i] if self.SHO_ranges else None,
+                )
+
+                if i == 0:
+                    ax.set(ylabel="counts")
+                ax.set(xlabel=label["y_label"])
+                ax.ticklabel_format(axis="x", style="sci", scilimits=(0, 0))
+                ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+
+                ax.xaxis.labelpad = 10
+
+                ax.set_box_aspect(1)
+
+            if self.verbose:
+                self.dataset.extraction_state
+
+        # prints the figure
+        if self.Printer is not None and filename is not None:
+            self.Printer.savefig(fig, filename, label_figs=axs, style="b")
 
 
     ##### GETTERS #####
@@ -517,90 +621,8 @@ class Viz:
             self.noise = kwargs.get("noise")
 
 
-#     def static_scale_decorator(func):
-#         """Decorator that stops the function from changing the state
-
-#         Args:
-#             func (method): any method
-#         """
-
-#         def wrapper(self,SHO_data, *args, **kwargs):
-
-#             current_SHO_ranges = self.SHO_ranges
-#             current_dataset_state = self.dataset.get_state  # Assume this returns a dict of the dataset state
-
-#             print('current_SHO_ranges:', current_SHO_ranges)
-#             print('current_dataset_state:', current_dataset_state)
-
-#             # Call the original function
-#             out = func(self, SHO_data, *args, **kwargs)
-
-#             # Restore the preserved state
-#             self.SHO_ranges = current_SHO_ranges
-#             self.dataset.set_attributes(**current_dataset_state)
-
-#             #current_state = args[0].SHO_ranges
-#             #current_state = args[0].dataset.get_state
-#             #print('current_state',current_state)
-#             #out = func(self, SHO_data, *args, **kwargs)
-#             #args[0].SHO_ranges = current_state
-#             #args[0].dataset.set_attributes(**current_state)
-#             return out
-
-#         return wrapper
 
 
-#     @static_scale_decorator
-#     def SHO_hist(self, SHO_data, filename=None, scaled=False):
-#         """Plots the SHO hysteresis parameters
-
-#         Args:
-#             SHO_data (numpy): SHO fit results
-#             filename (str, optional): filename where to save the results. Defaults to "".
-#         """
-
-#         # if the scale is False will not use the scale in the viz
-#         if self.dataset.scaled or scaled:
-#             print('dataset is scaled')
-#             self.SHO_ranges = None
-
-#         # if the SHO data is not a list it will make it a list
-#         if type(SHO_data) is not list:
-#             SHO_data = [SHO_data]
-
-#         # check distributions of each parameter before and after scaling
-#         fig, axs = layout_fig(
-#             4 * len(SHO_data), 4, figsize=(5.25, 1.25 * len(SHO_data))
-#         )
-
-#         for k, SHO_data_ in enumerate(SHO_data):
-#             axs_ = axs[k * 4: (k + 1) * 4]
-
-#             SHO_data_ = SHO_data_.reshape(-1, 4)
-
-#             for i, (ax, label) in enumerate(zip(axs_.flat, self.SHO_labels)):
-#                 ax.hist(
-#                     SHO_data_[:, i].flatten(),
-#                     100,
-#                     range=self.SHO_ranges[i] if self.SHO_ranges else None,
-#                 )
-
-#                 if i == 0:
-#                     ax.set(ylabel="counts")
-#                 ax.set(xlabel=label["y_label"])
-#                 ax.ticklabel_format(axis="x", style="sci", scilimits=(0, 0))
-#                 ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
-
-#                 ax.xaxis.labelpad = 10
-
-#                 ax.set_box_aspect(1)
-
-#             if self.verbose:
-#                 self.dataset.extraction_state
-
-#         # prints the figure
-#         if self.Printer is not None and filename is not None:
-#             self.Printer.savefig(fig, filename, label_figs=axs, style="b")
 
 #     def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 #         """

@@ -122,6 +122,7 @@ class Viz:
         color_palette (Optional[Any], optional): Color palette settings. Defaults to None.
 
     """
+
     dataset: Any  # Specify the type based on what you expect
     # You can also define the type of Printer if you know it
     Printer: Optional[Type] = None
@@ -132,55 +133,55 @@ class Viz:
     # Specify the type based on what you expect
     image_scalebar: Optional[Any] = None
 
-    SHO_labels: List[Dict[str, str]] = field(default_factory=lambda: [
-        {"title": "Amplitude", "y_label": "Amplitude \n (Arb. U.)"},
-        {"title": "Resonance Frequency",
-            "y_label": "Resonance Frequency \n (Hz)"},
-        {"title": "Dampening", "y_label": "Quality Factor \n (Arb. U.)"},
-        {"title": "Phase", "y_label": "Phase \n (rad)"},
-    ])
+    SHO_labels: List[Dict[str, str]] = field(
+        default_factory=lambda: [
+            {"title": "Amplitude", "y_label": "Amplitude \n (Arb. U.)"},
+            {"title": "Resonance Frequency", "y_label": "Resonance Frequency \n (Hz)"},
+            {"title": "Dampening", "y_label": "Quality Factor \n (Arb. U.)"},
+            {"title": "Phase", "y_label": "Phase \n (rad)"},
+        ]
+    )
 
     # Replace Any with the expected type if known
     color_palette: Optional[Any] = None
-    
+
     ##### Decorators #####
-    
+
     def static_dataset_decorator(func):
         """
         Decorator that preserves the dataset's state before and after a function call.
 
-        This decorator ensures that the state of the dataset remains unchanged after 
-        the decorated function is executed. It captures the current state before the 
+        This decorator ensures that the state of the dataset remains unchanged after
+        the decorated function is executed. It captures the current state before the
         function is called and restores it afterward.
 
         Args:
-            func (method): 
-                The method to be decorated. This can be any method that interacts with 
+            func (method):
+                The method to be decorated. This can be any method that interacts with
                 the dataset and might alter its state.
 
         Returns:
-            method: 
+            method:
                 The wrapped function that preserves the dataset's state.
         """
-
 
         def wrapper(*args, **kwargs):
             # Capture the current state of the dataset
             current_state = args[0].dataset.get_state
-            
+
             # Execute the decorated function and capture its output
             out = func(*args, **kwargs)
-            
+
             # Restore the dataset's state to what it was before the function was called
             args[0].dataset.set_attributes(**current_state)
-            
+
             # Return the output of the function
             return out
 
         return wrapper
-    
+
     ##### GRAPHS #####
-    
+
     @static_dataset_decorator
     def raw_data_comparison(
         self,
@@ -200,26 +201,25 @@ class Viz:
         and predicted datasets. The function can save the plot if a filename is provided.
 
         Args:
-            true (dict): 
+            true (dict):
                 Attributes of the true dataset to be set.
-            predict (dict, optional): 
+            predict (dict, optional):
                 Attributes of the predicted dataset to be set. Defaults to None.
-            filename (str, optional): 
+            filename (str, optional):
                 Name of the file to save the figure. Defaults to None.
-            pixel (int, optional): 
+            pixel (int, optional):
                 Pixel index to plot. If None, a random pixel is selected. Defaults to None.
-            voltage_step (int, optional): 
+            voltage_step (int, optional):
                 Voltage step index to plot. If None, it is determined by the dataset. Defaults to None.
-            legend (bool, optional): 
+            legend (bool, optional):
                 Whether to display a legend on the plot. Defaults to True.
-            **kwargs (dict): 
+            **kwargs (dict):
                 Additional keyword arguments for the dataset's raw_spectra method.
 
         Returns:
             None
         """
 
-        
         # Set the attributes for the true dataset
         self.set_attributes(**true)
 
@@ -237,9 +237,7 @@ class Viz:
         self.dataset.raw_format = "magnitude spectrum"
 
         # Get the raw spectral data for the selected pixel and voltage step
-        data, x = self.dataset.raw_spectra(
-            pixel, voltage_step, frequency=True
-        )
+        data, x = self.dataset.raw_spectra(pixel, voltage_step, frequency=True)
 
         # Plot amplitude and phase for the true dataset
         axs[0].plot(x, data[0].flatten(), "b", label=self.dataset.label + " Amplitude")
@@ -312,68 +310,83 @@ class Viz:
             self.Printer.savefig(fig, filename, label_figs=[axs[0], axs[1]], style="b")
 
     @static_dataset_decorator
-    def raw_be(self, dataset, filename="Figure_1_random_cantilever_resonance_results"):
-        """Plots the raw data and the BE waveform
+    def raw_be(
+        self,
+        dataset,
+        x_start=0.8e6,
+        x_end=1e6,
+        figsize=(5 * (5 / 3), 1.3),
+        inset_pos=[0.5, 0.65, 0.48, 0.33],
+        filename="Figure_1_random_cantilever_resonance_results",
+    ):
+        """
+        Plots the raw data and the Band Excitation (BE) waveform for a randomly selected 
+        pixel and voltage step from the provided dataset. 
+
+        This function performs the following steps:
+        1. Selects a random pixel and voltage step from the dataset.
+        2. Constructs and plots the BE waveform.
+        3. Plots the resonance graph using the Fourier transform of the BE waveform.
+        4. Plots the hysteresis waveform with a zoomed-in inset.
+        5. Changes the dataset state to get the magnitude spectrum and plots it.
+        6. Retrieves the raw spectra in both magnitude and complex format and plots the 
+        real and imaginary components.
+        7. Saves the figure if a printer object is available.
 
         Args:
-            dataset (BE.dataset): BE dataset
+            dataset (BE.dataset): BE dataset containing the data to be plotted.
+            x_start (float, optional): Start of the x-axis range for the zoomed-in inset. Defaults to 0.8e6.
+            x_end (float, optional): End of the x-axis range for the zoomed-in inset. Defaults to 1e6.
+            figsize (tuple, optional): Size of the figure to be plotted. Defaults to (5 * (5 / 3), 1.3).
+            inset_pos (list, optional): Position of the inset axes in the plot. Defaults to [0.5, 0.65, 0.48, 0.33].
             filename (str, optional): Name to save the file. Defaults to "Figure_1_random_cantilever_resonance_results".
         """
-
-        # Select a random point and time step to plot
+        
+        # Select a random pixel and voltage step from the dataset to plot
         pixel = np.random.randint(0, dataset.num_pix)
         voltagestep = np.random.randint(0, dataset.voltage_steps)
 
-        # Plots the amplitude and phase for the selected pixel and time step
-        fig, ax = layout_fig(5, 5, figsize=(5 * (5 / 3), 1.3))
+        # Initialize the figure and axes for plotting
+        fig, ax = layout_fig(5, 5, figsize=figsize)
 
-        # constructs the BE waveform and plot
+        # Calculate the number of voltage steps in one BE waveform cycle
         be_voltagesteps = len(dataset.be_waveform) / dataset.be_repeats
 
-        # plots the BE waveform
-        ax[0].plot(dataset.be_waveform[: int(be_voltagesteps)])
+        # Plot the BE waveform
+        ax[0].plot(dataset.be_waveform[:int(be_voltagesteps)])
         ax[0].set(xlabel="Time (sec)", ylabel="Voltage (V)")
 
-        # plots the resonance graph
-        resonance_graph = np.fft.fft(
-            dataset.be_waveform[: int(be_voltagesteps)])
+        # Perform Fourier Transform on the BE waveform to get the resonance graph
+        resonance_graph = np.fft.fft(dataset.be_waveform[:int(be_voltagesteps)])
         fftfreq = fftpack.fftfreq(int(be_voltagesteps)) * dataset.sampling_rate
 
+        # Plot the resonance graph
         ax[1].plot(
-            fftfreq[: int(be_voltagesteps) // 2],
-            np.abs(resonance_graph[: int(be_voltagesteps) // 2]),
+            fftfreq[:int(be_voltagesteps) // 2],
+            np.abs(resonance_graph[:int(be_voltagesteps) // 2]),
         )
         ax[1].axvline(
             x=dataset.be_center_frequency,
-            ymax=np.max(resonance_graph[: int(be_voltagesteps) // 2]),
+            ymax=np.max(resonance_graph[:int(be_voltagesteps) // 2]),
             linestyle="--",
             color="r",
         )
         ax[1].set(xlabel="Frequency (Hz)", ylabel="Amplitude (Arb. U.)")
+
+        # Set the x-axis limits based on the BE center frequency and bandwidth
         ax[1].set_xlim(
-            dataset.be_center_frequency
-            - dataset.be_bandwidth
-            - dataset.be_bandwidth * 0.25,
-            dataset.be_center_frequency
-            + dataset.be_bandwidth
-            + dataset.be_bandwidth * 0.25,
+            dataset.be_center_frequency - dataset.be_bandwidth - dataset.be_bandwidth * 0.25,
+            dataset.be_center_frequency + dataset.be_bandwidth + dataset.be_bandwidth * 0.25,
         )
 
-        # TODO: Should make this generalized not hard coded
-
-        # manually set the x limits
-        x_start = 120
-        x_end = 140
-
-        # plots the hysteresis waveform and zooms in
-        ax[2].plot(dataset.hysteresis_waveform)
-
-        ax_new = ax[2].inset_axes([0.5, 0.65, 0.48, 0.33])
-        ax_new.plot(dataset.hysteresis_waveform)
+        # Plot the hysteresis waveform and add a zoomed-in inset
+        ax[2].plot(dataset.waveform_constructor())
+        ax_new = ax[2].inset_axes(inset_pos)
+        ax_new.plot(dataset.waveform_constructor())
         ax_new.set_xlim(x_start, x_end)
-        ax_new.set_ylim(0, -15)
+        ax_new.set_ylim(-2, 20)
 
-        # drows the inset connector
+        # Draw the inset connector lines
         inset_connector(
             fig,
             ax[2],
@@ -385,10 +398,10 @@ class Viz:
             linewidth=0.5,
         )
 
-        # adds a box on the figure
+        # Add a box around the inset area on the main plot
         add_box(
             ax[2],
-            (x_start, 0, x_end, -15),
+            (x_start, 0, x_end, 15),
             edgecolor="k",
             linestyle="--",
             facecolor="none",
@@ -399,23 +412,23 @@ class Viz:
         ax[2].set_xlabel("Voltage Steps")
         ax[2].set_ylabel("Voltage (V)")
 
-        # changes the state to get the magnitude spectrum
+        # Set the dataset state to retrieve the magnitude spectrum
         dataset.scaled = False
         dataset.raw_format = "magnitude spectrum"
         dataset.measurement_state = "all"
         dataset.resampled = False
 
-        # gets the data for the selected pixel and time step
+        # Get the magnitude spectrum for the selected pixel and voltage step
         data_ = dataset.raw_spectra(pixel, voltagestep)
 
-        # plots the magnitude spectrum for and phase for the selected pixel and time step
+        # Plot the magnitude spectrum
         ax[3].plot(
             dataset.frequency_bin,
             data_[0].flatten(),
         )
-        ax[3].set(
-            xlabel="Frequency (Hz)", ylabel="Amplitude (Arb. U.)", facecolor="none"
-        )
+        ax[3].set(xlabel="Frequency (Hz)", ylabel="Amplitude (Arb. U.)", facecolor="none")
+
+        # Plot the phase spectrum on the same plot with a secondary y-axis
         ax2 = ax[3].twinx()
         ax2.plot(
             dataset.frequency_bin,
@@ -425,45 +438,42 @@ class Viz:
         ax2.set(xlabel="Frequency (Hz)", ylabel="Phase (rad)")
         ax[3].set_zorder(ax2.get_zorder() + 1)
 
+        # Switch the dataset back to complex format
         dataset.raw_format = "complex"
         data_ = dataset.raw_spectra(pixel, voltagestep)
 
-        # plots the real and imaginary components for the selected pixel and time step
+        # Plot the real and imaginary components of the spectra
         ax[4].plot(dataset.frequency_bin, data_[0].flatten(), label="Real")
         ax[4].set(xlabel="Frequency (Hz)", ylabel="Real (Arb. U.)")
         ax3 = ax[4].twinx()
-        ax3.plot(dataset.frequency_bin, data_[
-                 1].flatten(), "r", label="Imaginary")
-        ax3.set(xlabel="Frequency (Hz)",
-                ylabel="Imag (Arb. U.)", facecolor="none")
-        # TODO: Delete if not needed
-        # ax[4].set_zorder(ax3.get_zorder() + 1)
+        ax3.plot(dataset.frequency_bin, data_[1].flatten(), "r", label="Imaginary")
+        ax3.set(xlabel="Frequency (Hz)", ylabel="Imag (Arb. U.)", facecolor="none")
 
-        # prints the figure
+        # Save the figure if a Printer object is available
         if self.Printer is not None:
             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
 
+
     ##### GETTERS #####
-        
+
     def get_voltage_step(self, voltage_step):
         """
         Determine and return a valid voltage step index.
 
-        This method checks if a voltage step index is provided. If not, it randomly 
-        selects a valid voltage step index based on the current measurement state of 
+        This method checks if a voltage step index is provided. If not, it randomly
+        selects a valid voltage step index based on the current measurement state of
         the dataset.
 
         Args:
-            voltage_step (int, optional): 
-                The voltage step index to use. If None, a random index is selected based 
+            voltage_step (int, optional):
+                The voltage step index to use. If None, a random index is selected based
                 on the dataset's measurement state.
 
         Returns:
-            int: 
+            int:
                 The selected or provided voltage step index.
         """
 
-        
         # If voltage_step is not provided, determine a random step
         if voltage_step is None:
             # If the measurement state is "on" or "off", select from the first half of the steps
@@ -471,35 +481,33 @@ class Viz:
                 self.dataset.measurement_state == "on"
                 or self.dataset.measurement_state == "off"
             ):
-                voltage_step = np.random.randint(
-                    0, self.dataset.voltage_steps // 2
-                )
+                voltage_step = np.random.randint(0, self.dataset.voltage_steps // 2)
             else:
                 # Otherwise, select from the full range of voltage steps
                 voltage_step = np.random.randint(0, self.dataset.voltage_steps)
-        
+
         # Return the determined or provided voltage step index
         return voltage_step
 
     ###### SETTERS ######
-    
+
     def set_attributes(self, **kwargs):
         """
         Sets the attributes of the dataset using key-value pairs from a dictionary.
 
-        This utility function iterates over the provided keyword arguments and sets 
-        the corresponding attributes of the dataset object. It also ensures that any 
+        This utility function iterates over the provided keyword arguments and sets
+        the corresponding attributes of the dataset object. It also ensures that any
         necessary setters are triggered, such as for the 'noise' attribute.
 
         Args:
-            **kwargs: 
-                Arbitrary keyword arguments representing the attributes to set on the dataset. 
+            **kwargs:
+                Arbitrary keyword arguments representing the attributes to set on the dataset.
                 The keys represent attribute names, and the values represent the values to be set.
-        
+
         Returns:
             None
         """
-        
+
         # Iterate over the key-value pairs in kwargs and set the corresponding attributes on the dataset
         for key, value in kwargs.items():
             setattr(self.dataset, key, value)
@@ -517,20 +525,20 @@ class Viz:
 #         """
 
 #         def wrapper(self,SHO_data, *args, **kwargs):
-            
+
 #             current_SHO_ranges = self.SHO_ranges
 #             current_dataset_state = self.dataset.get_state  # Assume this returns a dict of the dataset state
 
 #             print('current_SHO_ranges:', current_SHO_ranges)
 #             print('current_dataset_state:', current_dataset_state)
-            
+
 #             # Call the original function
 #             out = func(self, SHO_data, *args, **kwargs)
-            
+
 #             # Restore the preserved state
 #             self.SHO_ranges = current_SHO_ranges
 #             self.dataset.set_attributes(**current_dataset_state)
-            
+
 #             #current_state = args[0].SHO_ranges
 #             #current_state = args[0].dataset.get_state
 #             #print('current_state',current_state)
@@ -540,7 +548,6 @@ class Viz:
 #             return out
 
 #         return wrapper
-
 
 
 #     @static_scale_decorator
@@ -1135,7 +1142,7 @@ class Viz:
 #         x1 = self.dataset.get_voltage
 
 #         data = torch.tensor(true).float()
-        
+
 #         if isinstance(prediction, Fitter1D.Model):
 #             pred_data, scaled_params, params = prediction.predict(
 #                 data, translate_params=False, is_SHO=False)
@@ -1152,14 +1159,14 @@ class Viz:
 #         # if index is not None:
 #         #     true = [true[0][index], true[1][index]]
 #         #     prediction = [prediction[0][index], prediction[1][index]]
-        
+
 #         # converts to numpy from tensor if needed
 #         try:
 #             prediction = prediction.detach().numpy()
 #             true = true.detach().numpy()
 #         except:
 #             pass
-        
+
 #         prediction = np.rollaxis(prediction, 0, prediction.ndim - 1)
 #         true = np.rollaxis(true, 0, true.ndim - 1)
 
@@ -1167,7 +1174,7 @@ class Viz:
 #         index1, mse1, d1, d2 = Model.get_rankings(
 #             true, prediction, n=n)
 
-#         # saves the parameters if the model is provided 
+#         # saves the parameters if the model is provided
 #         try:
 #             # saves just the parameters that are needed
 #             params = params[index1]
@@ -1483,9 +1490,9 @@ class Viz:
 #         fit_type='SHO',
 #         **kwargs,
 #     ):
-        
+
 #         true_state = torch.atleast_3d(torch.tensor(true_state.reshape(-1,96)))
-        
+
 #         d1, d2, x1, x2, label, index1, mse1 = None, None, None, None, None, None, None
 
 #         if fit_type == "SHO":
@@ -2260,7 +2267,6 @@ class Viz:
 #             self.Printer.savefig(fig, filename)
 
 
-
 #     def build_figure_for_movie(
 #         self,
 #         comparison,
@@ -2663,16 +2669,16 @@ class Viz:
 #             cycle = np.random.randint(0, data.shape[2], 1)
 
 #         return (row, col, cycle)
-    
-#     def random_hysteresis(self, 
+
+#     def random_hysteresis(self,
 #                           raw_hysteresis_loop,
 #                           lsqf_hysteresis_loop,
 #                           voltage,
 #                           filename,
 #                           size,
 #                           row, col, cycle):
-                          
-        
+
+
 #         fig, ax = subfigures(1, 1, size=size)
 
 #         ax[0].plot(voltage.squeeze(),
@@ -2690,8 +2696,6 @@ class Viz:
 #         if self.Printer is not None and filename is not None:
 #             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
 
-    
-
 
 #     def hysteresis_maps(
 #         self,
@@ -2703,7 +2707,7 @@ class Viz:
 #     ):
 #         # # reshape data:
 #         # if data.shape != 3:
-            
+
 #         # calculates the size of the embedding image
 #         embedding_image_size = 60
 
@@ -2725,7 +2729,7 @@ class Viz:
 
 #         # Titles for each row
 #         row_titles = ['Predicted Parameters', 'LSQF Parameters']
-        
+
 #         string_add = 'a'
 
 #         for i in range(9):
@@ -2745,7 +2749,7 @@ class Viz:
 #                     ),
 #                 )
 #             )
-            
+
 #             axs[0, i].imshow(
 #                 parms_pred[:, i].reshape(
 #                     embedding_image_size, embedding_image_size),
@@ -2774,7 +2778,7 @@ class Viz:
 #                     axs[1, i].images[0], cax=cax, format="%.1e", orientation='horizontal')
 #                 # Set the label for each colorbar
 #                 cbar.set_label(colorbar_labels[i])
-                
+
 #             labelfigs(axs[0,i],
 #                     string_add=colorbar_labels[i],
 #                     loc ='ct',
@@ -2784,7 +2788,7 @@ class Viz:
 #              # Update the char to the next order
 #             ascii_value = ord(string_add)+1
 #             string_add = chr(ascii_value)
-            
+
 #         labelfigs(axs[0,0],
 #         string_add='a',
 #         loc ='tl',
@@ -2805,7 +2809,7 @@ class Viz:
 #         for i, title in enumerate(row_titles):
 #             fig.text(0.5, title_y_positions[i], title, ha='center',
 #                      va='center', fontsize=10, transform=fig.transFigure)
-        
+
 
 #         # prints the figure
 #         if self.Printer is not None and filename is not None:
@@ -2813,7 +2817,7 @@ class Viz:
 #             self.Printer.savefig(
 #                 fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
 #             )
-    
+
 #     def ranked_mse(self, true, sample_a, other_samples=None):
 #         """
 #         Compute Mean Squared Error (MSE) between two datasets of samples.
@@ -2893,14 +2897,14 @@ class Viz:
 #         # sets the measurement state
 #         if self.dataset.measurement_state is not None:
 #             self.dataset.measurement_state = measurement_state
-            
+
 #         # if only the LSQF is to be plotted
 #         if 'LSQF' in data and 'NN' not in data:
 #             # gets the LSQF Hysteresis Loops from the Dataset
 #             loops, raw_hysteresis_loop_scaled, voltage = self.dataset.get_LSQF_hysteresis_fits(compare=True, index=False)
-            
+
 #             raw_hysteresis_loop = self.dataset.hysteresis_scaler.inverse_transform(raw_hysteresis_loop_scaled)
-            
+
 #             # selects a point to plot
 #             row, col, cycle = self.get_selected_hysteresis(
 #                 raw_hysteresis_loop, row, col, cycle)

@@ -1024,7 +1024,28 @@ class BE_Dataset:
             else:
                 return self.get_data_w_voltage_state(dataset_[:])
 
-        
+    
+    def get_data_w_voltage_state(self, data):
+        """
+        get_data_w_voltage_state function to extract data given a voltage state either the on or off state
+
+        Args:
+            data (np.array): BE data
+
+        Returns:
+            np.array: BE data considering the voltage state
+        """
+
+        # only does this if getting the full dataset, will reduce to off and on state
+        if self.measurement_state == 'all':
+            data = data
+        elif self.measurement_state == 'on':
+            data = data[:, 1::2, :]
+        elif self.measurement_state == 'off':
+            data = data[:, ::2, :]
+
+        return data
+    
     @static_state_decorator
     def SHO_fit_results(self,
                         state=None,
@@ -1891,26 +1912,6 @@ class BE_Dataset:
 
     
 
-    # def get_data_w_voltage_state(self, data):
-    #     """
-    #     get_data_w_voltage_state function to extract data given a voltage state
-
-    #     Args:
-    #         data (np.array): BE data
-
-    #     Returns:
-    #         np.array: BE data considering the voltage state
-    #     """
-
-    #     # only does this if getting the full dataset, will reduce to off and on state
-    #     if self.measurement_state == 'all':
-    #         data = data
-    #     elif self.measurement_state == 'on':
-    #         data = data[:, 1::2, :]
-    #     elif self.measurement_state == 'off':
-    #         data = data[:, ::2, :]
-
-    #     return data
 
     # def get_cycle(self, data, axis=0,  **kwargs):
     #     """

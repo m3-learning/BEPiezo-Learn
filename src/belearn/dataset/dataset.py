@@ -988,6 +988,96 @@ class BE_Dataset:
         #         # Extract and return the entire dataset
         #         return self.raw_data_reshaped[self.dataset][:]
         
+    @static_state_decorator
+    def SHO_fit_results(self,
+                        state=None,
+                        model=None,
+                        phase_shift=None,
+                        X_data=None):
+        """
+        Retrieves the SHO (Simple Harmonic Oscillator) fit results from the dataset, either 
+        by using a specified neural network model or a least squares fitting method.
+
+        Args:
+            state (dict, optional): A dictionary representing a specific measurement state. 
+                                    If provided, the dataset will be adjusted to this state before fitting.
+                                    Defaults to None.
+            model (nn.Module, optional): A neural network model to predict the SHO fit results. 
+                                        If not provided, a least squares fitting method is used.
+                                        Defaults to None.
+            phase_shift (float, optional): A value to shift the phase of the resulting data. 
+                                        If None, the default phase shift from the dataset's configuration is used.
+                                        Defaults to None.
+            X_data (np.array, optional): The frequency bins used for model prediction. 
+                                        If None and a model is provided, it will be generated from the dataset.
+                                        Defaults to None.
+
+        Returns:
+            np.array: The SHO fit parameters, either in the shape of (index, SHO_params) or 
+                    (num_pix, num_voltage_steps, SHO_params), depending on the dataset configuration.
+        """
+
+        # Note: Removed pixel and voltage step indexing here
+
+        # If a neural network model is not provided, use the Least Squares Fitting (LSQF) method
+        if model is None:
+
+            # Open the HDF5 file for reading the SHO fitting data
+            with h5py.File(self.file, "r+") as h5_f:
+
+                # If a state is provided, set the dataset attributes accordingly
+                if state is not None:
+                    self.set_attributes(**state)
+
+                # Evaluate and retrieve the fitting data using the specified fitter (e.g., LSQF)
+                data = eval(f"self.SHO_{self.fitter}()")
+
+                # Store the original shape of the data for reshaping later
+                data_shape = data.shape
+
+                # Reshape the data to a 2D array with 4 columns (assumed to be the SHO parameters)
+                data = data.reshape(-1, 4)
+
+                # If a phase shift is specified in the dataset's fitter configuration and no 
+                # external phase shift is provided, apply the default phase shift
+                if eval(f"self.{self.fitter}_phase_shift") is not None and phase_shift is None:
+                    data[:, 3] = eval(
+                        f"self.shift_phase(data[:, 3], self.{self.fitter}_phase_shift)")
+
+                # Reshape the data back to its original shape
+                data = data.reshape(data_shape)
+
+                # If the dataset is scaled, apply the scaling transformation to the data
+                if self.scaled:
+                    data = self.SHO_scaler.transform(
+                        data.reshape(-1, 4)).reshape(data_shape)
+
+        else:
+            # If a model is provided, use it to predict the SHO parameters
+
+            # If X_data is not provided, generate the necessary input data (X_data, Y_data) from the dataset
+            if X_data is None:
+                X_data, Y_data = self.NN_data()
+
+            # Predict the SHO parameters using the model
+            pred_data, scaled_param, data = model.predict(X_data)
+
+            # If the dataset is scaled, use the scaled parameters as the final data
+            if self.scaled:
+                data = scaled_param
+
+        # Apply an external phase shift if provided
+        if phase_shift is not None:
+            data[:, 3] = self.shift_phase(data[:, 3], phase_shift)
+
+        # Return the data reshaped according to the output configuration
+        if self.output_shape == "index":
+            # Return data as a 2D array (index, SHO_params)
+            return data.reshape(-1, 4)
+        else:
+            # Return data as a 3D array (num_pix, num_voltage_steps, SHO_params)
+            return data.reshape(self.num_pix, self.state_num_voltage_steps(), 4)
+
         
     @property
     def extraction_state(self):
@@ -1784,72 +1874,7 @@ class BE_Dataset:
 
     #     return voltage_step
 
-    # @static_state_decorator
-    # def SHO_fit_results(self,
-    #                     state=None,
-    #                     model=None,
-    #                     phase_shift=None,
-    #                     X_data=None):
-    #     """
-    #     SHO_fit_results general function to get the SHO fit results from the dataset
-
-    #     Args:
-    #         state (dict, optional): a provided measurement state. Defaults to None.
-    #         model (nn.module, optional): model which to get the data from. Defaults to None.
-    #         phase_shift (float, optional): value to shift the phase. Defaults to None.
-    #         X_data (np.array, optional): frequency bins. Defaults to None.
-
-    #     Returns:
-    #         np.array: SHO fit parameters
-    #     """
-
-    #     # Note removed pixel and voltage step indexing here
-
-    #     # if a neural network model is not provided use the LSQF
-    #     if model is None:
-
-    #         # reads the H5 file
-    #         with h5py.File(self.file, "r+") as h5_f:
-
-    #             # sets a state if it is provided as a dictionary
-    #             if state is not None:
-    #                 self.set_attributes(**state)
-
-    #             data = eval(f"self.SHO_{self.fitter}()")
-
-    #             data_shape = data.shape
-
-    #             data = data.reshape(-1, 4)
-
-    #             if eval(f"self.{self.fitter}_phase_shift") is not None and phase_shift is None:
-    #                 data[:, 3] = eval(
-    #                     f"self.shift_phase(data[:, 3], self.{self.fitter}_phase_shift)")
-
-    #             data = data.reshape(data_shape)
-
-    #             if self.scaled:
-    #                 data = self.SHO_scaler.transform(
-    #                     data.reshape(-1, 4)).reshape(data_shape)
-
-    #     elif model is not None:
-
-    #         if X_data is None:
-    #             X_data, Y_data = self.NN_data()
-
-    #         # you can view the test and training dataset by replacing X_data with X_test or X_train
-    #         pred_data, scaled_param, data = model.predict(X_data)
-
-    #         if self.scaled:
-    #             data = scaled_param
-
-    #     if phase_shift is not None:
-    #         data[:, 3] = self.shift_phase(data[:, 3], phase_shift)
-
-    #     # reshapes the data to be (index, SHO_params)
-    #     if self.output_shape == "index":
-    #         return data.reshape(-1, 4)
-    #     else:
-    #         return data.reshape(self.num_pix, self.state_num_voltage_steps(), 4)
+    
 
     # def get_data_w_voltage_state(self, data):
     #     """

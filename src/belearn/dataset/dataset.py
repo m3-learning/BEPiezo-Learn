@@ -1205,6 +1205,55 @@ class BE_Dataset:
 
     ##### Data Transformers ######
     
+    @staticmethod
+    def shift_phase(phase, shift_=None):
+        """
+        Shifts the phase of the dataset by a specified amount. This function adjusts the phase 
+        values to account for any phase shift, ensuring the phase values are wrapped correctly 
+        within the range of -π to π or π to 3π depending on the shift direction.
+
+        Args:
+            phase (np.array): Array of phase data to be shifted.
+            shift_ (float, optional): The phase shift to apply, in radians. If None or 0, 
+                                    no shift is applied. Defaults to None.
+
+        Returns:
+            np.array: The phase-shifted data, with phase values adjusted according to the specified shift.
+        """
+
+        # If no shift is specified or the shift is 0, return the original phase data unchanged
+        if shift_ is None or shift_ == 0:
+            return phase
+        else:
+            shift = shift_
+
+        # If the shift is positive, adjust the phase values
+        if shift > 0:
+            # Increment phase by π to handle phase wrapping
+            phase_ = phase
+            phase_ += np.pi
+
+            # Adjust phase values greater than π by adding 2π
+            phase_[phase_ <= shift] += 2 * np.pi
+
+            # Subtract the shift and adjust by -π to wrap the phase back within the appropriate range
+            phase__ = phase_ - shift - np.pi
+
+        # If the shift is negative, adjust the phase values accordingly
+        else:
+            # Decrement phase by π to handle phase wrapping
+            phase_ = phase
+            phase_ -= np.pi
+
+            # Adjust phase values less than -π by subtracting 2π
+            phase_[phase_ >= shift] -= 2 * np.pi
+
+            # Subtract the shift and adjust by +π to wrap the phase back within the appropriate range
+            phase__ = phase_ - shift + np.pi
+
+        return phase__
+
+    
     def waveform_constructor(self):
         """
         Constructs a combined waveform by adding elements from a hysteresis waveform and 
@@ -1844,38 +1893,7 @@ class BE_Dataset:
 
     #     return np.take(data, 0, axis=axis) + 1j * np.take(data, 1, axis=axis)
 
-    # @staticmethod
-    # def shift_phase(phase, shift_=None):
-    #     """
-    #     shift_phase function that shifts the phase of the dataset
 
-    #     Args:
-    #         phase (np.array): phase data
-    #         shift_ (float, optional): phase to shift the data in radians. Defaults to None.
-
-    #     Returns:
-    #         np.array: phase shifted data
-    #     """
-
-    #     if shift_ is None or shift_ == 0:
-    #         return phase
-    #     else:
-    #         shift = shift_
-
-    #     if shift > 0:
-    #         phase_ = phase
-    #         phase_ += np.pi
-    #         phase_[phase_ <= shift] += 2 *\
-    #             np.pi  # shift phase values greater than pi
-    #         phase__ = phase_ - shift - np.pi
-    #     else:
-    #         phase_ = phase
-    #         phase_ -= np.pi
-    #         phase_[phase_ >= shift] -= 2 *\
-    #             np.pi  # shift phase values greater than pi
-    #         phase__ = phase_ - shift + np.pi
-
-    #     return phase__
 
     # def raw_data_resampled(self, pixel=None, voltage_step=None):
     #     """

@@ -562,46 +562,46 @@ class Viz:
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename, label_figs=axs, style="b")
 
-def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
-    """
-    Plots the SHO loop fit results for a randomly selected pixel or provided data.
+    def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
+        """
+        Plots the SHO loop fit results for a randomly selected pixel or provided data.
 
-    Args:
-        data (np.array, optional): The dataset to use for plotting the SHO loop fits. 
-                                   If not provided, data from a randomly selected pixel is used. Defaults to None.
-        filename (str, optional): The filename for saving the plotted figure. 
-                                  Defaults to "Figure_2_random_SHO_fit_results".
+        Args:
+            data (np.array, optional): The dataset to use for plotting the SHO loop fits. 
+                                    If not provided, data from a randomly selected pixel is used. Defaults to None.
+            filename (str, optional): The filename for saving the plotted figure. 
+                                    Defaults to "Figure_2_random_SHO_fit_results".
 
-    This function selects a pixel either randomly or based on the provided data and 
-    plots the SHO (Simple Harmonic Oscillator) loop fit results across various 
-    parameters (defined in self.SHO_labels). The resulting plot is saved using 
-    the specified filename if a Printer object is available.
-    """
+        This function selects a pixel either randomly or based on the provided data and 
+        plots the SHO (Simple Harmonic Oscillator) loop fit results across various 
+        parameters (defined in self.SHO_labels). The resulting plot is saved using 
+        the specified filename if a Printer object is available.
+        """
 
-    if data is None:
-        # If no data is provided, select a random pixel from the dataset
-        pixel = np.random.randint(0, self.dataset.num_pix)
-        data = self.dataset.SHO_fit_results()[[pixel], :, :]
+        if data is None:
+            # If no data is provided, select a random pixel from the dataset
+            pixel = np.random.randint(0, self.dataset.num_pix)
+            data = self.dataset.SHO_fit_results()[[pixel], :, :]
 
-    # Initialize the figure and axes with a 4x4 grid layout
-    fig, axs = layout_fig(4, 4, figsize=(5.5, 1.1))
+        # Initialize the figure and axes with a 4x4 grid layout
+        fig, axs = layout_fig(4, 4, figsize=(5.5, 1.1))
 
-    # Loop over each axis and corresponding SHO label to plot the fit results
-    for i, (ax, label) in enumerate(zip(axs, self.SHO_labels)):
-        ax.plot(self.dataset.dc_voltage, data[0, :, i])
-        ax.set_ylabel(label["y_label"])
+        # Loop over each axis and corresponding SHO label to plot the fit results
+        for i, (ax, label) in enumerate(zip(axs, self.SHO_labels)):
+            ax.plot(self.dataset.dc_voltage, data[0, :, i])
+            ax.set_ylabel(label["y_label"])
 
-    # If verbose mode is enabled, log the current extraction state (for debugging or tracking)
-    if self.verbose:
-        self.dataset.extraction_state
+        # If verbose mode is enabled, log the current extraction state (for debugging or tracking)
+        if self.verbose:
+            self.dataset.extraction_state
 
-    # If a Printer object is defined, save the figure with the specified filename and style
-    if self.Printer is not None:
-        self.Printer.savefig(fig, filename, label_figs=axs, style="b")
+        # If a Printer object is defined, save the figure with the specified filename and style
+        if self.Printer is not None:
+            self.Printer.savefig(fig, filename, label_figs=axs, style="b")
 
     ###### MOVIES #####
 
-    @static_state_decorator
+    @static_dataset_decorator
     def SHO_fit_movie_images(
         self,
         noise=0,
@@ -885,7 +885,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 #             )
 #         return x
 
-#     @static_state_decorator
+#     @static_dataset_decorator
 #     def fit_tester(self, true, predict, pixel=None, voltage_step=None, **kwargs):
 #         # if a pixel is not provided it will select a random pixel
 #         if pixel is None:
@@ -909,7 +909,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 #             **kwargs,
 #         )
 
-#     @static_state_decorator
+#     @static_dataset_decorator
 #     def nn_checker(
 #         self, state, filename=None, pixel=None, voltage_step=None, legend=True, **kwargs
 #     ):
@@ -959,7 +959,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 #         if self.Printer is not None and filename is not None:
 #             self.Printer.savefig(fig, filename, style="b")
 
-#     @static_state_decorator
+#     @static_dataset_decorator
 #     def nn_validation(
 #         self,
 #         model,
@@ -1123,7 +1123,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 #             self.Printer.savefig(fig, filename, label_figs=[
 #                                  axs[0], axs[1]], style="b")
 
-#     @static_state_decorator
+#     @static_dataset_decorator
 #     def best_median_worst_reconstructions(
 #         self,
 #         model,
@@ -1211,7 +1211,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 #         if self.Printer is not None and filename is not None:
 #             self.Printer.savefig(fig, filename, style="b")
 
-#     # @static_state_decorator
+#     # @static_dataset_decorator
 #     def get_best_median_worst(
 #         self,
 #         true_state,
@@ -1371,7 +1371,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 
 #         return data, labels
 
-#     @static_state_decorator
+#     @static_dataset_decorator
 #     def get_best_median_worst_hysteresis(self,
 #                                          true_state,
 #                                          prediction=None,
@@ -1429,7 +1429,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 
 #         return (d1, d2, x1, x2, index1, mse1, params)
 
-#     @static_state_decorator
+#     @static_dataset_decorator
 #     def get_mse_index(self, index, model):
 #         # gets the raw data
 #         # returns the raw spectra in (samples, voltage steps, real/imaginary)
@@ -1487,7 +1487,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 
 #         return SHO_Model.MSE(data.detach().numpy(), predictions)
 
-#     @static_state_decorator
+#     @static_dataset_decorator
 #     def SHO_Fit_comparison(
 #         self,
 #         data,
@@ -1648,7 +1648,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 
 #         return fig
 
-#     @static_state_decorator
+#     @static_dataset_decorator
 #     def get_SHO_params(self, index, model, out_state):
 #         """Function that gets the SHO parameters for a given index based on a specific model
 
@@ -1717,7 +1717,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 
 #         return pred_data, params, labels
 
-#     @static_state_decorator
+#     @static_dataset_decorator
 #     def bmw_nn(
 #         self,
 #         true_state,
@@ -1865,7 +1865,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 #             if kwargs["returns"] == True:
 #                 return d1, d2, index1, mse1
 
-#     @static_state_decorator
+#     @static_dataset_decorator
 #     def SHO_switching_maps(
 #         self,
 #         SHO_,
@@ -2073,7 +2073,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 
 #         return fig
 
-#     @static_state_decorator
+#     @static_dataset_decorator
 #     def SHO_switching_maps_test(
 #         self,
 #         SHO_,
@@ -2307,7 +2307,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 
 #         fig.show()
 
-#     @static_state_decorator
+#     @static_dataset_decorator
 #     def noisy_datasets(
 #         self, state, noise_level=None, pixel=None, voltage_step=None, filename=None
 #     ):
@@ -2368,7 +2368,7 @@ def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
 #                 fig, filename, label_figs=ax_, size=6, loc="bl", inset_fraction=0.2
 #             )
 
-#     @static_state_decorator
+#     @static_dataset_decorator
 #     def violin_plot_comparison(self, state, model, X_data, filename):
 #         self.set_attributes(**state)
 

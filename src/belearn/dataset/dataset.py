@@ -618,6 +618,12 @@ class BE_Dataset:
         """BE bandwidth in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"].attrs["BE_band_width_[Hz]"]
+        
+    @property
+    def dc_voltage(self):
+        """Gets the DC voltage vector"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f[f"Raw_Data_SHO_Fit/Raw_Data-SHO_Fit_000/Spectroscopic_Values"][0, 1::2]
 
     @property
     def voltage_steps(self):
@@ -1779,12 +1785,6 @@ class BE_Dataset:
     #     """Number of rows in the data"""
     #     with h5py.File(self.file, "r+") as h5_f:
     #         return h5_f['Measurement_000'].attrs["grid_num_rows"]
-
-    # @property
-    # def dc_voltage(self):
-    #     """Gets the DC voltage vector"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return h5_f[f"Raw_Data-SHO_Fit_000/Spectroscopic_Values"][0, 1::2]
 
     # @property
     # def num_cycles(self):

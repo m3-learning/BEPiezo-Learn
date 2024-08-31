@@ -49,61 +49,66 @@ from scipy import fftpack
 # }
 
 
-# def get_lowest_loss_for_noise_level(path, desired_noise_level):
-#     """
-#     get_lowest_loss_for_noise_level function to get the lowest loss for a given noise level from the checkpoint files in a directory
+def get_lowest_loss_for_noise_level(path, desired_noise_level):
+    """
+    Retrieves the filename of the checkpoint file with the lowest training loss for a specified noise level.
 
-#     Args:,
-#         path (os.path): path where the files exist
-#         desired_noise_level (int): noise level
+    This function searches through checkpoint files in the specified directory, extracts the noise level and loss value 
+    from the filenames, and returns the filename with the lowest loss for the given noise level.
 
-#     Returns:
-#         str: filename where the lowest loss is found
-#     """
+    Args:
+        path (str): The directory path where the checkpoint files (.pth) are located.
+        desired_noise_level (int or str): The noise level to search for. Can be provided as an integer or string.
 
-#     # checks if the noise level is provided as a string or int
-#     if isinstance(desired_noise_level, int):
-#         # converts to a string for the file name
-#         desired_noise_level = str(desired_noise_level)
+    Returns:
+        str: The filename with the lowest loss for the desired noise level. 
+             Returns None if no files match the desired noise level.
+    """
 
-#     # Create a dictionary to store the lowest loss for each noise value
-#     lowest_losses = {}
+    # Checks if the desired noise level is provided as an integer
+    if isinstance(desired_noise_level, int):
+        # Converts the integer noise level to a string to match the filename format
+        desired_noise_level = str(desired_noise_level)
 
-#     # Iterate over the files in the directory
-#     for root, dirs, files in os.walk(path):
+    # Initialize a dictionary to store the lowest loss and corresponding filename for each noise level
+    lowest_losses = {}
 
-#         # loops around all the files in the directory
-#         for file in files:
+    # Iterate over all files in the directory
+    for root, dirs, files in os.walk(path):
 
-#             # only looks at files that are checkpoint files
-#             if file.endswith(".pth"):
+        # Loop through each file found in the directory
+        for file in files:
 
-#                 # gets the noise value from the filename
-#                 noise_value = file.split("_noise_")[1].split("_")[0]
+            # Process only checkpoint files with the ".pth" extension
+            if file.endswith(".pth"):
 
-#                 # gets the loss value from the filename
-#                 loss = file.split("train_loss_")[1].split("_")[0]
-#                 loss = float(loss.split(".pth")[0])
+                # Extract the noise value from the filename
+                noise_value = file.split("_noise_")[1].split("_")[0]
 
-#                 # Update the lowest loss for each noise value in the dictionary
-#                 if noise_value == desired_noise_level:
-#                     if (
-#                         noise_value not in lowest_losses
-#                         or loss < lowest_losses[noise_value][0]
-#                     ):
-#                         lowest_losses[noise_value] = (loss, file)
+                # Extract the loss value from the filename and convert it to a float
+                loss = file.split("train_loss_")[1].split("_")[0]
+                loss = float(loss.split(".pth")[0])
 
-#     # Return the file name with the lowest loss for the desired noise level
-#     if desired_noise_level in lowest_losses:
+                # Update the dictionary with the lowest loss for the current noise value
+                if noise_value == desired_noise_level:
+                    if (
+                        noise_value not in lowest_losses
+                        or loss < lowest_losses[noise_value][0]
+                    ):
+                        lowest_losses[noise_value] = (loss, file)
 
-#         # gets the loss and filename
-#         loss, file_name = lowest_losses[desired_noise_level]
+    # Check if the desired noise level was found and return the corresponding filename
+    if desired_noise_level in lowest_losses:
 
-#         return file_name
+        # Retrieve the lowest loss and associated filename for the desired noise level
+        loss, file_name = lowest_losses[desired_noise_level]
 
-#     else:
+        return file_name
 
-#         return None
+    else:
+        # Return None if no files match the desired noise level
+        return None
+
 
 
 @dataclass
@@ -557,6 +562,246 @@ class Viz:
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename, label_figs=axs, style="b")
 
+def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
+    """
+    Plots the SHO loop fit results for a randomly selected pixel or provided data.
+
+    Args:
+        data (np.array, optional): The dataset to use for plotting the SHO loop fits. 
+                                   If not provided, data from a randomly selected pixel is used. Defaults to None.
+        filename (str, optional): The filename for saving the plotted figure. 
+                                  Defaults to "Figure_2_random_SHO_fit_results".
+
+    This function selects a pixel either randomly or based on the provided data and 
+    plots the SHO (Simple Harmonic Oscillator) loop fit results across various 
+    parameters (defined in self.SHO_labels). The resulting plot is saved using 
+    the specified filename if a Printer object is available.
+    """
+
+    if data is None:
+        # If no data is provided, select a random pixel from the dataset
+        pixel = np.random.randint(0, self.dataset.num_pix)
+        data = self.dataset.SHO_fit_results()[[pixel], :, :]
+
+    # Initialize the figure and axes with a 4x4 grid layout
+    fig, axs = layout_fig(4, 4, figsize=(5.5, 1.1))
+
+    # Loop over each axis and corresponding SHO label to plot the fit results
+    for i, (ax, label) in enumerate(zip(axs, self.SHO_labels)):
+        ax.plot(self.dataset.dc_voltage, data[0, :, i])
+        ax.set_ylabel(label["y_label"])
+
+    # If verbose mode is enabled, log the current extraction state (for debugging or tracking)
+    if self.verbose:
+        self.dataset.extraction_state
+
+    # If a Printer object is defined, save the figure with the specified filename and style
+    if self.Printer is not None:
+        self.Printer.savefig(fig, filename, label_figs=axs, style="b")
+
+    ###### MOVIES #####
+
+    @static_state_decorator
+    def SHO_fit_movie_images(
+        self,
+        noise=0,
+        model_path=None,
+        models=[None],
+        fig_width=6.5,
+        voltage_plot_height=1.25,  # height of the voltage plot
+        intra_gap=0.02,  # gap between the graphs,
+        inter_gap=0.2,  # gap between the graphs,
+        cbar_gap=0.6,  # gap between the graphs of colorbars
+        # space on the right where the cbar is not):
+        cbar_space=1.3,
+        colorbars=True,
+        scalebar_=True,
+        filename=None,
+        basepath=None,
+        labels=None,
+        phase_shift=None,
+    ):
+        output_state = {"output_shape": "pixels", "scaled": False}
+
+        # makes sure the output state is in pixels
+        self.dataset.set_attributes(**output_state)
+
+        # builds the basepath for the images of the movie
+        if basepath is not None:
+            # if a model is provided name based on the model
+            if model_path is not None:
+                model_filename = (
+                    model_path
+                    + "/"
+                    + get_lowest_loss_for_noise_level(model_path, noise)
+                )
+
+                basepath += f"/{model_filename.split('/')[-1].split('.')[0]}"
+
+            # if no model is provided name based on the noise level
+            else:
+                basepath += f"Noise_{noise}"
+
+            # makes the folder
+            basepath = make_folder(basepath)
+
+        # if models is given
+        if models is not None:
+            # builds the arrays
+            on_data = []
+            off_data = []
+            noise_labels = []
+
+            # loops around the different models for models
+            for model_, phase_shift_ in zip(models, phase_shift):
+                on_models, off_models = self.get_SHO_data(
+                    noise, model_, phase_shift=phase_shift_
+                )
+                on_data.append(on_models)
+                off_data.append(off_models)
+                noise_labels.append(noise)
+        else:
+            model = self.get_model(model_path, noise)
+            on_data, off_data = self.get_SHO_data(noise, model)
+
+        # labels for the different figures
+        names = ["A", "\u03C9", "Q", "\u03C6"]
+
+        # gets the DC voltage data - this is for only the on state or else it would all be 0
+        voltage = self.dataset.dc_voltage
+
+        # loops around each voltage step in the measurement
+        for z, voltage in enumerate(voltage):
+            # calls the function to build the figure
+            fig, ax, fig_scalar = self.build_figure_for_movie(
+                models,  # dataset to compare to
+                fig_width,  # width of the figure
+                inter_gap,  # gap between the graphs of different datasets,
+                intra_gap,  # gap between the graphs of same datasets,
+                cbar_space,  # gap between the graphs and the colorbar
+                colorbars,  # colorbars
+                voltage_plot_height,
+                labels,
+            )  # height of the voltage plot
+
+            # plots the voltage
+            ax[0].plot(self.dataset.dc_voltage, "k")
+            ax[0].plot(z, voltage, "o", color="k", markersize=10)
+            ax[0].set_ylabel("Voltage (V)")
+            ax[0].set_xlabel("Step")
+
+            for compare_num in range(len(models)):
+                # plots each of the SHO parameters for the off and on state
+                for j in range(4):
+                    imagemap(
+                        ax[j + 1 + compare_num * 8],
+                        on_data[compare_num][:, z, j],
+                        colorbars=False,
+                        clim=self.SHO_ranges[j],
+                    )
+                    imagemap(
+                        ax[j + 5 + compare_num * 8],
+                        off_data[compare_num][:, z, j],
+                        colorbars=False,
+                        clim=self.SHO_ranges[j],
+                    )
+                    labelfigs(ax[j + 1], string_add=f"On {names[j]}", loc="ct")
+                    labelfigs(
+                        ax[j + 5], string_add=f"Off {names[j]}", loc="ct")
+
+                if labels is not None:
+                    # Get the position of the axis
+                    bbox = ax[5 + compare_num * 8].get_position()
+
+                    # bbox bounds are in the form [left, bottom, width, height]
+                    # in the normalized unit with respect to the figure size
+                    # bottom + height
+                    top_in_norm_units = bbox.bounds[1] + bbox.bounds[3]
+                    # bottom + height
+                    right_in_norm_units = bbox.bounds[0] + bbox.bounds[2]
+
+                    # Get the figure size in inches
+                    fig_size_inches = fig.get_size_inches()  # Returns width, height
+
+                    # The height of the figure in inches
+                    fig_height_inches = fig_size_inches[1]
+                    fig_width_inches = fig_size_inches[0]
+
+                    # Convert the top position to inches
+                    top_in_inches = top_in_norm_units * fig_height_inches
+                    right_in_inches = right_in_norm_units * fig_width_inches + inter_gap
+
+                    add_text_to_figure(
+                        fig,
+                        f"{labels[compare_num]} Noise {noise_labels[compare_num]}",
+                        [right_in_inches / 2, top_in_inches + 0.33 / 2],
+                    )
+
+                # if add colorbars
+                if colorbars:
+                    # builds a list to store the colorbar axis objects
+                    bar_ax = []
+
+                    # gets the voltage axis position in ([xmin, ymin, xmax, ymax]])
+                    voltage_ax_pos = fig_scalar.to_inches(
+                        np.array(ax[0].get_position()).flatten()
+                    )
+
+                    # loops around the 4 axis
+                    for i in range(4):
+                        # calculates the height and width of the colorbars
+                        cbar_h = (voltage_ax_pos[1] - inter_gap * 2 - 0.33) / 2
+                        cbar_w = (cbar_space - inter_gap - cbar_gap) / 2
+
+                        # sets the position of the axis in inches
+                        pos_inch = [
+                            voltage_ax_pos[2]
+                            - (2 - i % 2) * (cbar_gap + cbar_w)
+                            + inter_gap
+                            + cbar_w,
+                            voltage_ax_pos[1]
+                            - (i // 2) * (inter_gap + cbar_h)
+                            - 0.33
+                            - cbar_h,
+                            cbar_w,
+                            cbar_h,
+                        ]
+
+                        # adds the plot to the figure
+                        bar_ax.append(fig.add_axes(
+                            fig_scalar.to_relative(pos_inch)))
+
+                        # adds the colorbars to the plots
+                        cbar = plt.colorbar(
+                            ax[i + 1].images[0],
+                            cax=bar_ax[i],
+                            format="%.1e",
+                            ticks=np.linspace(
+                                self.SHO_ranges[i][0], self.SHO_ranges[i][1], 5
+                            ),
+                        )
+
+                        cbar.set_label(names[i])  # Add a label to the colorbar
+
+            if self.image_scalebar is not None:
+                scalebar(ax[-1], *self.image_scalebar)
+
+            # prints the figure
+            if self.Printer is not None and filename is not None:
+                self.Printer.savefig(
+                    fig,
+                    f"{filename}_noise_{noise}_{z:04d}",
+                    basepath=basepath + "/",
+                    fileformats=["png"],
+                )
+
+            plt.close(fig)
+
+        # makes the movie
+        make_movie(
+            f"{filename}_noise_{noise}", basepath, basepath, file_format="png", fps=5
+        )
+
 
     ##### GETTERS #####
 
@@ -624,32 +869,7 @@ class Viz:
 
 
 
-#     def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
-#         """
-#         Plots the SHO loop fit results
 
-#         Args:
-#             data (np.array, optional): dataset to use for extracting the loop fits. Defaults to None.
-#             filename (str, optional): Filename to save the data. Defaults to "Figure_2_random_SHO_fit_results".
-#         """
-
-#         if data is None:
-#             pixel = np.random.randint(0, self.dataset.num_pix)
-#             data = self.dataset.SHO_fit_results()[[pixel], :, :]
-
-#         # plots the SHO fit results for the selected pixel
-#         fig, axs = layout_fig(4, 4, figsize=(5.5, 1.1))
-
-#         for i, (ax, label) in enumerate(zip(axs, self.SHO_labels)):
-#             ax.plot(self.dataset.dc_voltage, data[0, :, i])
-#             ax.set_ylabel(label["y_label"])
-
-#         if self.verbose:
-#             self.dataset.extraction_state
-
-#         # prints the figure
-#         if self.Printer is not None:
-#             self.Printer.savefig(fig, filename, label_figs=axs, style="b")
 
 
 #     def get_freq_values(self, data):
@@ -2451,207 +2671,7 @@ class Viz:
 
 #         return on_data, off_data
 
-#     @static_state_decorator
-#     def SHO_fit_movie_images(
-#         self,
-#         noise=0,
-#         model_path=None,
-#         models=[None],
-#         fig_width=6.5,
-#         voltage_plot_height=1.25,  # height of the voltage plot
-#         intra_gap=0.02,  # gap between the graphs,
-#         inter_gap=0.2,  # gap between the graphs,
-#         cbar_gap=0.6,  # gap between the graphs of colorbars
-#         # space on the right where the cbar is not):
-#         cbar_space=1.3,
-#         colorbars=True,
-#         scalebar_=True,
-#         filename=None,
-#         basepath=None,
-#         labels=None,
-#         phase_shift=None,
-#     ):
-#         output_state = {"output_shape": "pixels", "scaled": False}
 
-#         # makes sure the output state is in pixels
-#         self.dataset.set_attributes(**output_state)
-
-#         # TODO - This needs to be moved in
-#         # builds the basepath for the images of the movie
-#         if basepath is not None:
-#             # if a model is provided name based on the model
-#             if model_path is not None:
-#                 model_filename = (
-#                     model_path
-#                     + "/"
-#                     + get_lowest_loss_for_noise_level(model_path, noise)
-#                 )
-
-#                 basepath += f"/{model_filename.split('/')[-1].split('.')[0]}"
-
-#             # if no model is provided name based on the noise level
-#             else:
-#                 basepath += f"Noise_{noise}"
-
-#             # makes the folder
-#             basepath = make_folder(basepath)
-
-#         # if models is given
-#         if models is not None:
-#             # builds the arrays
-#             on_data = []
-#             off_data = []
-#             noise_labels = []
-
-#             # loops around the different models for models
-#             for model_, phase_shift_ in zip(models, phase_shift):
-#                 on_models, off_models = self.get_SHO_data(
-#                     noise, model_, phase_shift=phase_shift_
-#                 )
-#                 on_data.append(on_models)
-#                 off_data.append(off_models)
-#                 noise_labels.append(noise)
-#         else:
-#             model = self.get_model(model_path, noise)
-#             on_data, off_data = self.get_SHO_data(noise, model)
-
-#         # labels for the different figures
-#         names = ["A", "\u03C9", "Q", "\u03C6"]
-
-#         # gets the DC voltage data - this is for only the on state or else it would all be 0
-#         voltage = self.dataset.dc_voltage
-
-#         # loops around each voltage step in the measurement
-#         for z, voltage in enumerate(voltage):
-#             # calls the function to build the figure
-#             fig, ax, fig_scalar = self.build_figure_for_movie(
-#                 models,  # dataset to compare to
-#                 fig_width,  # width of the figure
-#                 inter_gap,  # gap between the graphs of different datasets,
-#                 intra_gap,  # gap between the graphs of same datasets,
-#                 cbar_space,  # gap between the graphs and the colorbar
-#                 colorbars,  # colorbars
-#                 voltage_plot_height,
-#                 labels,
-#             )  # height of the voltage plot
-
-#             # plots the voltage
-#             ax[0].plot(self.dataset.dc_voltage, "k")
-#             ax[0].plot(z, voltage, "o", color="k", markersize=10)
-#             ax[0].set_ylabel("Voltage (V)")
-#             ax[0].set_xlabel("Step")
-
-#             for compare_num in range(len(models)):
-#                 # plots each of the SHO parameters for the off and on state
-#                 for j in range(4):
-#                     imagemap(
-#                         ax[j + 1 + compare_num * 8],
-#                         on_data[compare_num][:, z, j],
-#                         colorbars=False,
-#                         clim=self.SHO_ranges[j],
-#                     )
-#                     imagemap(
-#                         ax[j + 5 + compare_num * 8],
-#                         off_data[compare_num][:, z, j],
-#                         colorbars=False,
-#                         clim=self.SHO_ranges[j],
-#                     )
-#                     labelfigs(ax[j + 1], string_add=f"On {names[j]}", loc="ct")
-#                     labelfigs(
-#                         ax[j + 5], string_add=f"Off {names[j]}", loc="ct")
-
-#                 if labels is not None:
-#                     # Get the position of the axis
-#                     bbox = ax[5 + compare_num * 8].get_position()
-
-#                     # bbox bounds are in the form [left, bottom, width, height]
-#                     # in the normalized unit with respect to the figure size
-#                     # bottom + height
-#                     top_in_norm_units = bbox.bounds[1] + bbox.bounds[3]
-#                     # bottom + height
-#                     right_in_norm_units = bbox.bounds[0] + bbox.bounds[2]
-
-#                     # Get the figure size in inches
-#                     fig_size_inches = fig.get_size_inches()  # Returns width, height
-
-#                     # The height of the figure in inches
-#                     fig_height_inches = fig_size_inches[1]
-#                     fig_width_inches = fig_size_inches[0]
-
-#                     # Convert the top position to inches
-#                     top_in_inches = top_in_norm_units * fig_height_inches
-#                     right_in_inches = right_in_norm_units * fig_width_inches + inter_gap
-
-#                     add_text_to_figure(
-#                         fig,
-#                         f"{labels[compare_num]} Noise {noise_labels[compare_num]}",
-#                         [right_in_inches / 2, top_in_inches + 0.33 / 2],
-#                     )
-
-#                 # if add colorbars
-#                 if colorbars:
-#                     # builds a list to store the colorbar axis objects
-#                     bar_ax = []
-
-#                     # gets the voltage axis position in ([xmin, ymin, xmax, ymax]])
-#                     voltage_ax_pos = fig_scalar.to_inches(
-#                         np.array(ax[0].get_position()).flatten()
-#                     )
-
-#                     # loops around the 4 axis
-#                     for i in range(4):
-#                         # calculates the height and width of the colorbars
-#                         cbar_h = (voltage_ax_pos[1] - inter_gap * 2 - 0.33) / 2
-#                         cbar_w = (cbar_space - inter_gap - cbar_gap) / 2
-
-#                         # sets the position of the axis in inches
-#                         pos_inch = [
-#                             voltage_ax_pos[2]
-#                             - (2 - i % 2) * (cbar_gap + cbar_w)
-#                             + inter_gap
-#                             + cbar_w,
-#                             voltage_ax_pos[1]
-#                             - (i // 2) * (inter_gap + cbar_h)
-#                             - 0.33
-#                             - cbar_h,
-#                             cbar_w,
-#                             cbar_h,
-#                         ]
-
-#                         # adds the plot to the figure
-#                         bar_ax.append(fig.add_axes(
-#                             fig_scalar.to_relative(pos_inch)))
-
-#                         # adds the colorbars to the plots
-#                         cbar = plt.colorbar(
-#                             ax[i + 1].images[0],
-#                             cax=bar_ax[i],
-#                             format="%.1e",
-#                             ticks=np.linspace(
-#                                 self.SHO_ranges[i][0], self.SHO_ranges[i][1], 5
-#                             ),
-#                         )
-
-#                         cbar.set_label(names[i])  # Add a label to the colorbar
-
-#             if self.image_scalebar is not None:
-#                 scalebar(ax[-1], *self.image_scalebar)
-
-#             # prints the figure
-#             if self.Printer is not None and filename is not None:
-#                 self.Printer.savefig(
-#                     fig,
-#                     f"{filename}_noise_{noise}_{z:04d}",
-#                     basepath=basepath + "/",
-#                     fileformats=["png"],
-#                 )
-
-#             plt.close(fig)
-
-#         # makes the movie
-#         make_movie(
-#             f"{filename}_noise_{noise}", basepath, basepath, file_format="png", fps=5
-#         )
 
 #     def MSE_compare(self, true_data, predictions, labels):
 #         for pred, label in zip(predictions, labels):

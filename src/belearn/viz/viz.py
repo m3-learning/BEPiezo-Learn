@@ -31,7 +31,7 @@
 # from m3_learning.viz.Movies import make_movie
 # import os
 
-from m3util.viz.layout import layout_fig, add_box, inset_connector, add_text_to_figure, labelfigs, scalebar
+from m3util.viz.layout import layout_fig, add_box, inset_connector, add_text_to_figure, labelfigs, scalebar, imagemap, FigDimConverter
 from m3util.util.IO import make_folder
 from m3util.viz.movies import make_movie
 
@@ -42,6 +42,10 @@ from scipy import fftpack
 
 import matplotlib.pyplot as plt
 
+
+import dask
+from dask import delayed, compute
+from dask.distributed import Client
 
 # color_palette = {
 #     "LSQF_A": "#003f5c",
@@ -828,12 +832,160 @@ class Viz:
             f"{filename}_noise_{noise}", basepath, basepath, file_format="png", fps=5
         )
 
-    import dask
-    from dask import delayed, compute
-    from dask.distributed import Client
+    def build_figure_for_movie(
+        self,
+        comparison,
+        fig_width,
+        inter_gap,
+        intra_gap,
+        cbar_space,
+        colorbars,
+        voltage_plot_height,
+        labels=None,
+    ):
+        """
+        Builds a figure layout for generating movie frames with multiple comparison plots.
 
-    # Initialize a Dask client to manage the parallel computation
-    client = Client()
+        This function creates a figure layout that includes multiple rows and columns of 
+        subplots, which are used to display comparison data (e.g., SHO fit results) alongside 
+        a voltage plot. It is designed to accommodate various configurations, including optional 
+        colorbars, labels, and gaps between plots.
+
+        Args:
+            comparison (any): Dataset(s) to compare, which determine the number of rows in the figure.
+            fig_width (float): Width of the figure in inches.
+            inter_gap (float): Gap between different datasets in inches.
+            intra_gap (float): Gap between similar datasets in inches.
+            cbar_space (float): Space allocated for the colorbar in inches.
+            colorbars (bool): Whether to include colorbars in the figure.
+            voltage_plot_height (float): Height of the voltage plot in inches.
+            labels (list, optional): List of labels for the plots. Defaults to None.
+
+        Returns:
+            matplotlib.figure.Figure: The figure object containing the plots.
+            list: A list of matplotlib.axes.Axes objects for each subplot.
+            FigDimConverter: An object used to convert figure dimensions from inches to relative coordinates.
+        """
+
+        # Initialize the list of axes for the figure
+        ax = []
+
+        # Calculate the number of rows needed, based on the comparison datasets
+        rows = len(comparison) * 2
+
+        # Determine the number of inter-gaps based on whether labels are provided
+        if labels is not None:
+            inter_gap_count = len(comparison) + 1
+        else:
+            inter_gap_count = 1
+
+        # Calculate the size of each embedding image in the figure
+        embedding_image_size = (
+            fig_width
+            - inter_gap * inter_gap_count
+            - intra_gap * 2
+            - cbar_space * colorbars
+        ) / 4  # Divide by 4 because there are 4 plots per row
+
+        # Calculate the total figure height based on the image sizes and gaps
+        fig_height = (
+            rows * (embedding_image_size + inter_gap / 2 + intra_gap / 2)
+            + voltage_plot_height
+            + 0.33 * inter_gap_count
+        )
+
+        # Create a scalar to convert inches to relative coordinates for positioning
+        fig_scalar = FigDimConverter((fig_width, fig_height))
+
+        # Create the figure with the calculated width and height
+        fig = plt.figure(figsize=(fig_width, fig_height))
+
+        # Define the position for the voltage plot (left, bottom, width, height in inches)
+        pos_inch = [
+            0.33,  # Left position
+            fig_height - voltage_plot_height,  # Bottom position (top-aligned)
+            6.5 - 0.33,  # Width of the voltage plot
+            voltage_plot_height,  # Height of the voltage plot
+        ]
+
+        # Add the voltage plot to the figure
+        ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
+
+        # Reset the x position for embedding plots and adjust the y position
+        pos_inch[0] = 0  # Reset left position
+        pos_inch[1] -= embedding_image_size + 0.33 * inter_gap_count  # Adjust bottom position
+
+        # Set the size for embedding images
+        pos_inch[2] = embedding_image_size  # Width of embedding image
+        pos_inch[3] = embedding_image_size  # Height of embedding image
+
+        # Loop through the rows to add the subplots for the embedding images
+        for j in range(rows):
+            # Add 4 graphs per row
+            for i in range(4):
+                ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))  # Add subplot to figure
+
+                # Adjust the gap between plots within the same row
+                if i == 1:
+                    gap = inter_gap
+                else:
+                    gap = intra_gap
+
+                # Move the position to the right for the next subplot
+                pos_inch[0] += embedding_image_size + gap
+
+            # Reset the x position to the start of the next row
+            pos_inch[0] = 0
+
+            # Adjust the y position for the next row based on the row index
+            if (j + 1) % 2 == 0:
+                pos_inch[1] -= embedding_image_size + inter_gap * inter_gap_count
+            else:
+                pos_inch[1] -= embedding_image_size + intra_gap
+
+        # Create a reordered list of axes for easier access
+        ax_ = [ax[0]]  # Start with the voltage plot
+
+        z = len(comparison) - 1
+
+        # Reorder the axes to make them easier to work with, going left to right, top to bottom
+        for j in range(1 + z):
+            for i in range(2):
+                ax_.extend(ax[1 + 2 * i + 8 * j: 3 + 2 * i + 8 * j])
+                ax_.extend(ax[5 + 2 * i + 8 * j: 7 + 2 * i + 8 * j])
+
+        return fig, ax_, fig_scalar
+
+
+#     def get_model(self, model_path, noise):
+#         # if a model path is not provided then data is from LSQF
+#         if model_path is not None:
+#             # finds the model with the lowest loss for the given noise level
+#             model_filename = (
+#                 model_path + "/" +
+#                 get_lowest_loss_for_noise_level(model_path, noise)
+#             )
+
+#             # instantiate the model
+#             model = SHO_Model(
+#                 self.dataset, training=False, model_basename="SHO_Fitter_original_data"
+#             )
+
+#             # loads the weights
+#             model.load(model_filename)
+
+#             if self.verbose:
+#                 # prints which model is being used
+#                 print("Using model: ", model_filename)
+
+#         elif model is not None:
+#             pass
+
+#         else:
+#             # sets the model equal to None if no model is provided
+#             model = None
+
+#         return model
 
     @static_dataset_decorator
     def SHO_fit_movie_images_P(
@@ -883,6 +1035,9 @@ class Viz:
         Returns:
             None: The function saves the generated images and optionally creates a movie from them.
         """
+        
+        # Initialize a Dask client to manage the parallel computation
+        client = Client()
 
         output_state = {"output_shape": "pixels", "scaled": False}
         self.dataset.set_attributes(**output_state)
@@ -2787,147 +2942,7 @@ class Viz:
 #             self.Printer.savefig(fig, filename)
 
 
-#     def build_figure_for_movie(
-#         self,
-#         comparison,
-#         fig_width,
-#         inter_gap,
-#         intra_gap,
-#         cbar_space,
-#         colorbars,
-#         voltage_plot_height,
-#         labels=None,
-#     ):
-#         """function that builds the figure for the movie
 
-#         Args:
-#             comparison (any): dataset to compare to
-#             fig_width (float): figure width in inches
-#             inter_gap (float): gap between different datasets in inches
-#             intra_gap (float): gap between similar datasets in inches
-#             cbar_space (float): gap between the colorbar and the image in inches
-#             colorbars (bool): if a colorbar is included
-#             voltage_plot_height (float): height of the voltage plot in inches
-#             labels (list, optional): list of labels for the plots. Defaults to None.
-
-#         Returns:
-#             matplotlib.fig, matplotlib.ax, figbar.scalar: The figure object, a list of ax objects, and the scalar to convert inches to relative coordinates
-#         """
-
-#         # instantiates the list of axes
-#         ax = []
-
-#         rows = len(comparison) * 2
-
-#         if labels is not None:
-#             inter_gap_count = len(comparison) + 1
-#         else:
-#             inter_gap_count = 1
-
-#         # calculates the size of the embedding image
-#         embedding_image_size = (
-#             fig_width
-#             - inter_gap * inter_gap_count
-#             - intra_gap * 2
-#             - cbar_space * colorbars
-#         ) / (4)
-
-#         # calculates the figure height based on the image details
-#         fig_height = (
-#             rows * (embedding_image_size + inter_gap / 2 + intra_gap / 2)
-#             + voltage_plot_height
-#             + 0.33 * inter_gap_count
-#         )
-
-#         # defines a scalar to convert inches to relative coordinates
-#         fig_scalar = FigDimConverter((fig_width, fig_height))
-
-#         # creates the figure
-#         fig = plt.figure(figsize=(fig_width, fig_height))
-
-#         # left bottom width height
-#         pos_inch = [
-#             0.33,
-#             fig_height - voltage_plot_height,
-#             6.5 - 0.33,
-#             voltage_plot_height,
-#         ]
-
-#         # adds the plot for the voltage
-#         ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
-
-#         # resets the x0 position for the embedding plots
-#         pos_inch[0] = 0
-#         pos_inch[1] -= embedding_image_size + 0.33 * inter_gap_count
-
-#         # sets the embedding size of the image
-#         pos_inch[2] = embedding_image_size
-#         pos_inch[3] = embedding_image_size
-
-#         # adds the rows to the figure
-#         for j in range(rows):
-#             # adds 4 graphs per row
-#             for i in range(4):
-#                 # adds the plot to the figure
-#                 ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
-
-#                 if i == 1:
-#                     gap = inter_gap
-#                 else:
-#                     gap = intra_gap
-
-#                 # adds the inter plot gap
-#                 pos_inch[0] += embedding_image_size + gap
-
-#             pos_inch[0] = 0
-
-#             if (j + 1) % 2 == 0:
-#                 pos_inch[1] -= embedding_image_size + \
-#                     inter_gap * inter_gap_count
-#             else:
-#                 pos_inch[1] -= embedding_image_size + intra_gap
-
-#         ax_ = [ax[0]]
-
-#         z = len(comparison) - 1
-
-#         # reshapes the axis so it is easier to work with goes from left to right, top to bottom.
-#         for j in range(1 + z):
-#             for i in range(2):
-#                 ax_.extend(ax[1 + 2 * i + 8 * j: 3 + 2 * i + 8 * j])
-#                 ax_.extend(ax[5 + 2 * i + 8 * j: 7 + 2 * i + 8 * j])
-
-#         return fig, ax_, fig_scalar
-
-#     def get_model(self, model_path, noise):
-#         # if a model path is not provided then data is from LSQF
-#         if model_path is not None:
-#             # finds the model with the lowest loss for the given noise level
-#             model_filename = (
-#                 model_path + "/" +
-#                 get_lowest_loss_for_noise_level(model_path, noise)
-#             )
-
-#             # instantiate the model
-#             model = SHO_Model(
-#                 self.dataset, training=False, model_basename="SHO_Fitter_original_data"
-#             )
-
-#             # loads the weights
-#             model.load(model_filename)
-
-#             if self.verbose:
-#                 # prints which model is being used
-#                 print("Using model: ", model_filename)
-
-#         elif model is not None:
-#             pass
-
-#         else:
-#             # sets the model equal to None if no model is provided
-#             model = None
-
-#         return model
 
 
 

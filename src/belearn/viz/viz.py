@@ -15,7 +15,7 @@
 # )
 # from scipy.signal import resample
 # from scipy import fftpack
-# import matplotlib.pyplot as plt
+
 # from m3_learning.be.nn import SHO_Model
 # from m3_learning.be.loop_fitter import loop_fitting_function_torch
 # from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -31,12 +31,16 @@
 # from m3_learning.viz.Movies import make_movie
 # import os
 
-from m3util.viz.layout import layout_fig, add_box, inset_connector
+from m3util.viz.layout import layout_fig, add_box, inset_connector, add_text_to_figure, labelfigs, scalebar
+from m3util.util.IO import make_folder
+from m3util.viz.movies import make_movie
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Type
 import numpy as np
 from scipy import fftpack
+
+import matplotlib.pyplot as plt
 
 
 # color_palette = {
@@ -609,11 +613,10 @@ class Viz:
         models=[None],
         fig_width=6.5,
         voltage_plot_height=1.25,  # height of the voltage plot
-        intra_gap=0.02,  # gap between the graphs,
-        inter_gap=0.2,  # gap between the graphs,
+        intra_gap=0.02,  # gap between the graphs
+        inter_gap=0.2,  # gap between the graphs
         cbar_gap=0.6,  # gap between the graphs of colorbars
-        # space on the right where the cbar is not):
-        cbar_space=1.3,
+        cbar_space=1.3,  # space on the right where the colorbar is not
         colorbars=True,
         scalebar_=True,
         filename=None,
@@ -621,38 +624,287 @@ class Viz:
         labels=None,
         phase_shift=None,
     ):
-        output_state = {"output_shape": "pixels", "scaled": False}
+        """
+        Generates a sequence of images depicting SHO (Simple Harmonic Oscillator) fit results
+        for various voltage steps, and optionally compiles them into a movie.
 
-        # makes sure the output state is in pixels
+        This function creates images showing the fit results of the SHO model for both the 
+        "on" and "off" states at different voltage steps. The images can include multiple 
+        models for comparison, and optional features like colorbars, scalebars, and labels. 
+        The images are saved to the specified directory, and a movie can be created from them.
+
+        Args:
+            noise (int, optional): The noise level used for generating the SHO fits. Defaults to 0.
+            model_path (str, optional): Path to the directory containing the model checkpoints. Defaults to None.
+            models (list, optional): List of models to compare. Defaults to [None].
+            fig_width (float, optional): Width of the figure. Defaults to 6.5.
+            voltage_plot_height (float, optional): Height of the voltage plot. Defaults to 1.25.
+            intra_gap (float, optional): Gap between the graphs of the same dataset. Defaults to 0.02.
+            inter_gap (float, optional): Gap between the graphs of different datasets. Defaults to 0.2.
+            cbar_gap (float, optional): Gap between the graphs and colorbars. Defaults to 0.6.
+            cbar_space (float, optional): Space reserved for the colorbars on the right. Defaults to 1.3.
+            colorbars (bool, optional): Whether to include colorbars in the images. Defaults to True.
+            scalebar_ (bool, optional): Whether to include a scalebar in the images. Defaults to True.
+            filename (str, optional): Base filename for saving images. Defaults to None.
+            basepath (str, optional): Base path for saving images. Defaults to None.
+            labels (list, optional): Labels for the different models in the comparison. Defaults to None.
+            phase_shift (list, optional): Phase shifts to apply to the models. Defaults to None.
+
+        Returns:
+            None: The function saves the generated images and optionally creates a movie from them.
+        """
+
+        # Sets the output state to ensure the dataset outputs pixel data
+        output_state = {"output_shape": "pixels", "scaled": False}
         self.dataset.set_attributes(**output_state)
 
-        # builds the basepath for the images of the movie
+        # Constructs the basepath for saving images if provided
         if basepath is not None:
-            # if a model is provided name based on the model
+            # If a model path is provided, name the directory based on the model with the lowest loss
             if model_path is not None:
                 model_filename = (
                     model_path
                     + "/"
                     + get_lowest_loss_for_noise_level(model_path, noise)
                 )
-
                 basepath += f"/{model_filename.split('/')[-1].split('.')[0]}"
-
-            # if no model is provided name based on the noise level
             else:
+                # If no model is provided, name the directory based on the noise level
                 basepath += f"Noise_{noise}"
 
-            # makes the folder
+            # Creates the directory for saving images
             basepath = make_folder(basepath)
 
-        # if models is given
+        # If models are provided for comparison
         if models is not None:
-            # builds the arrays
             on_data = []
             off_data = []
             noise_labels = []
 
-            # loops around the different models for models
+            # Loop through the models and get the SHO data for each
+            for model_, phase_shift_ in zip(models, phase_shift):
+                on_models, off_models = self.get_SHO_data(
+                    noise, model_, phase_shift=phase_shift_
+                )
+                on_data.append(on_models)
+                off_data.append(off_models)
+                noise_labels.append(noise)
+        else:
+            # If no models are provided, get the default model and its SHO data
+            model = self.get_model(model_path, noise)
+            on_data, off_data = self.get_SHO_data(noise, model)
+
+        # Labels for the different SHO parameters (e.g., Amplitude, Frequency, Quality Factor, Phase)
+        names = ["A", "\u03C9", "Q", "\u03C6"]
+
+        # Retrieves the DC voltage data (only for the "on" state)
+        voltage = self.dataset.dc_voltage
+
+        # Loop through each voltage step to generate images
+        for z, voltage in enumerate(voltage):
+            # Build the figure and axes layout for the movie images
+            fig, ax, fig_scalar = self.build_figure_for_movie(
+                models,  # dataset to compare to
+                fig_width,  # width of the figure
+                inter_gap,  # gap between the graphs of different datasets
+                intra_gap,  # gap between the graphs of the same datasets
+                cbar_space,  # gap between the graphs and the colorbar
+                colorbars,  # include colorbars or not
+                voltage_plot_height,  # height of the voltage plot
+                labels,  # labels for the models
+            )
+
+            # Plot the DC voltage trace for the current step
+            ax[0].plot(self.dataset.dc_voltage, "k")
+            ax[0].plot(z, voltage, "o", color="k", markersize=10)
+            ax[0].set_ylabel("Voltage (V)")
+            ax[0].set_xlabel("Step")
+
+            # Loop over the models and SHO parameters to plot the images
+            for compare_num in range(len(models)):
+                for j in range(4):
+                    # Plot each SHO parameter for the "on" state
+                    imagemap(
+                        ax[j + 1 + compare_num * 8],
+                        on_data[compare_num][:, z, j],
+                        colorbars=False,
+                        clim=self.SHO_ranges[j],
+                    )
+                    # Plot each SHO parameter for the "off" state
+                    imagemap(
+                        ax[j + 5 + compare_num * 8],
+                        off_data[compare_num][:, z, j],
+                        colorbars=False,
+                        clim=self.SHO_ranges[j],
+                    )
+                    labelfigs(ax[j + 1], string_add=f"On {names[j]}", loc="ct")
+                    labelfigs(ax[j + 5], string_add=f"Off {names[j]}", loc="ct")
+
+                # Add labels to the figures if provided
+                if labels is not None:
+                    # Get the position of the axis
+                    bbox = ax[5 + compare_num * 8].get_position()
+
+                    # Calculate the position for the label text
+                    top_in_norm_units = bbox.bounds[1] + bbox.bounds[3]
+                    right_in_norm_units = bbox.bounds[0] + bbox.bounds[2]
+
+                    # Convert to inches
+                    fig_size_inches = fig.get_size_inches()
+                    fig_height_inches = fig_size_inches[1]
+                    fig_width_inches = fig_size_inches[0]
+
+                    top_in_inches = top_in_norm_units * fig_height_inches
+                    right_in_inches = right_in_norm_units * fig_width_inches + inter_gap
+
+                    # Add the label text to the figure
+                    add_text_to_figure(
+                        fig,
+                        f"{labels[compare_num]} Noise {noise_labels[compare_num]}",
+                        [right_in_inches / 2, top_in_inches + 0.33 / 2],
+                    )
+
+                # Add colorbars if specified
+                if colorbars:
+                    bar_ax = []
+
+                    # Get the voltage axis position in inches
+                    voltage_ax_pos = fig_scalar.to_inches(
+                        np.array(ax[0].get_position()).flatten()
+                    )
+
+                    # Loop through the 4 SHO parameters to add colorbars
+                    for i in range(4):
+                        # Calculate the position and size of the colorbars
+                        cbar_h = (voltage_ax_pos[1] - inter_gap * 2 - 0.33) / 2
+                        cbar_w = (cbar_space - inter_gap - cbar_gap) / 2
+
+                        pos_inch = [
+                            voltage_ax_pos[2]
+                            - (2 - i % 2) * (cbar_gap + cbar_w)
+                            + inter_gap
+                            + cbar_w,
+                            voltage_ax_pos[1]
+                            - (i // 2) * (inter_gap + cbar_h)
+                            - 0.33
+                            - cbar_h,
+                            cbar_w,
+                            cbar_h,
+                        ]
+
+                        # Add the colorbar axis to the figure
+                        bar_ax.append(fig.add_axes(
+                            fig_scalar.to_relative(pos_inch)))
+
+                        # Add the colorbar to the axis
+                        cbar = plt.colorbar(
+                            ax[i + 1].images[0],
+                            cax=bar_ax[i],
+                            format="%.1e",
+                            ticks=np.linspace(
+                                self.SHO_ranges[i][0], self.SHO_ranges[i][1], 5
+                            ),
+                        )
+
+                        cbar.set_label(names[i])  # Label the colorbar
+
+            # Add a scalebar to the last axis if specified
+            if self.image_scalebar is not None:
+                scalebar(ax[-1], *self.image_scalebar)
+
+            # Save the figure if a Printer object and filename are provided
+            if self.Printer is not None and filename is not None:
+                self.Printer.savefig(
+                    fig,
+                    f"{filename}_noise_{noise}_{z:04d}",
+                    basepath=basepath + "/",
+                    fileformats=["png"],
+                )
+
+            plt.close(fig)  # Close the figure to free memory
+
+        # Create a movie from the saved images
+        make_movie(
+            f"{filename}_noise_{noise}", basepath, basepath, file_format="png", fps=5
+        )
+
+    import dask
+    from dask import delayed, compute
+    from dask.distributed import Client
+
+    # Initialize a Dask client to manage the parallel computation
+    client = Client()
+
+    @static_dataset_decorator
+    def SHO_fit_movie_images_P(
+        self,
+        noise=0,
+        model_path=None,
+        models=[None],
+        fig_width=6.5,
+        voltage_plot_height=1.25,  # height of the voltage plot
+        intra_gap=0.02,  # gap between the graphs
+        inter_gap=0.2,  # gap between the graphs
+        cbar_gap=0.6,  # gap between the graphs of colorbars
+        cbar_space=1.3,  # space on the right where the colorbar is not
+        colorbars=True,
+        scalebar_=True,
+        filename=None,
+        basepath=None,
+        labels=None,
+        phase_shift=None,
+    ):
+        """
+        Generates a sequence of images depicting SHO (Simple Harmonic Oscillator) fit results
+        for various voltage steps, and optionally compiles them into a movie.
+
+        This function creates images showing the fit results of the SHO model for both the 
+        "on" and "off" states at different voltage steps. The images can include multiple 
+        models for comparison, and optional features like colorbars, scalebars, and labels. 
+        The images are saved to the specified directory, and a movie can be created from them.
+
+        Args:
+            noise (int, optional): The noise level used for generating the SHO fits. Defaults to 0.
+            model_path (str, optional): Path to the directory containing the model checkpoints. Defaults to None.
+            models (list, optional): List of models to compare. Defaults to [None].
+            fig_width (float, optional): Width of the figure. Defaults to 6.5.
+            voltage_plot_height (float, optional): Height of the voltage plot. Defaults to 1.25.
+            intra_gap (float, optional): Gap between the graphs of the same dataset. Defaults to 0.02.
+            inter_gap (float, optional): Gap between the graphs of different datasets. Defaults to 0.2.
+            cbar_gap (float, optional): Gap between the graphs and colorbars. Defaults to 0.6.
+            cbar_space (float, optional): Space reserved for the colorbars on the right. Defaults to 1.3.
+            colorbars (bool, optional): Whether to include colorbars in the images. Defaults to True.
+            scalebar_ (bool, optional): Whether to include a scalebar in the images. Defaults to True.
+            filename (str, optional): Base filename for saving images. Defaults to None.
+            basepath (str, optional): Base path for saving images. Defaults to None.
+            labels (list, optional): Labels for the different models in the comparison. Defaults to None.
+            phase_shift (list, optional): Phase shifts to apply to the models. Defaults to None.
+
+        Returns:
+            None: The function saves the generated images and optionally creates a movie from them.
+        """
+
+        output_state = {"output_shape": "pixels", "scaled": False}
+        self.dataset.set_attributes(**output_state)
+
+        if basepath is not None:
+            if model_path is not None:
+                model_filename = (
+                    model_path
+                    + "/"
+                    + get_lowest_loss_for_noise_level(model_path, noise)
+                )
+                basepath += f"/{model_filename.split('/')[-1].split('.')[0]}"
+            else:
+                basepath += f"Noise_{noise}"
+
+            basepath = make_folder(basepath)
+
+        if models is not None:
+            on_data = []
+            off_data = []
+            noise_labels = []
+
             for model_, phase_shift_ in zip(models, phase_shift):
                 on_models, off_models = self.get_SHO_data(
                     noise, model_, phase_shift=phase_shift_
@@ -664,34 +916,31 @@ class Viz:
             model = self.get_model(model_path, noise)
             on_data, off_data = self.get_SHO_data(noise, model)
 
-        # labels for the different figures
         names = ["A", "\u03C9", "Q", "\u03C6"]
-
-        # gets the DC voltage data - this is for only the on state or else it would all be 0
         voltage = self.dataset.dc_voltage
 
-        # loops around each voltage step in the measurement
-        for z, voltage in enumerate(voltage):
-            # calls the function to build the figure
+        # Create a list to store delayed tasks
+        tasks = []
+
+        def process_voltage_step(z, voltage, basepath):
+            # Build the figure and axes layout for the movie images
             fig, ax, fig_scalar = self.build_figure_for_movie(
                 models,  # dataset to compare to
                 fig_width,  # width of the figure
-                inter_gap,  # gap between the graphs of different datasets,
-                intra_gap,  # gap between the graphs of same datasets,
+                inter_gap,  # gap between the graphs of different datasets
+                intra_gap,  # gap between the graphs of the same datasets
                 cbar_space,  # gap between the graphs and the colorbar
-                colorbars,  # colorbars
-                voltage_plot_height,
-                labels,
-            )  # height of the voltage plot
+                colorbars,  # include colorbars or not
+                voltage_plot_height,  # height of the voltage plot
+                labels,  # labels for the models
+            )
 
-            # plots the voltage
             ax[0].plot(self.dataset.dc_voltage, "k")
             ax[0].plot(z, voltage, "o", color="k", markersize=10)
             ax[0].set_ylabel("Voltage (V)")
             ax[0].set_xlabel("Step")
 
             for compare_num in range(len(models)):
-                # plots each of the SHO parameters for the off and on state
                 for j in range(4):
                     imagemap(
                         ax[j + 1 + compare_num * 8],
@@ -706,28 +955,17 @@ class Viz:
                         clim=self.SHO_ranges[j],
                     )
                     labelfigs(ax[j + 1], string_add=f"On {names[j]}", loc="ct")
-                    labelfigs(
-                        ax[j + 5], string_add=f"Off {names[j]}", loc="ct")
+                    labelfigs(ax[j + 5], string_add=f"Off {names[j]}", loc="ct")
 
                 if labels is not None:
-                    # Get the position of the axis
                     bbox = ax[5 + compare_num * 8].get_position()
-
-                    # bbox bounds are in the form [left, bottom, width, height]
-                    # in the normalized unit with respect to the figure size
-                    # bottom + height
                     top_in_norm_units = bbox.bounds[1] + bbox.bounds[3]
-                    # bottom + height
                     right_in_norm_units = bbox.bounds[0] + bbox.bounds[2]
 
-                    # Get the figure size in inches
-                    fig_size_inches = fig.get_size_inches()  # Returns width, height
-
-                    # The height of the figure in inches
+                    fig_size_inches = fig.get_size_inches()
                     fig_height_inches = fig_size_inches[1]
                     fig_width_inches = fig_size_inches[0]
 
-                    # Convert the top position to inches
                     top_in_inches = top_in_norm_units * fig_height_inches
                     right_in_inches = right_in_norm_units * fig_width_inches + inter_gap
 
@@ -737,23 +975,16 @@ class Viz:
                         [right_in_inches / 2, top_in_inches + 0.33 / 2],
                     )
 
-                # if add colorbars
                 if colorbars:
-                    # builds a list to store the colorbar axis objects
                     bar_ax = []
-
-                    # gets the voltage axis position in ([xmin, ymin, xmax, ymax]])
                     voltage_ax_pos = fig_scalar.to_inches(
                         np.array(ax[0].get_position()).flatten()
                     )
 
-                    # loops around the 4 axis
                     for i in range(4):
-                        # calculates the height and width of the colorbars
                         cbar_h = (voltage_ax_pos[1] - inter_gap * 2 - 0.33) / 2
                         cbar_w = (cbar_space - inter_gap - cbar_gap) / 2
 
-                        # sets the position of the axis in inches
                         pos_inch = [
                             voltage_ax_pos[2]
                             - (2 - i % 2) * (cbar_gap + cbar_w)
@@ -767,11 +998,9 @@ class Viz:
                             cbar_h,
                         ]
 
-                        # adds the plot to the figure
                         bar_ax.append(fig.add_axes(
                             fig_scalar.to_relative(pos_inch)))
 
-                        # adds the colorbars to the plots
                         cbar = plt.colorbar(
                             ax[i + 1].images[0],
                             cax=bar_ax[i],
@@ -781,12 +1010,11 @@ class Viz:
                             ),
                         )
 
-                        cbar.set_label(names[i])  # Add a label to the colorbar
+                        cbar.set_label(names[i])
 
             if self.image_scalebar is not None:
                 scalebar(ax[-1], *self.image_scalebar)
 
-            # prints the figure
             if self.Printer is not None and filename is not None:
                 self.Printer.savefig(
                     fig,
@@ -797,7 +1025,15 @@ class Viz:
 
             plt.close(fig)
 
-        # makes the movie
+        # Create delayed tasks for each voltage step
+        for z, voltage_step in enumerate(voltage):
+            task = delayed(process_voltage_step)(z, voltage_step, basepath)
+            tasks.append(task)
+
+        # Execute all tasks in parallel
+        compute(*tasks)
+
+        # Create a movie from the saved images
         make_movie(
             f"{filename}_noise_{noise}", basepath, basepath, file_format="png", fps=5
         )
@@ -837,6 +1073,48 @@ class Viz:
 
         # Return the determined or provided voltage step index
         return voltage_step
+    
+    def get_SHO_data(self, noise, model, phase_shift=None):
+        """
+        Retrieves Simple Harmonic Oscillator (SHO) fit results for both "on" and "off" states.
+
+        This function sets the noise level and measurement state of the dataset, then extracts 
+        the SHO fit results for both the "on" and "off" states using the specified model and 
+        phase shift.
+
+        Args:
+            noise (int): The noise level to apply to the dataset.
+            model (object): The model used for generating the SHO fit results.
+            phase_shift (float, optional): An optional phase shift to apply during the fit. Defaults to None.
+
+        Returns:
+            tuple: A tuple containing two numpy arrays:
+                - `on_data`: SHO fit results for the "on" state.
+                - `off_data`: SHO fit results for the "off" state.
+        """
+
+        # Set the noise level for the dataset
+        self.dataset.noise = noise
+
+        # Set the measurement state to "on" to get the data for the "on" state
+        self.dataset.measurement_state = "on"
+
+        # Retrieve the SHO fit results for the "on" state
+        on_data = self.dataset.SHO_fit_results(
+            model=model, phase_shift=phase_shift
+        )
+
+        # Set the measurement state to "off" to get the data for the "off" state
+        self.dataset.measurement_state = "off"
+
+        # Retrieve the SHO fit results for the "off" state
+        off_data = self.dataset.SHO_fit_results(
+            model=model, phase_shift=phase_shift
+        )
+
+        # Return the fit results for both states as a tuple
+        return on_data, off_data
+
 
     ###### SETTERS ######
 
@@ -2650,26 +2928,6 @@ class Viz:
 #             model = None
 
 #         return model
-
-#     def get_SHO_data(self, noise, model, phase_shift=None):
-#         # sets the noise state
-#         self.dataset.noise = noise
-
-#         # gets the on state of the data
-#         self.dataset.measurement_state = "on"
-
-#         # gets the fit results
-#         on_data = self.dataset.SHO_fit_results(
-#             model=model, phase_shift=phase_shift)
-
-#         # sets the state to the off state to get the data
-#         self.dataset.measurement_state = "off"
-
-#         # gets the off state of the data
-#         off_data = self.dataset.SHO_fit_results(
-#             model=model, phase_shift=phase_shift)
-
-#         return on_data, off_data
 
 
 

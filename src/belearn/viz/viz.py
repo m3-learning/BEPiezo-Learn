@@ -606,7 +606,103 @@ class Viz:
         # If a Printer object is defined, save the figure with the specified filename and style
         if self.Printer is not None:
             self.Printer.savefig(fig, filename, label_figs=axs, style="b")
+            
+    @static_dataset_decorator
+    def fit_tester(self, true, predict, pixel=None, voltage_step=None, **kwargs):
+        """
+        Tests the fit of a model by comparing predicted data against true data for a specific pixel and voltage step.
 
+        If a pixel is not provided, a random pixel will be selected. The method will also determine the appropriate 
+        voltage step if one is not provided. The comparison is visualized using a raw data comparison plot.
+
+        Args:
+            true (dict): A dictionary containing the true data values to compare against.
+            predict (dict): A dictionary containing the predicted data values.
+            pixel (int, optional): The pixel index to use for the comparison. If not provided, a random pixel will be selected.
+            voltage_step (int, optional): The voltage step to use for the comparison. If not provided, it will be calculated based on the current state.
+            **kwargs: Additional keyword arguments passed to the raw_data_comparison method.
+
+        Returns:
+            None
+        """
+
+        # If a pixel is not provided, select a random pixel from the dataset
+        if pixel is None:
+            pixel = np.random.randint(0, self.dataset.num_pix)
+
+        # Get the appropriate voltage step, considering the current state
+        voltage_step = self.get_voltage_step(voltage_step)
+
+        # Set object attributes based on the predict dictionary
+        self.set_attributes(**predict)
+
+        # Compute the fit parameters for the selected pixel and voltage step
+        params = self.dataset.SHO_LSQF(pixel=pixel, voltage_step=voltage_step)
+
+        # Print the true data for inspection or debugging
+        print(true)
+
+        # Perform and visualize the raw data comparison between true and predicted data
+        self.raw_data_comparison(
+            true,
+            predict,
+            pixel=pixel,
+            voltage_step=voltage_step,
+            fit_results=params,
+            **kwargs,
+        )
+
+    @static_dataset_decorator
+    def nn_checker(
+        self, state, filename=None, pixel=None, voltage_step=None, legend=True, **kwargs
+    ):
+        # if a pixel is not provided it will select a random pixel
+        if pixel is None:
+            # Select a random point and time step to plot
+            pixel = np.random.randint(0, self.dataset.num_pix)
+
+        # gets the voltagestep with consideration of the current state
+        voltage_step = self.get_voltage_step(voltage_step)
+
+        self.set_attributes(**state)
+
+        data = self.dataset.raw_spectra(pixel=pixel, voltage_step=voltage_step)
+
+        # plot real and imaginary components of resampled data
+        fig = plt.figure(figsize=(3, 1.25), layout="compressed")
+        axs = plt.subplot(111)
+
+        self.dataset.raw_format = "complex"
+
+        data, x = self.dataset.raw_spectra(
+            pixel, voltage_step, frequency=True, **kwargs
+        )
+
+        axs.plot(x, data[0].flatten(), "k", label=self.dataset.label + " Real")
+        axs.set_xlabel("Frequency (Hz)")
+        axs.set_ylabel("Real (Arb. U.)")
+        ax2 = axs.twinx()
+        ax2.set_ylabel("Imag (Arb. U.)")
+        ax2.plot(x, data[1].flatten(), "g", label=self.dataset.label + " Imag")
+
+        axes = [axs, ax2]
+
+        for ax in axes:
+            ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+            ax.set_box_aspect(1)
+
+        if self.verbose:
+            self.dataset.extraction_state
+
+        if legend:
+            fig.legend(bbox_to_anchor=(1.0, 1),
+                       loc="upper right", borderaxespad=0.1)
+
+        # prints the figure
+        if self.Printer is not None and filename is not None:
+            self.Printer.savefig(fig, filename, style="b")
+    
+    
     ###### MOVIES #####
 
     @static_dataset_decorator
@@ -1318,79 +1414,6 @@ class Viz:
 #             )
 #         return x
 
-#     @static_dataset_decorator
-#     def fit_tester(self, true, predict, pixel=None, voltage_step=None, **kwargs):
-#         # if a pixel is not provided it will select a random pixel
-#         if pixel is None:
-#             # Select a random point and time step to plot
-#             pixel = np.random.randint(0, self.dataset.num_pix)
-
-#         # gets the voltagestep with consideration of the current state
-#         voltage_step = self.get_voltage_step(voltage_step)
-
-#         self.set_attributes(**predict)
-#         params = self.dataset.SHO_LSQF(pixel=pixel, voltage_step=voltage_step)
-
-#         print(true)
-
-#         self.raw_data_comparison(
-#             true,
-#             predict,
-#             pixel=pixel,
-#             voltage_step=voltage_step,
-#             fit_results=params,
-#             **kwargs,
-#         )
-
-#     @static_dataset_decorator
-#     def nn_checker(
-#         self, state, filename=None, pixel=None, voltage_step=None, legend=True, **kwargs
-#     ):
-#         # if a pixel is not provided it will select a random pixel
-#         if pixel is None:
-#             # Select a random point and time step to plot
-#             pixel = np.random.randint(0, self.dataset.num_pix)
-
-#         # gets the voltagestep with consideration of the current state
-#         voltage_step = self.get_voltage_step(voltage_step)
-
-#         self.set_attributes(**state)
-
-#         data = self.dataset.raw_spectra(pixel=pixel, voltage_step=voltage_step)
-
-#         # plot real and imaginary components of resampled data
-#         fig = plt.figure(figsize=(3, 1.25), layout="compressed")
-#         axs = plt.subplot(111)
-
-#         self.dataset.raw_format = "complex"
-
-#         data, x = self.dataset.raw_spectra(
-#             pixel, voltage_step, frequency=True, **kwargs
-#         )
-
-#         axs.plot(x, data[0].flatten(), "k", label=self.dataset.label + " Real")
-#         axs.set_xlabel("Frequency (Hz)")
-#         axs.set_ylabel("Real (Arb. U.)")
-#         ax2 = axs.twinx()
-#         ax2.set_ylabel("Imag (Arb. U.)")
-#         ax2.plot(x, data[1].flatten(), "g", label=self.dataset.label + " Imag")
-
-#         axes = [axs, ax2]
-
-#         for ax in axes:
-#             ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
-#             ax.set_box_aspect(1)
-
-#         if self.verbose:
-#             self.dataset.extraction_state
-
-#         if legend:
-#             fig.legend(bbox_to_anchor=(1.0, 1),
-#                        loc="upper right", borderaxespad=0.1)
-
-#         # prints the figure
-#         if self.Printer is not None and filename is not None:
-#             self.Printer.savefig(fig, filename, style="b")
 
 #     @static_dataset_decorator
 #     def nn_validation(

@@ -43,18 +43,15 @@ from scipy import fftpack
 import matplotlib.pyplot as plt
 
 
-import dask
-from dask import delayed, compute
-from dask.distributed import Client
-
-# color_palette = {
-#     "LSQF_A": "#003f5c",
-#     "LSQF_P": "#444e86",
-#     "NN_A": "#955196",
-#     "NN_P": "#dd5182",
-#     "other": "#ff6e54",
-#     "other_2": "#ffa600",
-# }
+# Defines the color palet for the plots
+color_palette = {
+    "LSQF_A": "#003f5c",
+    "LSQF_P": "#444e86",
+    "NN_A": "#955196",
+    "NN_P": "#dd5182",
+    "other": "#ff6e54",
+    "other_2": "#ffa600",
+}
 
 
 def get_lowest_loss_for_noise_level(path, desired_noise_level):
@@ -702,6 +699,155 @@ class Viz:
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename, style="b")
     
+    ##### Analytics #####
+    
+    @static_dataset_decorator
+    def bmw_nn(
+        self,
+        true_state,
+        prediction=None,
+        model=None,
+        out_state=None,
+        n=1,
+        gaps=(0.8, 0.33),
+        size=(1.25, 1.25),
+        filename=None,
+        compare_state=None,
+        fit_type='SHO',
+        **kwargs,
+    ):
+
+        true_state = torch.atleast_3d(torch.tensor(true_state.reshape(-1,96)))
+
+        d1, d2, x1, x2, label, index1, mse1 = None, None, None, None, None, None, None
+
+        if fit_type == "SHO":
+            d1, d2, x1, x2, label, index1, mse1 = self.get_best_median_worst(
+                true_state,
+                prediction=prediction,
+                model=model,
+                out_state=out_state,
+                n=n,
+                compare_state=compare_state,
+                **kwargs,
+            )
+
+            fig, ax = subfigures(1, 3, gaps=gaps, size=size)
+
+            for i, (true, prediction, error) in enumerate(zip(d1, d2, mse1)):
+                ax_ = ax[i]
+                ax_.plot(
+                    x2,
+                    prediction[0].flatten(),
+                    color_palette["NN_A"],
+                    label=f"NN {label[0]}",
+                )
+                ax1 = ax_.twinx()
+                ax1.plot(
+                    x2,
+                    prediction[1].flatten(),
+                    color_palette["NN_P"],
+                    label=f"NN {label[1]}]",
+                )
+
+                ax_.plot(
+                    x1,
+                    true[0].flatten(),
+                    "o",
+                    color=color_palette["NN_A"],
+                    label=f"Raw {label[0]}",
+                )
+                ax1.plot(
+                    x1,
+                    true[1].flatten(),
+                    "o",
+                    color=color_palette["NN_P"],
+                    label=f"Raw {label[1]}",
+                )
+
+                ax_.set_xlabel("Frequency (Hz)")
+
+                # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
+                text_position_in_inches = (
+                    -1 * (gaps[0] + size[0]) * ((2 - i) % 3) + size[0] / 2,
+                    (gaps[1] + size[1]) * (1.25 - i // 3 - 1.25) - gaps[1],
+                )
+                text = f"MSE: {error:0.4f}"
+                add_text_to_figure(
+                    fig, text, text_position_in_inches, fontsize=6, ha="center"
+                )
+
+                if out_state is not None:
+                    if "measurement state" in out_state.keys():
+                        if out_state["raw_format"] == "magnitude spectrum":
+                            ax_.set_ylabel("Amplitude (Arb. U.)")
+                            ax1.set_ylabel("Phase (rad)")
+                    else:
+                        ax_.set_ylabel("Real (Arb. U.)")
+                        ax1.set_ylabel("Imag (Arb. U.)")
+
+            # add a legend just for the last one
+            lines, labels = ax_.get_legend_handles_labels()
+            lines2, labels2 = ax1.get_legend_handles_labels()
+            ax_.legend(lines + lines2, labels + labels2, loc="upper right")
+
+        elif fit_type == "hysteresis":
+            d1, d2, x1, x2, index1, mse1, _ = self.get_best_median_worst_hysteresis(
+                true_state,
+                prediction=prediction,
+                n=n,
+                **kwargs,
+            )
+
+            fig, ax = subfigures(1, 3, gaps=gaps, size=size)
+
+            for i, (true, prediction, error) in enumerate(zip(d1, d2, mse1)):
+                ax_ = ax[i]
+
+                ax_.plot(
+                    x2,
+                    prediction.flatten(),
+                    color=color_palette["NN_A"],
+                    # label=f"NN {label[0]}",
+                )
+
+                ax_.plot(
+                    x1,
+                    true.flatten(),
+                    "o",
+                    color=color_palette["NN_A"],
+                    # label=f"Raw {label[0]}",
+                )
+
+                ax_.set_xlabel("Voltage (V)")
+
+                # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
+                text_position_in_inches = (
+                    -1 * (gaps[0] + size[0]) * ((2 - i) % 3) + size[0] / 2,
+                    (gaps[1] + size[1]) * (1.25 - i // 3 - 1.25) - gaps[1],
+                )
+
+                text = f"MSE: {error:0.4f}"
+                add_text_to_figure(
+                    fig, text, text_position_in_inches, fontsize=6, ha="center"
+                )
+
+                ax_.set_ylabel("(Arb. U.)")
+
+                # add a legend just for the last one
+                lines, labels = ax_.get_legend_handles_labels()
+                ax_.legend(lines, labels, loc="upper right")
+
+        else:
+            raise ValueError("fit_type must be SHO or hysteresis")
+
+        # prints the figure
+        if self.Printer is not None and filename is not None:
+            self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+
+        if "returns" in kwargs.keys():
+            if kwargs["returns"] == True:
+                return d1, d2, index1, mse1
     
     ###### MOVIES #####
 
@@ -1082,212 +1228,6 @@ class Viz:
 #             model = None
 
 #         return model
-
-    @static_dataset_decorator
-    def SHO_fit_movie_images_P(
-        self,
-        noise=0,
-        model_path=None,
-        models=[None],
-        fig_width=6.5,
-        voltage_plot_height=1.25,  # height of the voltage plot
-        intra_gap=0.02,  # gap between the graphs
-        inter_gap=0.2,  # gap between the graphs
-        cbar_gap=0.6,  # gap between the graphs of colorbars
-        cbar_space=1.3,  # space on the right where the colorbar is not
-        colorbars=True,
-        scalebar_=True,
-        filename=None,
-        basepath=None,
-        labels=None,
-        phase_shift=None,
-    ):
-        """
-        Generates a sequence of images depicting SHO (Simple Harmonic Oscillator) fit results
-        for various voltage steps, and optionally compiles them into a movie.
-
-        This function creates images showing the fit results of the SHO model for both the 
-        "on" and "off" states at different voltage steps. The images can include multiple 
-        models for comparison, and optional features like colorbars, scalebars, and labels. 
-        The images are saved to the specified directory, and a movie can be created from them.
-
-        Args:
-            noise (int, optional): The noise level used for generating the SHO fits. Defaults to 0.
-            model_path (str, optional): Path to the directory containing the model checkpoints. Defaults to None.
-            models (list, optional): List of models to compare. Defaults to [None].
-            fig_width (float, optional): Width of the figure. Defaults to 6.5.
-            voltage_plot_height (float, optional): Height of the voltage plot. Defaults to 1.25.
-            intra_gap (float, optional): Gap between the graphs of the same dataset. Defaults to 0.02.
-            inter_gap (float, optional): Gap between the graphs of different datasets. Defaults to 0.2.
-            cbar_gap (float, optional): Gap between the graphs and colorbars. Defaults to 0.6.
-            cbar_space (float, optional): Space reserved for the colorbars on the right. Defaults to 1.3.
-            colorbars (bool, optional): Whether to include colorbars in the images. Defaults to True.
-            scalebar_ (bool, optional): Whether to include a scalebar in the images. Defaults to True.
-            filename (str, optional): Base filename for saving images. Defaults to None.
-            basepath (str, optional): Base path for saving images. Defaults to None.
-            labels (list, optional): Labels for the different models in the comparison. Defaults to None.
-            phase_shift (list, optional): Phase shifts to apply to the models. Defaults to None.
-
-        Returns:
-            None: The function saves the generated images and optionally creates a movie from them.
-        """
-        
-        # Initialize a Dask client to manage the parallel computation
-        client = Client()
-
-        output_state = {"output_shape": "pixels", "scaled": False}
-        self.dataset.set_attributes(**output_state)
-
-        if basepath is not None:
-            if model_path is not None:
-                model_filename = (
-                    model_path
-                    + "/"
-                    + get_lowest_loss_for_noise_level(model_path, noise)
-                )
-                basepath += f"/{model_filename.split('/')[-1].split('.')[0]}"
-            else:
-                basepath += f"Noise_{noise}"
-
-            basepath = make_folder(basepath)
-
-        if models is not None:
-            on_data = []
-            off_data = []
-            noise_labels = []
-
-            for model_, phase_shift_ in zip(models, phase_shift):
-                on_models, off_models = self.get_SHO_data(
-                    noise, model_, phase_shift=phase_shift_
-                )
-                on_data.append(on_models)
-                off_data.append(off_models)
-                noise_labels.append(noise)
-        else:
-            model = self.get_model(model_path, noise)
-            on_data, off_data = self.get_SHO_data(noise, model)
-
-        names = ["A", "\u03C9", "Q", "\u03C6"]
-        voltage = self.dataset.dc_voltage
-
-        # Create a list to store delayed tasks
-        tasks = []
-
-        def process_voltage_step(z, voltage, basepath):
-            # Build the figure and axes layout for the movie images
-            fig, ax, fig_scalar = self.build_figure_for_movie(
-                models,  # dataset to compare to
-                fig_width,  # width of the figure
-                inter_gap,  # gap between the graphs of different datasets
-                intra_gap,  # gap between the graphs of the same datasets
-                cbar_space,  # gap between the graphs and the colorbar
-                colorbars,  # include colorbars or not
-                voltage_plot_height,  # height of the voltage plot
-                labels,  # labels for the models
-            )
-
-            ax[0].plot(self.dataset.dc_voltage, "k")
-            ax[0].plot(z, voltage, "o", color="k", markersize=10)
-            ax[0].set_ylabel("Voltage (V)")
-            ax[0].set_xlabel("Step")
-
-            for compare_num in range(len(models)):
-                for j in range(4):
-                    imagemap(
-                        ax[j + 1 + compare_num * 8],
-                        on_data[compare_num][:, z, j],
-                        colorbars=False,
-                        clim=self.SHO_ranges[j],
-                    )
-                    imagemap(
-                        ax[j + 5 + compare_num * 8],
-                        off_data[compare_num][:, z, j],
-                        colorbars=False,
-                        clim=self.SHO_ranges[j],
-                    )
-                    labelfigs(ax[j + 1], string_add=f"On {names[j]}", loc="ct")
-                    labelfigs(ax[j + 5], string_add=f"Off {names[j]}", loc="ct")
-
-                if labels is not None:
-                    bbox = ax[5 + compare_num * 8].get_position()
-                    top_in_norm_units = bbox.bounds[1] + bbox.bounds[3]
-                    right_in_norm_units = bbox.bounds[0] + bbox.bounds[2]
-
-                    fig_size_inches = fig.get_size_inches()
-                    fig_height_inches = fig_size_inches[1]
-                    fig_width_inches = fig_size_inches[0]
-
-                    top_in_inches = top_in_norm_units * fig_height_inches
-                    right_in_inches = right_in_norm_units * fig_width_inches + inter_gap
-
-                    add_text_to_figure(
-                        fig,
-                        f"{labels[compare_num]} Noise {noise_labels[compare_num]}",
-                        [right_in_inches / 2, top_in_inches + 0.33 / 2],
-                    )
-
-                if colorbars:
-                    bar_ax = []
-                    voltage_ax_pos = fig_scalar.to_inches(
-                        np.array(ax[0].get_position()).flatten()
-                    )
-
-                    for i in range(4):
-                        cbar_h = (voltage_ax_pos[1] - inter_gap * 2 - 0.33) / 2
-                        cbar_w = (cbar_space - inter_gap - cbar_gap) / 2
-
-                        pos_inch = [
-                            voltage_ax_pos[2]
-                            - (2 - i % 2) * (cbar_gap + cbar_w)
-                            + inter_gap
-                            + cbar_w,
-                            voltage_ax_pos[1]
-                            - (i // 2) * (inter_gap + cbar_h)
-                            - 0.33
-                            - cbar_h,
-                            cbar_w,
-                            cbar_h,
-                        ]
-
-                        bar_ax.append(fig.add_axes(
-                            fig_scalar.to_relative(pos_inch)))
-
-                        cbar = plt.colorbar(
-                            ax[i + 1].images[0],
-                            cax=bar_ax[i],
-                            format="%.1e",
-                            ticks=np.linspace(
-                                self.SHO_ranges[i][0], self.SHO_ranges[i][1], 5
-                            ),
-                        )
-
-                        cbar.set_label(names[i])
-
-            if self.image_scalebar is not None:
-                scalebar(ax[-1], *self.image_scalebar)
-
-            if self.Printer is not None and filename is not None:
-                self.Printer.savefig(
-                    fig,
-                    f"{filename}_noise_{noise}_{z:04d}",
-                    basepath=basepath + "/",
-                    fileformats=["png"],
-                )
-
-            plt.close(fig)
-
-        # Create delayed tasks for each voltage step
-        for z, voltage_step in enumerate(voltage):
-            task = delayed(process_voltage_step)(z, voltage_step, basepath)
-            tasks.append(task)
-
-        # Execute all tasks in parallel
-        compute(*tasks)
-
-        # Create a movie from the saved images
-        make_movie(
-            f"{filename}_noise_{noise}", basepath, basepath, file_format="png", fps=5
-        )
 
 
     ##### GETTERS #####
@@ -2172,154 +2112,6 @@ class Viz:
 #         # self.set_attributes(**current_state)
 
 #         return pred_data, params, labels
-
-#     @static_dataset_decorator
-#     def bmw_nn(
-#         self,
-#         true_state,
-#         prediction=None,
-#         model=None,
-#         out_state=None,
-#         n=1,
-#         gaps=(0.8, 0.33),
-#         size=(1.25, 1.25),
-#         filename=None,
-#         compare_state=None,
-#         fit_type='SHO',
-#         **kwargs,
-#     ):
-
-#         true_state = torch.atleast_3d(torch.tensor(true_state.reshape(-1,96)))
-
-#         d1, d2, x1, x2, label, index1, mse1 = None, None, None, None, None, None, None
-
-#         if fit_type == "SHO":
-#             d1, d2, x1, x2, label, index1, mse1 = self.get_best_median_worst(
-#                 true_state,
-#                 prediction=prediction,
-#                 model=model,
-#                 out_state=out_state,
-#                 n=n,
-#                 compare_state=compare_state,
-#                 **kwargs,
-#             )
-
-#             fig, ax = subfigures(1, 3, gaps=gaps, size=size)
-
-#             for i, (true, prediction, error) in enumerate(zip(d1, d2, mse1)):
-#                 ax_ = ax[i]
-#                 ax_.plot(
-#                     x2,
-#                     prediction[0].flatten(),
-#                     color_palette["NN_A"],
-#                     label=f"NN {label[0]}",
-#                 )
-#                 ax1 = ax_.twinx()
-#                 ax1.plot(
-#                     x2,
-#                     prediction[1].flatten(),
-#                     color_palette["NN_P"],
-#                     label=f"NN {label[1]}]",
-#                 )
-
-#                 ax_.plot(
-#                     x1,
-#                     true[0].flatten(),
-#                     "o",
-#                     color=color_palette["NN_A"],
-#                     label=f"Raw {label[0]}",
-#                 )
-#                 ax1.plot(
-#                     x1,
-#                     true[1].flatten(),
-#                     "o",
-#                     color=color_palette["NN_P"],
-#                     label=f"Raw {label[1]}",
-#                 )
-
-#                 ax_.set_xlabel("Frequency (Hz)")
-
-#                 # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
-#                 text_position_in_inches = (
-#                     -1 * (gaps[0] + size[0]) * ((2 - i) % 3) + size[0] / 2,
-#                     (gaps[1] + size[1]) * (1.25 - i // 3 - 1.25) - gaps[1],
-#                 )
-#                 text = f"MSE: {error:0.4f}"
-#                 add_text_to_figure(
-#                     fig, text, text_position_in_inches, fontsize=6, ha="center"
-#                 )
-
-#                 if out_state is not None:
-#                     if "measurement state" in out_state.keys():
-#                         if out_state["raw_format"] == "magnitude spectrum":
-#                             ax_.set_ylabel("Amplitude (Arb. U.)")
-#                             ax1.set_ylabel("Phase (rad)")
-#                     else:
-#                         ax_.set_ylabel("Real (Arb. U.)")
-#                         ax1.set_ylabel("Imag (Arb. U.)")
-
-#             # add a legend just for the last one
-#             lines, labels = ax_.get_legend_handles_labels()
-#             lines2, labels2 = ax1.get_legend_handles_labels()
-#             ax_.legend(lines + lines2, labels + labels2, loc="upper right")
-
-#         elif fit_type == "hysteresis":
-#             d1, d2, x1, x2, index1, mse1, _ = self.get_best_median_worst_hysteresis(
-#                 true_state,
-#                 prediction=prediction,
-#                 n=n,
-#                 **kwargs,
-#             )
-
-#             fig, ax = subfigures(1, 3, gaps=gaps, size=size)
-
-#             for i, (true, prediction, error) in enumerate(zip(d1, d2, mse1)):
-#                 ax_ = ax[i]
-
-#                 ax_.plot(
-#                     x2,
-#                     prediction.flatten(),
-#                     color=color_palette["NN_A"],
-#                     # label=f"NN {label[0]}",
-#                 )
-
-#                 ax_.plot(
-#                     x1,
-#                     true.flatten(),
-#                     "o",
-#                     color=color_palette["NN_A"],
-#                     # label=f"Raw {label[0]}",
-#                 )
-
-#                 ax_.set_xlabel("Voltage (V)")
-
-#                 # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
-#                 text_position_in_inches = (
-#                     -1 * (gaps[0] + size[0]) * ((2 - i) % 3) + size[0] / 2,
-#                     (gaps[1] + size[1]) * (1.25 - i // 3 - 1.25) - gaps[1],
-#                 )
-
-#                 text = f"MSE: {error:0.4f}"
-#                 add_text_to_figure(
-#                     fig, text, text_position_in_inches, fontsize=6, ha="center"
-#                 )
-
-#                 ax_.set_ylabel("(Arb. U.)")
-
-#                 # add a legend just for the last one
-#                 lines, labels = ax_.get_legend_handles_labels()
-#                 ax_.legend(lines, labels, loc="upper right")
-
-#         else:
-#             raise ValueError("fit_type must be SHO or hysteresis")
-
-#         # prints the figure
-#         if self.Printer is not None and filename is not None:
-#             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
-
-#         if "returns" in kwargs.keys():
-#             if kwargs["returns"] == True:
-#                 return d1, d2, index1, mse1
 
 #     @static_dataset_decorator
 #     def SHO_switching_maps(

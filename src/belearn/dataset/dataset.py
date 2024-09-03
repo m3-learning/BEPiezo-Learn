@@ -731,6 +731,19 @@ class BE_Dataset:
         """Spectroscopic values"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"]["Channel_000"]["Spectroscopic_Values"][:]
+    
+    @property
+    def voltage_steps_per_cycle(self):
+        """
+        Retrieves the number of voltage steps per cycle.
+
+        This function determines the number of voltage steps per cycle.
+
+        Returns:
+            int: The number of voltage steps per cycle corresponding to the current measurement state.
+        """
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"].attrs["VS_steps_per_full_cycle"]
 
     @property
     def be_waveform(self):

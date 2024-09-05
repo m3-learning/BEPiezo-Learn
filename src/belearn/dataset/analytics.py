@@ -2,38 +2,85 @@ import numpy as np
 
 
 def MSE(true, prediction):
+    """
+    Computes the Mean Squared Error (MSE) between the true and predicted values.
 
-        # calculates the mse
-        mse = np.mean((true.reshape(
-            true.shape[0], -1) - prediction.reshape(true.shape[0], -1))**2, axis=1)
+    Args:
+        true (numpy.ndarray): Ground truth values. It should be a NumPy array.
+        prediction (numpy.ndarray): Predicted values. It should have the same shape as 'true'.
 
-        # converts to a scalar if there is only one value
-        if mse.shape[0] == 1:
-            return mse.item()
+    Returns:
+        numpy.ndarray or float: The MSE for each batch if there are multiple samples, or 
+                                a scalar MSE value if there is only one sample.
 
-        return mse
+    Notes:
+        The function flattens all dimensions except the batch dimension for both 'true' and 'prediction' 
+        arrays to compute the MSE per batch.
+    """
+    # Reshape the true and prediction arrays to 2D, preserving the batch size (first dimension)
+    # This operation flattens all other dimensions (channels, timesteps, etc.)
+    mse = np.mean((true.reshape(true.shape[0], -1) - prediction.reshape(true.shape[0], -1))**2, axis=1)
+
+    # If there's only one batch (single sample), return MSE as a scalar
+    if mse.shape[0] == 1:
+        return mse.item()
+
+    # Return the MSE for each batch
+    return mse
+
 
 def mse_rankings(true, prediction, curves=False):
+    """
+    Calculates the mean squared error (MSE) for the given predictions relative to the true values, 
+    ranks them based on the error, and optionally returns the true and predicted values sorted by the ranked error.
 
-        def type_conversion(data):
+    Args:
+        true (array-like): Ground truth values. 
+                          It should be convertible to a NumPy array, typically structured as [batch, channels, timesteps].
+        prediction (array-like): Predicted values. 
+                                 It should have the same structure as the 'true' values.
+        curves (bool, optional): If True, return the sorted true and predicted values 
+                                 along with the ranked errors. Default is False.
 
-            data = np.array(data)
-            data = np.rollaxis(data, 0, data.ndim-1)
+    Returns:
+        index (numpy.ndarray): Indices of the predictions ranked by MSE in ascending order.
+        errors (numpy.ndarray): MSE values corresponding to each prediction, sorted by rank.
+        true (numpy.ndarray, optional): If 'curves' is True, returns the true values sorted by ranked MSE.
+        prediction (numpy.ndarray, optional): If 'curves' is True, returns the predicted values sorted by ranked MSE.
 
-            return data
+    """
+    def type_conversion(data):
+        """
+        Converts input data to a NumPy array and rearranges the axes so that
+        the batch axis is moved to the end.
 
-        true = type_conversion(true)
-        prediction = type_conversion(prediction)
+        Args:
+            data (array-like): Input data to be converted.
 
-        errors = MSE(prediction, true)
+        Returns:
+            numpy.ndarray: Data with the batch axis moved to the last position.
+        """
+        data = np.array(data)
+        data = np.rollaxis(data, 0, data.ndim - 1)  # Move batch axis to the end
+        return data
 
-        index = np.argsort(errors)
+    # Convert the input true and prediction arrays
+    true = type_conversion(true)
+    prediction = type_conversion(prediction)
 
-        if curves:
-            # true will be in the form [ranked error, channel, timestep]
-            return index, errors[index], true[index], prediction[index]
+    # Compute mean squared errors between the true and predicted values
+    errors = MSE(prediction, true)
 
-        return index, errors[index]
+    # Rank predictions based on the MSE values in ascending order
+    index = np.argsort(errors)
+
+    # If curves is True, return ranked true and predicted values
+    if curves:
+        # true will be in the form [ranked error, channel, timestep]
+        return index, errors[index], true[index], prediction[index]
+
+    # Otherwise, return the indices and ranked errors only
+    return index, errors[index]
 
 def get_rankings(raw_data, pred, n=1, curves=True):
     """

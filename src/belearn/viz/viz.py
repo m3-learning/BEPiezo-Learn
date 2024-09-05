@@ -31,7 +31,10 @@
 # from m3_learning.viz.Movies import make_movie
 # import os
 
-from m3util.viz.layout import layout_fig, add_box, inset_connector, add_text_to_figure, labelfigs, scalebar, imagemap, FigDimConverter
+import os
+import torch
+
+from m3util.viz.layout import layout_fig, add_box, inset_connector, add_text_to_figure, labelfigs, scalebar, imagemap, FigDimConverter, subfigures
 from m3util.util.IO import make_folder
 from m3util.viz.movies import make_movie
 
@@ -39,11 +42,15 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Type
 import numpy as np
 from scipy import fftpack
+from torch import nn
+from belearn.dataset.analytics import get_rankings
+
+
 
 import matplotlib.pyplot as plt
 
 
-# Defines the color palet for the plots
+# Defines the color palets for the plots
 color_palette = {
     "LSQF_A": "#003f5c",
     "LSQF_P": "#444e86",
@@ -716,9 +723,10 @@ class Viz:
         fit_type='SHO',
         **kwargs,
     ):
-
-        true_state = torch.atleast_3d(torch.tensor(true_state.reshape(-1,96)))
-
+        
+        #TODO: I had to remove this for fitting --
+        # true_state = torch.atleast_3d(torch.tensor(true_state.reshape(-1,96)))
+        
         d1, d2, x1, x2, label, index1, mse1 = None, None, None, None, None, None, None
 
         if fit_type == "SHO":
@@ -1606,166 +1614,160 @@ class Viz:
 #         # prints the figure
 #         if self.Printer is not None and filename is not None:
 #             self.Printer.savefig(fig, filename, style="b")
+    
+    #TODO add comments and docstring
+    def get_best_median_worst(
+        self,
+        true_state,
+        prediction=None,
+        out_state=None,
+        n=1,
+        SHO_results=False,
+        index=None,
+        compare_state=None,
+        **kwargs,
+    ):
+        def data_converter(data):
+            
+            # converts to a standard form which is a list
+            data = self.dataset.to_real_imag(data)
 
-#     # @static_dataset_decorator
-#     def get_best_median_worst(
-#         self,
-#         true_state,
-#         prediction=None,
-#         out_state=None,
-#         n=1,
-#         SHO_results=False,
-#         index=None,
-#         compare_state=None,
-#         **kwargs,
-#     ):
-#         def data_converter(data):
-#             # converts to a standard form which is a list
-#             data = self.dataset.to_real_imag(data)
+            try:
+                # converts to numpy from tensor
+                data = [data.numpy() for data in data]
+            except:
+                pass
 
-#             try:
-#                 # converts to numpy from tensor
-#                 data = [data.numpy() for data in data]
-#             except:
-#                 pass
+            return data
 
-#             return data
+        if type(true_state) is dict:
+            self.set_attributes(**true_state)
 
-#         if type(true_state) is dict:
-#             self.set_attributes(**true_state)
+            # the data must be scaled to rank the results
+            self.dataset.scaled = True
 
-#             # the data must be scaled to rank the results
-#             self.dataset.scaled = True
+            true, x1 = self.dataset.raw_spectra(frequency=True)
 
-#             true, x1 = self.dataset.raw_spectra(frequency=True)
+        # condition if x_data is passed
+        else:
 
-#         # condition if x_data is passed
-#         else:
-#             # # converts to a standard form which is a list
-#             # true = self.dataset.to_real_imag(true_state)
+            true = data_converter(true_state)
+        
+            # gets the frequency values
+            if true[0].ndim == 2:
+                x1 = self.dataset.get_freq_values(true[0].shape[1])
 
-#             # try:
-#             #     # converts to numpy from tensor
-#             #     true = [data.numpy() for data in true]
-#             # except:
-#             #     pass
+        # holds the raw state
+        current_state = self.dataset.get_state
 
-#             true = data_converter(true_state)
+        if isinstance(prediction, nn.Module):
+            fitter = "NN"
 
-#             # gets the frequency values
-#             if true[0].ndim == 2:
-#                 x1 = self.dataset.get_freq_values(true[0].shape[1])
+            # sets the phase shift to zero for parameters
+            # This is important if doing the fits because the fits will be wrong if the phase is shifted.
+            self.dataset.NN_phase_shift = 0
 
-#         # holds the raw state
-#         current_state = self.dataset.get_state
+            data = self.dataset.to_nn(true)
 
-#         if isinstance(prediction, nn.Module):
-#             fitter = "NN"
+            pred_data, scaled_params, params = prediction.predict(data)
 
-#             # sets the phase shift to zero for parameters
-#             # This is important if doing the fits because the fits will be wrong if the phase is shifted.
-#             self.dataset.NN_phase_shift = 0
+            self.dataset.scaled = True
 
-#             data = self.dataset.to_nn(true)
+            prediction, x2 = self.dataset.raw_spectra(
+                fit_results=params, frequency=True
+            )
 
-#             pred_data, scaled_params, params = prediction.predict(data)
+        elif isinstance(prediction, dict):
+            fitter = prediction["fitter"]
 
-#             self.dataset.scaled = True
+            exec(f"self.dataset.{prediction['fitter']}_phase_shift =0")
 
-#             prediction, x2 = self.dataset.raw_spectra(
-#                 fit_results=params, frequency=True
-#             )
+            self.dataset.scaled = False
 
-#         elif isinstance(prediction, dict):
-#             fitter = prediction["fitter"]
+            params = self.dataset.SHO_fit_results()
 
-#             exec(f"self.dataset.{prediction['fitter']}_phase_shift =0")
+            params = params.reshape(-1, 4)
 
-#             self.dataset.scaled = False
+            self.dataset.scaled = True
 
-#             params = self.dataset.SHO_fit_results()
+            prediction, x2 = self.dataset.raw_spectra(
+                fit_results=params, frequency=True
+            )
 
-#             params = params.reshape(-1, 4)
+        if "x2" not in locals():
+            # if you do not use the model will run the
+            x2 = self.dataset.get_freq_values(prediction[0].shape[1])
 
-#             self.dataset.scaled = True
+        # index the data if provided
+        if index is not None:
+            true = [true[0][index], true[1][index]]
+            prediction = [prediction[0][index], prediction[1][index]]
+            # params = params[index]
 
-#             prediction, x2 = self.dataset.raw_spectra(
-#                 fit_results=params, frequency=True
-#             )
+        if compare_state is not None:
+            compare_state = data_converter(compare_state)
 
-#         if "x2" not in locals():
-#             # if you do not use the model will run the
-#             x2 = self.dataset.get_freq_values(prediction[0].shape[1])
+            # this must take the scaled data
+            index1, mse1, d1, d2 = get_rankings(
+                compare_state, prediction, n=n
+            )
+        else:
+            # this must take the scaled data
+            index1, mse1, d1, d2 = get_rankings(
+                true, prediction, n=n)
 
-#         # index the data if provided
-#         if index is not None:
-#             true = [true[0][index], true[1][index]]
-#             prediction = [prediction[0][index], prediction[1][index]]
-#             # params = params[index]
+        d1, labels = self.out_state(d1, out_state)
+        d2, labels = self.out_state(d2, out_state)
 
-#         if compare_state is not None:
-#             compare_state = data_converter(compare_state)
+        # saves just the parameters that are needed
+        params = params[index1]
 
-#             # this must take the scaled data
-#             index1, mse1, d1, d2 = SHO_Model.get_rankings(
-#                 compare_state, prediction, n=n
-#             )
-#         else:
-#             # this must take the scaled data
-#             index1, mse1, d1, d2 = SHO_Model.get_rankings(
-#                 true, prediction, n=n)
+        # resets the current state to apply the phase shifts
+        self.set_attributes(**current_state)
 
-#         d1, labels = self.out_state(d1, out_state)
-#         d2, labels = self.out_state(d2, out_state)
+        # gets the original index values
+        if index is not None:
+            index1 = index[index1]
 
-#         # saves just the parameters that are needed
-#         params = params[index1]
+        # if statement that will return the values for the SHO Results
+        if SHO_results:
+            if eval(f"self.dataset.{fitter}_phase_shift") is not None:
+                params[:, 3] = eval(
+                    f"self.dataset.shift_phase(params[:, 3], self.dataset.{fitter}_phase_shift)"
+                )
+            return (d1, d2, x1, x2, labels, index1, mse1, params)
+        else:
+            return (d1, d2, x1, x2, labels, index1, mse1)
 
-#         # resets the current state to apply the phase shifts
-#         self.set_attributes(**current_state)
+    #TODO: add comments and docstring
+    def out_state(self, data, out_state):
+        # holds the raw state
+        current_state = self.dataset.get_state
 
-#         # gets the original index values
-#         if index is not None:
-#             index1 = index[index1]
+        def convert_to_mag(data):
+            data = self.dataset.to_complex(data, axis=1)
+            data = self.dataset.raw_data_scaler.inverse_transform(data)
+            data = self.dataset.to_magnitude(data)
+            data = np.array(data)
+            data = np.rollaxis(data, 0, data.ndim - 1)
+            return data
 
-#         # if statement that will return the values for the SHO Results
-#         if SHO_results:
-#             if eval(f"self.dataset.{fitter}_phase_shift") is not None:
-#                 params[:, 3] = eval(
-#                     f"self.dataset.shift_phase(params[:, 3], self.dataset.{fitter}_phase_shift)"
-#                 )
-#             return (d1, d2, x1, x2, labels, index1, mse1, params)
-#         else:
-#             return (d1, d2, x1, x2, labels, index1, mse1)
+        labels = ["real", "imaginary"]
 
-#     def out_state(self, data, out_state):
-#         # holds the raw state
-#         current_state = self.dataset.get_state
+        if out_state is not None:
+            if "raw_format" in out_state.keys():
+                if out_state["raw_format"] == "magnitude spectrum":
+                    data = convert_to_mag(data)
+                    labels = ["Amplitude", "Phase"]
 
-#         def convert_to_mag(data):
-#             data = self.dataset.to_complex(data, axis=1)
-#             data = self.dataset.raw_data_scaler.inverse_transform(data)
-#             data = self.dataset.to_magnitude(data)
-#             data = np.array(data)
-#             data = np.rollaxis(data, 0, data.ndim - 1)
-#             return data
+            elif "scaled" in out_state.keys():
+                if out_state["scaled"] == False:
+                    data = self.dataset.raw_data_scaler.inverse_transform(data)
+                    labels = ["Scaled " + s for s in labels]
 
-#         labels = ["real", "imaginary"]
+        self.set_attributes(**current_state)
 
-#         if out_state is not None:
-#             if "raw_format" in out_state.keys():
-#                 if out_state["raw_format"] == "magnitude spectrum":
-#                     data = convert_to_mag(data)
-#                     labels = ["Amplitude", "Phase"]
-
-#             elif "scaled" in out_state.keys():
-#                 if out_state["scaled"] == False:
-#                     data = self.dataset.raw_data_scaler.inverse_transform(data)
-#                     labels = ["Scaled " + s for s in labels]
-
-#         self.set_attributes(**current_state)
-
-#         return data, labels
+        return data, labels
 
 #     @static_dataset_decorator
 #     def get_best_median_worst_hysteresis(self,
@@ -3058,7 +3060,7 @@ class Viz:
 #         if nn_model is not None:
 #             # gets the data for model prediction with the NN
 #             _data, voltage = self.dataset.get_hysteresis(scaled=True, loop_interpolated=True)
-#             _data = torch.atleast_3d(torch.tensor(_data.reshape(-1, 96))).float()
+#             _data = torch.atleast_3d(torch.tensor(_data.reshape(-1, self.dataset.voltage_steps_per_cycle))).float()
 
 #             NN_pred_data, NN_scaled_params, NN_params = nn_model.predict(
 #                 _data, translate_params=False, is_SHO=False)

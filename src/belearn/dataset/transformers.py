@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 
-
 def to_complex(data, axis=None):
         """
         to_complex function that converts data to complex
@@ -19,7 +18,7 @@ def to_complex(data, axis=None):
             data = np.array(data)
 
         # if the data is already in complex form return
-        if to_complex(data):
+        if is_complex(data):
             return data
 
         # if axis is not provided take the last axis

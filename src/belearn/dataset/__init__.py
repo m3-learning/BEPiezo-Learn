@@ -3,5 +3,6 @@
 from . import scalers
 from . import dataset
 from . import transformers
+from . import analytics
 
-__all__ = ['scalers', 'dataset', 'transformers']
+__all__ = ['scalers', 'dataset', 'transformers', 'analytics']

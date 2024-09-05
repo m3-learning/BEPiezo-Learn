@@ -9,6 +9,7 @@ from m3util.util.h5 import (
 from belearn.dataset.scalers import Raw_Data_Scaler
 from belearn.util.wrappers import static_state_decorator
 from belearn.functions.sho import SHO_nn
+# from belearn.dataset.transformers import to_complex
 import numpy as np
 from dataclasses import dataclass, field, InitVar
 import h5py
@@ -309,6 +310,56 @@ class BE_Dataset:
                     compression="gzip",
                 )  # Compression type for storage
 
+    @staticmethod
+    def to_complex(data, axis=None):
+        """
+        to_complex function that converts data to complex
+
+        Args:
+            data (any): data to convert
+            axis (int, optional): axis which the data is structured. Defaults to None.
+
+        Returns:
+            np.array: complex array of the BE response
+        """
+
+        # converts to an array
+        if type(data) == list:
+            data = np.array(data)
+
+        # if the data is already in complex form return
+        if BE_Dataset.is_complex(data):
+            return data
+
+        # if axis is not provided take the last axis
+        if axis is None:
+            axis = data.ndim - 1
+
+        return np.take(data, 0, axis=axis) + 1j * np.take(data, 1, axis=axis)
+    
+    @staticmethod
+    def is_complex(data):
+        """
+        is_complex function to check if data is complex. If not complex makes it a complex number
+
+        Args:
+            data (any): input data
+
+        Returns:
+            any: array or tensor as a complex number
+        """
+
+        data = data[0]
+
+        if type(data) == torch.Tensor:
+            complex_ = data.is_complex()
+
+        if type(data) == np.ndarray:
+            complex_ = np.iscomplex(data)
+            complex_ = complex_.any()
+
+        return complex_
+    
     ##### SHO FITTERS #####
 
     def SHO_Fitter(
@@ -1603,7 +1654,30 @@ class BE_Dataset:
         x_data = torch.tensor(x_data, dtype=torch.float32)
 
         return x_data
+    
+    @staticmethod
+    def to_real_imag(data):
+        """
+        Extracts the real and imaginary components from band excitation (BE) data.
 
+        This function takes in BE data, which may be in either a NumPy array or a PyTorch 
+        tensor format, converts it to its complex form, and then separates the real and 
+        imaginary parts.
+
+        Args:
+            data (np.array or torch.Tensor): BE data, either as a NumPy array or a PyTorch tensor.
+
+        Returns:
+            list: A list containing two NumPy arrays: the first array represents the real 
+                components, and the second array represents the imaginary components 
+                of the BE response.
+        """
+        
+        # Convert the data to its complex form using the to_complex method from the BE_Dataset class.
+        data = BE_Dataset.to_complex(data)
+
+        # Extract and return the real and imaginary components as a list of NumPy arrays.
+        return [np.real(data), np.imag(data)]
     
     ##### NOISE GETTER and SETTER #####
 
@@ -1712,9 +1786,6 @@ class BE_Dataset:
         # Return the neural network input data and corresponding fit parameters
         return x_data, y_data
 
-    ##### SCALER #####
-    
-    #TODO -- Make this inherit from the DataSet to split out
 
 
     # def loop_fit_preprocessing(self):
@@ -1786,7 +1857,7 @@ class BE_Dataset:
     #                       "LSQF_phase_shift": None,
     #                       "NN_phase_shift": None, }
 
-    #     # sets the atributes to the default state
+    #     # sets the attributes to the default state
     #     self.set_attributes(**default_state_)
 
     # def data_writer(self, base, name, data):
@@ -1831,10 +1902,10 @@ class BE_Dataset:
 
     # def measure_group(self):
     #     """
-    #     measure_group gets the measurement group based on a noise leve
+    #     measure_group gets the measurement group based on a noise level
 
     #     Returns:
-    #         str: string for the measurment group for the data
+    #         str: string for the measurement group for the data
     #     """
 
     #     if self.noise == 0:
@@ -2022,7 +2093,7 @@ class BE_Dataset:
     #     to_magnitude converts a complex number to an amplitude and phase
 
     #     Args:
-    #         data (np.array): complex photodiode response of the cantilver
+    #         data (np.array): complex photodiode response of the cantilever
 
     #     Returns:
     #         list: list of np.array containing the magnitude and phase of the cantilever response
@@ -2030,19 +2101,7 @@ class BE_Dataset:
     #     data = BE_Dataset.to_complex(data)
     #     return [np.abs(data), np.angle(data)]
 
-    # @staticmethod
-    # def to_real_imag(data):
-    #     """
-    #     to_real_imag function to extract the real and imaginary data components
 
-    #     Args:
-    #         data (np.array or torch.Tensor): BE data
-
-    #     Returns:
-    #         list: a list of np.arrays representing the real and imaginary components of the BE response.
-    #     """
-    #     data = BE_Dataset.to_complex(data)
-    #     return [np.real(data), np.imag(data)]
 
     
 
@@ -2172,7 +2231,7 @@ class BE_Dataset:
     #         measurement_state (any, optional): sets the measurement state. Defaults to None.
 
     #     Returns:
-    #         np.array: output hysteresis data, bias vector for the hystersis loop
+    #         np.array: output hysteresis data, bias vector for the hysteresis loop
     #     """
 
     #     # todo: can replace this to make this much nicer to get the data. Too many random transforms

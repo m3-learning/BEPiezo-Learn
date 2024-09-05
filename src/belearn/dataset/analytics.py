@@ -1,5 +1,7 @@
 import numpy as np
-
+from autophyslearn.spectroscopic.nn import Multiscale1DFitter
+import torch
+from torch import nn
 
 def MSE(true, prediction):
     """
@@ -127,3 +129,48 @@ def get_rankings(raw_data, pred, n=1, curves=True):
 
     # Return the indices, MSE values, and optionally the reconstruction curves (d1, d2).
     return ind, mse, d1, d2
+
+
+
+def print_mse(model_obj, model_predictor, data, labels):
+    """
+    Prints the Mean Squared Error (MSE) of the model's predictions for each dataset provided.
+
+    Args:
+        model_obj: The object containing the dataset and any necessary methods for data extraction.
+        model_predictor: The object or model responsible for making predictions on the input data.
+        data (tuple): A tuple of datasets used to calculate the MSE. Each dataset can either be 
+                      a PyTorch tensor or a dictionary containing data for prediction.
+        labels (list): A list of strings corresponding to the names of the datasets, used for labeling the output.
+
+    This function computes the MSE for each dataset in `data`, either by calling the `predict` method 
+    of the `model_predictor` on tensor data or by extracting raw data from the `model_obj` for dictionary data.
+    The MSE is computed for each dataset and printed with the corresponding label.
+    """
+
+    # Loop through each dataset and its corresponding label
+    for data, label in zip(data, labels):
+
+        # If the data is a PyTorch tensor
+        if isinstance(data, torch.Tensor):
+            # Compute predictions using the model's predict method
+            pred_data, scaled_param, parm = model_predictor.predict(data)
+
+        # If the data is a dictionary, use raw data extraction methods from model_obj
+        elif isinstance(data, dict):
+            # Extract raw data from LSQF SHO fits in the dataset
+            pred_data, _ = model_obj.dataset.get_raw_data_from_LSQF_SHO(data)
+            # Get true data in NN format from the dataset
+            data, _ = model_obj.dataset.NN_data()
+            # Convert predictions to a PyTorch tensor
+            pred_data = torch.from_numpy(pred_data)
+
+        # Uncomment if necessary: Conversion to hysteresis tensor format (currently disabled)
+        # data = model_obj.dataset.hysteresis_tensor(data)
+        # pred_data = model_obj.dataset.hysteresis_tensor(pred_data)
+
+        # Compute the MSE between the true data and predicted data using PyTorch's MSELoss
+        out = nn.MSELoss()(data, pred_data)
+
+        # Print the MSE result with the dataset label
+        print(f"{label} Mean Squared Error: {out:0.7f}")

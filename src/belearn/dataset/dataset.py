@@ -891,6 +891,33 @@ class BE_Dataset:
                 "original data must be the same length as the frequency bins or the resampled frequency bins"
             )
         return x
+    
+    def get_cycle(self, data, axis=0, **kwargs):
+        """
+        Extracts data for a specific cycle from the hysteresis loop.
+
+        Args:
+            data (np.array): The band excitation data from which to extract the cycle.
+                            This is typically a multi-dimensional array containing several cycles.
+            axis (int, optional): The axis along which to split the data into cycles. Defaults to 0.
+            **kwargs: Additional keyword arguments to pass to np.array_split for custom behavior.
+
+        Returns:
+            np.array: The data corresponding to the specific cycle set by `self.cycle`.
+
+        This function splits the data into multiple cycles based on the attribute `self.num_cycles` 
+        and then returns the data for the specific cycle indicated by `self.cycle`.
+        """
+        
+        # Split the input data along the specified axis into 'num_cycles' parts
+        data = np.array_split(data, self.num_cycles, axis=axis, **kwargs)
+
+        # Extract the data for the cycle specified by 'self.cycle' (1-based index)
+        data = data[self.cycle - 1]
+
+        # Return the data corresponding to the specified cycle
+        return data
+
 
     def raw_data(self, pixel=None, voltage_step=None):
         """
@@ -1254,6 +1281,64 @@ class BE_Dataset:
         else:
             # Return data as a 3D array (num_pix, num_voltage_steps, SHO_params)
             return data.reshape(self.num_pix, self.state_num_voltage_steps(), 4)
+    
+    @static_state_decorator
+    def get_raw_data_from_LSQF_SHO(self, model, index=None):
+        """
+        Extracts raw data from LSQF (Least Squares Fit) SHO (Simple Harmonic Oscillator) fits.
+
+        Args:
+            model (dict): A dictionary that defines the state for extracting the SHO fit results. 
+                        The dictionary typically contains information about the fitter and its parameters.
+            index (int, optional): The index of the specific data point to extract. Defaults to None, 
+                                meaning all data will be returned.
+
+        Returns:
+            tuple: 
+                pred_data (numpy.ndarray): The predicted raw spectra data reconstructed from the SHO fits.
+                params (numpy.ndarray): The SHO parameters used for reconstruction.
+
+        This method extracts the unscaled SHO fit parameters, reconstructs the raw spectra, and optionally 
+        returns the result for a specific index.
+        """
+
+        # Set object attributes based on the provided model dictionary.
+        self.set_attributes(**model)
+
+        # Disable scaling of parameters for accurate reconstructions.
+        self.scaled = False
+
+        # Get the unscaled SHO fit results (shifted parameters).
+        params_shifted = self.SHO_fit_results()
+
+        # Set the phase shift of the current fitter to 0.
+        # This ensures that the reconstructed results are not phase-shifted.
+        exec(f"self.{model['fitter']}_phase_shift=0")
+
+        # Retrieve the SHO fit parameters with zero phase shift.
+        params = self.SHO_fit_results()
+
+        # Re-enable scaling of parameters after fetching the fit results.
+        self.scaled = True
+
+        # Reconstruct the raw spectra based on the SHO fit parameters (scaled values).
+        pred_data = self.raw_spectra(fit_results=params)
+
+        # Construct an array containing amplitude and phase, formatted as [amplitude, phase].
+        pred_data = np.array([pred_data[0], pred_data[1]])
+
+        # Reshape the data to match the expected format of the package.
+        pred_data = np.swapaxes(pred_data, 0, 1)  # Swap axis 0 and 1.
+        pred_data = np.swapaxes(pred_data, 1, 2)  # Swap axis 1 and 2.
+
+        # If an index is provided, extract only the specified data point and corresponding parameters.
+        if index is not None:
+            pred_data = pred_data[[index]]  # Select the data at the given index.
+            params = params_shifted[[index]]  # Select the shifted parameters at the given index.
+
+        # Return the reconstructed spectra (pred_data) and the SHO parameters.
+        return pred_data, params
+
 
     @property
     def extraction_state(self):
@@ -2106,20 +2191,7 @@ class BE_Dataset:
     
 
 
-    # def get_cycle(self, data, axis=0,  **kwargs):
-    #     """
-    #     get_cycle gets data for a specific cycle of the hysteresis loop
 
-    #     Args:
-    #         data (np.array): band excitation data to extract cycle from
-    #         axis (int, optional): axis to cut the data cycles. Defaults to 0.
-
-    #     Returns:
-    #         np.array: data for a specific cycle
-    #     """
-    #     data = np.array_split(data, self.num_cycles, axis=axis, **kwargs)
-    #     data = data[self.cycle - 1]
-    #     return data
 
     # def get_measurement_cycle(self, data, cycle=None, axis=1):
     #     """
@@ -2137,60 +2209,6 @@ class BE_Dataset:
     #         self.cycle = cycle
     #     data = self.get_data_w_voltage_state(data)
     #     return self.get_cycle(data, axis=axis)
-
-    # @static_state_decorator
-    # def get_raw_data_from_LSQF_SHO(self, model, index=None):
-    #     """
-    #     get_raw_data_from_LSQF_SHO Extracts the raw data from LSQF SHO fits
-
-    #     Args:
-    #         model (dict): dictionary that defines the state to extract
-    #         index (int, optional): index to extract. Defaults to None.
-
-    #     Returns:
-    #         tuple: output results from LSQF reconstruction, SHO parameters
-    #     """
-
-    #     # sets the attribute state based on the dictionary
-    #     self.set_attributes(**model)
-
-    #     # sets to get the unscaled parameters
-    #     # this is required so the reconstructions are correct
-    #     self.scaled = False
-
-    #     # gets the SHO results
-    #     params_shifted = self.SHO_fit_results()
-
-    #     # sets the phase shift for the current fitter = 0
-    #     # this is a requirement so the computed results are not phase shifted
-    #     exec(f"self.{model['fitter']}_phase_shift=0")
-
-    #     # gets the SHO fit parameters
-    #     params = self.SHO_fit_results()
-
-    #     # changes the state back to scaled
-    #     self.scaled = True
-
-    #     # gets the raw spectra computed based on the parameters
-    #     # the output is the scaled values
-    #     pred_data = self.raw_spectra(
-    #         fit_results=params)
-
-    #     # builds an array of the amplitude and phase
-    #     pred_data = np.array([pred_data[0], pred_data[1]])
-
-    #     # reshapes the data to be consistent with the rest of the package
-    #     pred_data = np.swapaxes(pred_data, 0, 1)
-    #     pred_data = np.swapaxes(pred_data, 1, 2)
-
-    #     if index is not None:
-    #         pred_data = pred_data[[index]]
-    #         params = params_shifted[[index]]
-
-    #     return pred_data, params
-
-
-
 
 
 

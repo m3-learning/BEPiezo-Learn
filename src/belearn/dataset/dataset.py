@@ -1824,6 +1824,36 @@ class BE_Dataset:
         # Extract and return the real and imaginary components as a list of NumPy arrays.
         return [np.real(data), np.imag(data)]
     
+    @staticmethod
+    def to_magnitude(data):
+        """
+        Converts a complex number representing the photodiode response of the cantilever 
+        into its amplitude (magnitude) and phase.
+
+        This function takes the complex photodiode response and calculates both the magnitude 
+        (amplitude) and phase using NumPy's `abs` and `angle` functions, respectively.
+
+        Args:
+            data (np.array): A NumPy array containing the complex photodiode response of the cantilever.
+
+        Returns:
+            list: A list of two NumPy arrays:
+                - The first element is the magnitude of the cantilever response (amplitude).
+                - The second element is the phase of the cantilever response (in radians).
+
+        Example:
+            If `data` contains complex numbers, this function will return:
+            - `np.abs(data)` for the magnitude.
+            - `np.angle(data)` for the phase.
+        """
+        
+        # Convert the input data to its complex representation
+        data = BE_Dataset.to_complex(data)
+        
+        # Calculate and return the magnitude (absolute value) and phase (angle) of the complex data
+        return [np.abs(data), np.angle(data)]
+
+    
     ##### NOISE GETTER and SETTER #####
 
     @property
@@ -2221,19 +2251,7 @@ class BE_Dataset:
 
     #     self.loop_param_scaler.fit(data)
 
-    # @staticmethod
-    # def to_magnitude(data):
-    #     """
-    #     to_magnitude converts a complex number to an amplitude and phase
-
-    #     Args:
-    #         data (np.array): complex photodiode response of the cantilever
-
-    #     Returns:
-    #         list: list of np.array containing the magnitude and phase of the cantilever response
-    #     """
-    #     data = BE_Dataset.to_complex(data)
-    #     return [np.abs(data), np.angle(data)]
+   
 
 
 

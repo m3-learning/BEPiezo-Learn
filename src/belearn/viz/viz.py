@@ -1064,6 +1064,195 @@ class Viz:
 
         # Show the figure
         fig.show()
+        
+    @static_dataset_decorator
+    def SHO_Fit_comparison(
+        self,
+        data,
+        names,
+        gaps=(0.8, 0.9),
+        size=(1.25, 1.25),
+        model_comparison=None,
+        out_state=None,
+        filename=None,
+        display_results="all",
+        **kwargs,
+    ):
+        """
+        Generates a comparison plot of SHO (Simple Harmonic Oscillator) fit results.
+
+        This function creates subplots comparing multiple fits (e.g., LSQF, NN) for amplitude and phase of 
+        cantilever responses. It supports comparing multiple fit models, visualizing the predicted and true 
+        responses, and optionally displaying error metrics like Mean Squared Error (MSE) for each fit.
+
+        Args:
+            data (list): List of tuples, where each tuple contains data for comparison, including:
+                        - d1: true amplitude
+                        - d2: predicted amplitude
+                        - x1: true frequency points
+                        - x2: predicted frequency points
+                        - label: labels for amplitude and phase
+                        - index1: index of the dataset
+                        - mse1: Mean Squared Error values
+                        - params: fit parameters (SHO)
+            names (list): List of strings representing the names of the fits (e.g., "LSQF", "NN").
+            gaps (tuple, optional): Tuple defining gaps between subplots. Defaults to (0.8, 0.9).
+            size (tuple, optional): Tuple defining the size of each subplot. Defaults to (1.25, 1.25).
+            model_comparison (list, optional): List of additional models (e.g., neural networks or LSQF fits) to compare.
+                                            Defaults to None.
+            out_state (dict, optional): Dictionary defining the output format and other parameters. Defaults to None.
+            filename (str, optional): If provided, saves the figure to this filename. Defaults to None.
+            display_results (str, optional): Controls the type of results displayed (e.g., MSE, all). Defaults to "all".
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            matplotlib.figure.Figure: The generated figure containing the SHO fit comparison plots.
+
+        Notes:
+            - This function plots the raw and predicted amplitude and phase data for each model.
+            - It supports displaying detailed error metrics for amplitude, phase, frequency, and quality factor.
+            - The function supports saving the generated figure to a file using the `Printer` object.
+        """
+
+        # Get the number of fits from the length of the data list
+        num_fits = len(data)
+
+        # Adjust gaps based on the type of results to display (e.g., only MSE)
+        if display_results == "MSE":
+            gaps = (0.8, 0.45)
+        elif display_results is None:
+            gaps = (0.8, 0.33)
+
+        # Create subplots for the comparison
+        fig, ax = subfigures(3, num_fits, gaps=gaps, size=size)
+
+        # Loop through each fit and the associated data
+        for step, (data, name) in enumerate(zip(data, names)):
+            # Unpack the data (true, predicted values, indices, etc.)
+            d1, d2, x1, x2, label, index1, mse1, params = data
+
+            # Loop through datasets for comparison (true vs. predicted data)
+            for bmw, (true, prediction, error, SHO, index1) in enumerate(zip(d1, d2, mse1, params, index1)):
+                # Initialize dictionaries for errors and SHO parameters
+                errors = {}
+                SHOs = {}
+
+                # Determine the subplot index
+                i = bmw * num_fits + step
+                ax_ = ax[i]
+
+                # Plot predicted amplitude and phase
+                ax_.plot(
+                    x2,
+                    prediction[0].flatten(),
+                    color=color_palette[f"{name}_A"],
+                    label=f"{name} {label[0]}",
+                )
+                ax1 = ax_.twinx()
+                ax1.plot(
+                    x2,
+                    prediction[1].flatten(),
+                    color=color_palette[f"{name}_P"],
+                    label=f"{name} {label[1]}",
+                )
+
+                # Plot true amplitude and phase
+                ax_.plot(
+                    x1,
+                    true[0].flatten(),
+                    "o",
+                    color=color_palette["LSQF_A"],
+                    label=f"Raw {label[0]}",
+                )
+                ax1.plot(
+                    x1,
+                    true[1].flatten(),
+                    "o",
+                    color=color_palette["LSQF_P"],
+                    label=f"Raw {label[1]}",
+                )
+
+                # Store errors and SHO parameters for the current model
+                errors[name] = error
+                SHOs[name] = SHO
+
+                # If a model comparison is provided, plot the comparison results
+                if model_comparison is not None:
+                    if model_comparison[step] is not None:
+                        # Get SHO parameters from the comparison model
+                        pred_data, params, labels = self.get_SHO_params(
+                            index1, model=model_comparison[step], out_state=out_state
+                        )
+
+                        # Determine the color prefix based on model type (NN or LSQF)
+                        if isinstance(model_comparison[step], nn.Module):
+                            color = "NN"
+                        elif isinstance(model_comparison[step], dict):
+                            color = "LSQF"
+
+                        # Store errors and SHO parameters for the comparison model
+                        errors[color] = self.get_mse_index(index1, model_comparison[step])
+                        SHOs[color] = np.array(params).squeeze()
+
+                        # Plot the comparison data
+                        ax_.plot(
+                            x2,
+                            pred_data.squeeze()[0].flatten(),
+                            color=color_palette[f"{color}_A"],
+                            label=f"{color} {labels[0]}",
+                        )
+                        ax1.plot(
+                            x2,
+                            pred_data.squeeze()[1].flatten(),
+                            color=color_palette[f"{color}_P"],
+                            label=f"{color} {labels[1]}",
+                        )
+
+                        # Display detailed results if requested
+                        if display_results == "all":
+                            error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}\n AMP - LSQF: {SHOs['LSQF'][0]:0.2e} NN: {SHOs['NN'][0]:0.2e}\n\u03C9 - LSQF: {SHOs['LSQF'][1]/1000:0.1f} NN: {SHOs['NN'][1]/1000:0.1f} Hz\nQ - LSQF: {SHOs['LSQF'][2]:0.1f} NN: {SHOs['NN'][2]:0.1f}\n\u03C6 - LSQF: {SHOs['LSQF'][3]:0.2f} NN: {SHOs['NN'][3]:0.1f} rad"
+                        elif display_results == "MSE":
+                            error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}"
+
+                # Set the x-axis label (Frequency in Hz)
+                ax_.set_xlabel("Frequency (Hz)")
+
+                # Display the results (e.g., MSE) below the plots
+                if display_results is not None:
+                    center = get_axis_pos_inches(fig, ax[i])
+                    text_position_in_inches = (center[0], center[1] - 0.33)
+
+                    if "error_string" not in locals():
+                        error_string = f"MSE: {error:0.4f}"
+
+                    add_text_to_figure(
+                        fig,
+                        error_string,
+                        text_position_in_inches,
+                        fontsize=6,
+                        ha="center",
+                        va="top",
+                    )
+
+                # Set y-axis labels based on output state
+                if out_state is not None:
+                    if "raw_format" in out_state.keys() and out_state["raw_format"] == "magnitude spectrum":
+                        ax_.set_ylabel("Amplitude (Arb. U.)")
+                        ax1.set_ylabel("Phase (rad)")
+                    else:
+                        ax_.set_ylabel("Real (Arb. U.)")
+                        ax1.set_ylabel("Imag (Arb. U.)")
+
+                # Add legend for the last fit
+                if i < num_fits:
+                    lines, labels = ax_.get_legend_handles_labels()
+                    lines2, labels2 = ax1.get_legend_handles_labels()
+                    ax_.legend(lines + lines2, labels + labels2, loc="upper right")
+
+        # Save the figure if filename is provided
+        if self.Printer is not None and filename is not None:
+            self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+
 
     
     ###### MOVIES #####
@@ -2094,166 +2283,7 @@ class Viz:
 
 #         return SHO_Model.MSE(data.detach().numpy(), predictions)
 
-#     @static_dataset_decorator
-#     def SHO_Fit_comparison(
-#         self,
-#         data,
-#         names,
-#         gaps=(0.8, 0.9),
-#         size=(1.25, 1.25),
-#         model_comparison=None,
-#         out_state=None,
-#         filename=None,
-#         display_results="all",
-#         **kwargs,
-#     ):
-#         # gets the number of fits
-#         num_fits = len(data)
 
-#         # changes the gaps if the results are displayed
-#         if display_results == "MSE":
-#             gaps = (0.8, 0.45)
-#         elif display_results is None:
-#             gaps = (0.8, 0.33)
-
-#         # builds the subfigures
-#         fig, ax = subfigures(3, num_fits, gaps=gaps, size=size)
-
-#         # loops around the number of fits, and the data
-#         for step, (data, name) in enumerate(zip(data, names)):
-#             # unpack the data
-#             d1, d2, x1, x2, label, index1, mse1, params = data
-
-#             # loops around the datasets to compare
-#             for bmw, (true, prediction, error, SHO, index1) in enumerate(
-#                 zip(d1, d2, mse1, params, index1)
-#             ):
-#                 # builds an empty dictionary to hold the errors, SHOs
-#                 errors = {}
-#                 SHOs = {}
-
-#                 # selects the graph where the data is plot (rows, columns)
-#                 i = bmw * num_fits + step
-
-#                 ax_ = ax[i]
-#                 ax_.plot(
-#                     x2,
-#                     prediction[0].flatten(),
-#                     color=color_palette[f"{name}_A"],
-#                     label=f"{name} {label[0]}",
-#                 )
-#                 ax1 = ax_.twinx()
-#                 ax1.plot(
-#                     x2,
-#                     prediction[1].flatten(),
-#                     color=color_palette[f"{name}_P"],
-#                     label=f"{name} {label[1]}",
-#                 )
-
-#                 ax_.plot(
-#                     x1,
-#                     true[0].flatten(),
-#                     "o",
-#                     color=color_palette["LSQF_A"],
-#                     label=f"Raw {label[0]}",
-#                 )
-#                 ax1.plot(
-#                     x1,
-#                     true[1].flatten(),
-#                     "o",
-#                     color=color_palette["LSQF_P"],
-#                     label=f"Raw {label[1]}",
-#                 )
-
-#                 # saves error to the correct error name
-#                 errors[name] = error
-#                 SHOs[name] = SHO
-
-#                 if model_comparison is not None:
-#                     if model_comparison[step] is not None:
-#                         pred_data, params, labels = self.get_SHO_params(
-#                             index1, model=model_comparison[step], out_state=out_state
-#                         )
-
-#                         # checks if using a neural network and saves the error
-#                         if isinstance(model_comparison[step], nn.Module):
-#                             # saves the color prefix
-#                             color = "NN"
-
-#                         # if the model is a dictionary then it is an LSQF model
-#                         if isinstance(model_comparison[step], dict):
-#                             # saves the color prefix
-#                             color = "LSQF"
-
-#                         # saves error to the correct error name
-#                         errors[color] = self.get_mse_index(
-#                             index1, model_comparison[step]
-#                         )
-#                         # might need to turn this into a numpy array and squeeze it
-#                         SHOs[color] = np.array(params).squeeze()
-
-#                         # plots the comparison graph
-#                         ax_.plot(
-#                             x2,
-#                             pred_data.squeeze()[0].flatten(),
-#                             color=color_palette[f"{color}_A"],
-#                             label=f"{color} {labels[0]}",
-#                         )
-#                         ax1.plot(
-#                             x2,
-#                             pred_data.squeeze()[1].flatten(),
-#                             color=color_palette[f"{color}_P"],
-#                             label=f"{color} {labels[1]}",
-#                         )
-#                         if display_results == "all":
-#                             error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}\n AMP - LSQF:{SHOs['LSQF'][0]:0.2e} NN:{SHOs['NN'][0]:0.2e}\n\u03C9 - LSQF: {SHOs['LSQF'][1]/1000:0.1f} NN: {SHOs['NN'][1]/1000:0.1f} Hz\nQ- LSQF: {SHOs['LSQF'][2]:0.1f} NN: {SHOs['NN'][2]:0.1f}\n\u03C6- LSQF: {SHOs['LSQF'][3]:0.2f} NN: {SHOs['NN'][3]:0.1f} rad"
-#                         elif display_results == "MSE":
-#                             error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}"
-
-#                 # sets the xlabel, this is always frequency (HZ)
-#                 ax_.set_xlabel("Frequency (Hz)")
-
-#                 # if wants to display the results
-#                 if display_results is not None:
-#                     # gets the axis position in inches - gets the bottom center
-#                     center = get_axis_pos_inches(fig, ax[i])
-
-#                     # selects the text position as an offset from the bottom center
-#                     text_position_in_inches = (center[0], center[1] - 0.33)
-
-#                     if "error_string" not in locals():
-#                         error_string = f"MSE: {error:0.4f}"
-
-#                     add_text_to_figure(
-#                         fig,
-#                         error_string,
-#                         text_position_in_inches,
-#                         fontsize=6,
-#                         ha="center",
-#                         va="top",
-#                     )
-
-#                 if out_state is not None:
-#                     if "raw_format" in out_state.keys():
-#                         if out_state["raw_format"] == "magnitude spectrum":
-#                             ax_.set_ylabel("Amplitude (Arb. U.)")
-#                             ax1.set_ylabel("Phase (rad)")
-#                     else:
-#                         ax_.set_ylabel("Real (Arb. U.)")
-#                         ax1.set_ylabel("Imag (Arb. U.)")
-
-#                 if i < num_fits:
-#                     # add a legend just for the last one
-#                     lines, labels = ax_.get_legend_handles_labels()
-#                     lines2, labels2 = ax1.get_legend_handles_labels()
-#                     ax_.legend(lines + lines2, labels +
-#                                labels2, loc="upper right")
-
-#         # prints the figure
-#         if self.Printer is not None and filename is not None:
-#             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
-
-#         return fig
 
 #     @static_dataset_decorator
 #     def get_SHO_params(self, index, model, out_state):

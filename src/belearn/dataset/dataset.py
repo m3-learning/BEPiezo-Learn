@@ -675,6 +675,32 @@ class BE_Dataset:
         """Gets the DC voltage vector"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f[f"Raw_Data_SHO_Fit/Raw_Data-SHO_Fit_000/Spectroscopic_Values"][0, 1::2]
+        
+    @property
+    def num_cycles(self):
+        """
+        Property to retrieve the number of cycles in the dataset.
+
+        This method opens the HDF5 file associated with the object, reads the number of cycles
+        stored in the "Measurement_000" group, and returns the total number of cycles. 
+        If the measurement was performed both 'in' and 'out-of-field', the number of cycles is doubled.
+
+        Returns:
+            int: The total number of cycles in the dataset.
+        """
+        
+        # Open the HDF5 file in read/write mode
+        with h5py.File(self.file, "r+") as h5_f:
+            # Retrieve the number of cycles from the attributes of "Measurement_000"
+            cycles = h5_f["Measurement_000"].attrs["VS_number_of_cycles"]
+
+            # Check if the measurement was performed 'in and out-of-field'
+            # If so, double the number of cycles to account for both directions
+            if h5_f["Measurement_000"].attrs["VS_measure_in_field_loops"] == 'in and out-of-field':
+                cycles *= 2
+
+            # Return the total number of cycles
+            return cycles
 
     @property
     def voltage_steps(self):
@@ -917,6 +943,40 @@ class BE_Dataset:
 
         # Return the data corresponding to the specified cycle
         return data
+    
+    def get_measurement_cycle(self, data, cycle=None, axis=1):
+        """
+        Retrieves the data for a specific measurement cycle from band excitation data.
+
+        This function extracts a specific cycle from the provided band excitation data. 
+        If a cycle number is provided, it updates the current cycle. The data is first 
+        processed based on the voltage state, and then the corresponding cycle is extracted 
+        using the `get_cycle` method.
+
+        Args:
+            data (np.array): The band excitation data to extract the cycle from. Typically a multi-dimensional array.
+            cycle (int, optional): The specific cycle to extract. If not provided, the default cycle stored in the object is used. Defaults to None.
+            axis (int, optional): The axis where the cycle dimension is located. Defaults to 1.
+
+        Returns:
+            np.array: The data corresponding to the specified measurement cycle.
+
+        Notes:
+            - The cycle number can be updated dynamically if passed as an argument.
+            - The function first processes the data through `get_data_w_voltage_state` to align it with the correct voltage state.
+            - Finally, it extracts the cycle using the `get_cycle` method.
+        """
+
+        # If a specific cycle is provided, update the current cycle attribute
+        if cycle is not None:
+            self.cycle = cycle
+
+        # Process the data to align with the voltage state
+        data = self.get_data_w_voltage_state(data)
+
+        # Extract and return the data corresponding to the specific cycle along the specified axis
+        return self.get_cycle(data, axis=axis)
+
 
 
     def raw_data(self, pixel=None, voltage_step=None):
@@ -2103,17 +2163,6 @@ class BE_Dataset:
     #         return h5_f['Measurement_000'].attrs["grid_num_rows"]
 
     # @property
-    # def num_cycles(self):
-    #     '''Gets the number of cycles in the data'''
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         cycles = h5_f["Measurement_000"].attrs["VS_number_of_cycles"]
-
-    #         if h5_f["Measurement_000"].attrs["VS_measure_in_field_loops"] == 'in and out-of-field':
-    #             cycles *= 2
-
-    #         return cycles
-
-    # @property
     # def resampled_freq(self):
     #     """Gets the resampled frequency"""
     #     return resample(self.frequency_bin, self.resampled_bins)
@@ -2193,22 +2242,7 @@ class BE_Dataset:
 
 
 
-    # def get_measurement_cycle(self, data, cycle=None, axis=1):
-    #     """
-    #     get_measurement_cycle function to get the cycle of a measurement
-
-    #     Args:
-    #         data (np.array): band excitation data to extract cycle from
-    #         cycle (int, optional): cycle to extract. Defaults to None.
-    #         axis (int, optional): axis where the cycle dimension is located. Defaults to 1.
-
-    #     Returns:
-    #         _type_: _description_
-    #     """
-    #     if cycle is not None:
-    #         self.cycle = cycle
-    #     data = self.get_data_w_voltage_state(data)
-    #     return self.get_cycle(data, axis=axis)
+    
 
 
 

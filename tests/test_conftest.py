@@ -12,7 +12,7 @@
 import pytest
 
 # You can add more notebooks to this list if needed
-notebooks_to_test = ['my_notebook.ipynb']
+notebooks_to_test = ['1(optional)_Noisy_Data_and_Fitting.ipynb']
 
 @pytest.mark.parametrize("notebook", notebooks_to_test)
 def test_notebook_execution(notebook):

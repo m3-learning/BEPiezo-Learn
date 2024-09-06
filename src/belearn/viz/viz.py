@@ -1065,8 +1065,6 @@ class Viz:
         # Show the figure
         fig.show()
 
-        return fig
-
     
     ###### MOVIES #####
 

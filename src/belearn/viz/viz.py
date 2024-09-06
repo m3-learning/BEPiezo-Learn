@@ -1711,7 +1711,88 @@ class Viz:
 
         # Return the fit results for both states as a tuple
         return on_data, off_data
+    
+    @static_dataset_decorator
+    def get_SHO_params(self, index, model, out_state):
+        """
+        Retrieves Simple Harmonic Oscillator (SHO) parameters for a given index based on the specified model.
 
+        This function computes or retrieves the SHO parameters (such as amplitude, phase, resonance frequency, and quality factor)
+        for the provided indices using either a neural network model or an LSQF model, depending on the type of `model` provided.
+        It also processes the data based on the output state specified in `out_state`.
+
+        Args:
+            index (list): List of indices for which to retrieve the SHO parameters.
+            model (any): The model used to compute the SHO results. Can be a neural network (`nn.Module`) or a dictionary representing
+                        an LSQF model with specific parameters.
+            out_state (dict): Dictionary specifying the output state of the data, such as how the output should be formatted.
+
+        Returns:
+            np.array, np.array, list: 
+                - `pred_data`: The predicted SHO data (processed real/imaginary or amplitude/phase data).
+                - `params`: The corresponding SHO parameters (e.g., amplitude, phase, resonance frequency, quality factor).
+                - `labels`: A list of labels describing the parameters for the returned data.
+        """
+
+        # Get pixel and voltage coordinates from the provided indices
+        pixel, voltage = np.unravel_index(
+            index, (self.dataset.num_pix, self.dataset.voltage_steps)
+        )
+
+        # Case 1: The model is a neural network (nn.Module)
+        if isinstance(model, nn.Module):
+            # Retrieve the input data for the neural network
+            X_data, Y_data = self.dataset.NN_data()
+
+            # Select the data based on the provided indices
+            X_data = X_data[[index]]
+
+            # Use the model to predict the data and SHO parameters
+            pred_data, scaled_param, params = model.predict(X_data)
+
+            # Convert the predicted data to a NumPy array
+            pred_data = np.array(pred_data)
+
+        # Case 2: The model is a dictionary (assumed to be an LSQF model)
+        if isinstance(model, dict):
+            # Ensure that the dataset is not scaled when retrieving raw parameters
+            self.dataset.scaled = False
+
+            # Retrieve the SHO fit results without any phase shift
+            params_shifted = self.dataset.SHO_fit_results()
+
+            # Ensure the phase shift for the current fitter is set to zero
+            exec(f"self.dataset.{model['fitter']}_phase_shift = 0")
+
+            # Retrieve the SHO fit parameters
+            params = self.dataset.SHO_fit_results()
+
+            # Switch back to scaled parameters for further processing
+            self.dataset.scaled = True
+
+            # Generate raw spectra from the fit results
+            pred_data = self.dataset.raw_spectra(fit_results=params)
+
+            # Reshape the predicted data for correct dimensionality (samples, channels, voltage steps)
+            pred_data = np.array([pred_data[0], pred_data[1]])  # (channels, samples, voltage steps)
+            pred_data = np.swapaxes(pred_data, 0, 1)  # (samples, channels, voltage steps)
+            pred_data = np.swapaxes(pred_data, 1, 2)  # (samples, voltage steps, channels)
+
+            # Reshape the shifted parameters for consistent handling
+            params_shifted = params_shifted.reshape(-1, 4)
+
+            # Select the data and parameters based on the provided indices
+            pred_data = pred_data[[index]]
+            params = params_shifted[[index]]
+
+        # Swap axes of the predicted data to match expected output format
+        pred_data = np.swapaxes(pred_data, 1, 2)
+
+        # Apply output state processing to the predicted data (real/imaginary or amplitude/phase)
+        pred_data, labels = self.out_state(pred_data, out_state)
+
+        # Return the predicted data, SHO parameters, and their corresponding labels
+        return pred_data, params, labels
 
     ###### SETTERS ######
 
@@ -2283,76 +2364,6 @@ class Viz:
 
 #         return SHO_Model.MSE(data.detach().numpy(), predictions)
 
-
-
-#     @static_dataset_decorator
-#     def get_SHO_params(self, index, model, out_state):
-#         """Function that gets the SHO parameters for a given index based on a specific model
-
-#         Args:
-#             index (list): list of indexes to get the SHO parameters for
-#             model (any): model or description of model that is used to compute the SHO results.
-#             out_state (dict): dictionary that specifies the output state of the data.
-
-#         Returns:
-#             array, array, list: returns the output data, the SHO parameters, and the labels for the data
-#         """
-
-#         # current_state = self.dataset.get_state
-
-#         pixel, voltage = np.unravel_index(
-#             index, (self.dataset.num_pix, self.dataset.voltage_steps)
-#         )
-
-#         if isinstance(model, nn.Module):
-#             X_data, Y_data = self.dataset.NN_data()
-
-#             X_data = X_data[[index]]
-
-#             pred_data, scaled_param, params = model.predict(X_data)
-
-#             pred_data = np.array(pred_data)
-
-#         if isinstance(model, dict):
-#             # # holds the raw state
-#             # current_state = self.dataset.get_state
-
-#             self.dataset.scaled = False
-
-#             params_shifted = self.dataset.SHO_fit_results()
-
-#             exec(f"self.dataset.{model['fitter']}_phase_shift =0")
-
-#             params = self.dataset.SHO_fit_results()
-
-#             self.dataset.scaled = True
-
-#             pred_data = self.dataset.raw_spectra(fit_results=params)
-
-#             # output (channels, samples, voltage steps)
-#             pred_data = np.array([pred_data[0], pred_data[1]])
-
-#             # output (samples, channels, voltage steps)
-#             pred_data = np.swapaxes(pred_data, 0, 1)
-
-#             # output (samples, voltage steps, channels)
-#             pred_data = np.swapaxes(pred_data, 1, 2)
-
-#             params_shifted = params_shifted.reshape(-1, 4)
-
-#             pred_data = pred_data[[index]]
-#             params = params_shifted[[index]]
-
-#             # self.set_attributes(**current_state)
-
-#         pred_data = np.swapaxes(pred_data, 1, 2)
-
-#         pred_data, labels = self.out_state(pred_data, out_state)
-
-#         # # returns the state to the original state
-#         # self.set_attributes(**current_state)
-
-#         return pred_data, params, labels
 
 
 

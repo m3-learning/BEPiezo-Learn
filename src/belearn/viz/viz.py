@@ -43,8 +43,7 @@ from typing import List, Dict, Optional, Any, Type
 import numpy as np
 from scipy import fftpack
 from torch import nn
-from belearn.dataset.analytics import get_rankings
-
+from belearn.dataset.analytics import get_rankings, MSE
 
 
 import matplotlib.pyplot as plt
@@ -1793,6 +1792,78 @@ class Viz:
 
         # Return the predicted data, SHO parameters, and their corresponding labels
         return pred_data, params, labels
+    
+    @static_dataset_decorator
+    def get_mse_index(self, index, model):
+        """
+        Computes the Mean Squared Error (MSE) between the raw spectra data and the predicted data
+        for a given set of indices and a specified model.
+
+        This function retrieves the raw data from the dataset and compares it with the predicted 
+        data from the provided model. Depending on whether the model is a neural network (`nn.Module`) 
+        or an LSQF model (represented as a dictionary), it handles predictions accordingly and 
+        calculates the MSE.
+
+        Args:
+            index (list): List of indices specifying which samples to compute the MSE for.
+            model (any): Model used to generate predictions. Can either be:
+                        - A neural network (`nn.Module`), in which case predictions are obtained from the model.
+                        - A dictionary representing an LSQF model, where predictions are computed using SHO fitting.
+
+        Returns:
+            float: The computed Mean Squared Error (MSE) between the raw data and the predicted data.
+
+        Notes:
+            - For neural network models (`nn.Module`), predictions are obtained directly from the model.
+            - For LSQF models, the raw spectra are generated using the unscaled SHO parameters.
+        """
+
+        # Retrieve the raw dataset (samples, voltage steps, real/imaginary)
+        data, _ = self.dataset.NN_data()
+
+        # Select the data for the given indices
+        data = data[[index]]
+
+        # Case 1: Model is a neural network (nn.Module)
+        if isinstance(model, nn.Module):
+            # Get the predictions from the neural network model
+            predictions, params_scaled, params = model.predict(data)
+
+            # Detach the predictions tensor from the computational graph and convert to NumPy array
+            predictions = predictions.detach().numpy()
+
+        # Case 2: Model is an LSQF model (represented as a dictionary)
+        if isinstance(model, dict):
+            # Set the phase shift for the specific fitter to zero (required for proper fitting)
+            exec(f"self.dataset.{model['fitter']}_phase_shift = 0")
+
+            # Disable scaling to get unscaled SHO parameters (needed for generating raw data)
+            self.dataset.scaled = False
+
+            # Retrieve the SHO fit results (parameters)
+            params = self.dataset.SHO_fit_results()
+
+            # Re-enable scaling (since the MSE is calculated using scaled parameters)
+            self.dataset.scaled = True
+
+            # Ensure the measurement state is set to 'complex' format (for real/imaginary data)
+            self.dataset.raw_format = "complex"
+
+            # Generate raw spectra using the retrieved SHO parameters
+            pred_data = self.dataset.raw_spectra(fit_results=params)
+
+            # Convert the predicted data to a NumPy array
+            pred_data = np.array(pred_data)  # Shape: (real/imaginary, samples, voltage steps)
+
+            # Roll the axes to match the required shape: (samples, voltage steps, real/imaginary)
+            pred_data = np.rollaxis(pred_data, 0, pred_data.ndim)
+
+            # Select the predicted data for the given indices
+            predictions = pred_data[[index]]
+
+        # Compute and return the MSE between the raw data and the predicted data
+        return MSE(data.detach().numpy(), predictions)
+
 
     ###### SETTERS ######
 
@@ -2305,64 +2376,6 @@ class Viz:
 #             index1 = index[index1]
 
 #         return (d1, d2, x1, x2, index1, mse1, params)
-
-#     @static_dataset_decorator
-#     def get_mse_index(self, index, model):
-#         # gets the raw data
-#         # returns the raw spectra in (samples, voltage steps, real/imaginary)
-#         data, _ = self.dataset.NN_data()
-
-#         # gets the index of the data selected
-#         # (samples, voltage steps, real/imaginary)
-#         data = data[[index]]
-
-#         if isinstance(model, nn.Module):
-#             # gets the predictions from the neural network
-#             predictions, params_scaled, params = model.predict(data)
-
-#             # detaches the tensor and converts to numpy
-#             predictions = predictions.detach().numpy()
-
-#         if isinstance(model, dict):
-#             # # holds the raw state
-#             # current_state = self.dataset.get_state
-
-#             # sets the phase shift to zero for the specific fitter - this is a requirement for using the fitting function
-#             exec(f"self.dataset.{model['fitter']}_phase_shift =0")
-
-#             # Ensures that we get the unscaled parameters
-#             # Only the unscaled parameters can be used to calculate the raw data
-#             self.dataset.scaled = False
-
-#             # Gets the parameters
-#             params = self.dataset.SHO_fit_results()
-
-#             # sets the dataset to scaled
-#             # we compare the MSE using the scaled parameters
-#             self.dataset.scaled = True
-
-#             # Ensures that the measurement state is complex
-#             self.dataset.raw_format = "complex"
-
-#             # This returns the raw data based on the parameters
-#             # this returns a list of the real and imaginary data
-#             pred_data = self.dataset.raw_spectra(fit_results=params)
-
-#             # makes the data an array
-#             # (real/imaginary, samples, voltage steps)
-#             pred_data = np.array(pred_data)
-
-#             # rolls the axis to (samples, voltage steps, real/imaginary)
-#             pred_data = np.rollaxis(pred_data, 0, pred_data.ndim)
-
-#             # gets the index of the data selected
-#             # (samples, voltage steps, real/imaginary)
-#             predictions = pred_data[[index]]
-
-#             # # restores the state to the original state
-#             # self.set_attributes(**current_state)
-
-#         return SHO_Model.MSE(data.detach().numpy(), predictions)
 
 
 

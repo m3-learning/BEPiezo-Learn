@@ -53,6 +53,9 @@ MANIFEST
 .conda*/
 .python-version
 
-/Data/*
-/Figures/*
-/Movies/*
+Data/*
+Figures/*
+Movies/*
+# Data/data_raw.h5
+*.pth
+Trained Models/SHO Fitter/Training_loss_SHO_Fitter_original_data_model_optimizer_Adam_epoch_4_train_loss_0.03404734210730735.txt

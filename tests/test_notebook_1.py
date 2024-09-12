@@ -2,7 +2,7 @@ from m3util.util.IO import download_and_unzip
 from belearn.dataset.dataset import BE_Dataset
 import numpy as np
 
-def test_notebook_execution(notebook):
+def test_notebook_execution():
 
     # Download the data file from Zenodo
     url = 'https://zenodo.org/record/7774788/files/PZT_2080_raw_data.h5?download=1'
@@ -29,12 +29,12 @@ def test_notebook_execution(notebook):
     print(noise_STD)
 
 
-    dataset.generate_noisy_data_records(noise_levels = 1, 
+    dataset.generate_noisy_data_records(noise_levels = [1], 
                                         verbose=True, 
                                         noise_STD=noise_STD)
 
-
-    out = [f"Noisy_Data_{i}" for i in np.arange(1,9)]
+    i = 1
+    out = [f"Noisy_Data_{i}"]
     out.append("Raw_Data")
 
     for data in out:
@@ -44,5 +44,4 @@ def test_notebook_execution(notebook):
 
     # print the contents of the file
     dataset.print_be_tree()
-
 

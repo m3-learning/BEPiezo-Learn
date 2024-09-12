@@ -1417,24 +1417,25 @@ class BE_Dataset:
             None
         """
 
-        # Print a formatted string that summarizes the current extraction state of the dataset
-        print(
-            f"""
-        Dataset = {self.dataset}
-        Resample = {self.resampled}
-        Raw Format = {self.raw_format}
-        Fitter = {self.fitter}
-        Scaled = {self.scaled}
-        Output Shape = {self.output_shape}
-        Measurement State = {self.measurement_state}
-        Resample Resampled = {self.resampled}
-        Resample Bins = {self.resampled_bins}
-        LSQF Phase Shift = {self.LSQF_phase_shift}
-        NN Phase Shift = {self.NN_phase_shift}
-        Noise Level = {self.noise}
-        Loop Interpolated = {self.loop_interpolated}
-        """
-        )
+        if self.verbose:
+            # Print a formatted string that summarizes the current extraction state of the dataset
+            print(
+                f"""
+            Dataset = {self.dataset}
+            Resample = {self.resampled}
+            Raw Format = {self.raw_format}
+            Fitter = {self.fitter}
+            Scaled = {self.scaled}
+            Output Shape = {self.output_shape}
+            Measurement State = {self.measurement_state}
+            Resample Resampled = {self.resampled}
+            Resample Bins = {self.resampled_bins}
+            LSQF Phase Shift = {self.LSQF_phase_shift}
+            NN Phase Shift = {self.NN_phase_shift}
+            Noise Level = {self.noise}
+            Loop Interpolated = {self.loop_interpolated}
+            """
+            )
 
     ##### SETTERS #####
 
@@ -1914,9 +1915,8 @@ class BE_Dataset:
             shuffle=shuffle
         )
 
-        # If verbose mode is enabled, print the extraction state
-        if self.verbose:
-            self.extraction_state
+        
+        self.extraction_state
 
         # Return the split datasets
         return self.X_train, self.X_test, self.y_train, self.y_test
@@ -1937,7 +1937,7 @@ class BE_Dataset:
         """
 
         # Print the current state of the data extraction process
-        print(self.extraction_state)
+        self.extraction_state
 
         # If resampled is specified, ensure the correct dataset is used
         if resampled is not None:

@@ -32,18 +32,21 @@
 # import os
 
 import os
+
 import torch
 
-from m3util.viz.layout import layout_fig, add_box, inset_connector, add_text_to_figure, labelfigs, scalebar, imagemap, FigDimConverter, subfigures
+from m3util.viz.layout import layout_fig, add_box, inset_connector, add_text_to_figure, labelfigs, scalebar, imagemap, FigDimConverter, subfigures, get_axis_pos_inches
 from m3util.util.IO import make_folder
 from m3util.viz.movies import make_movie
-
+import pandas as pd
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Type
 import numpy as np
 from scipy import fftpack
 from torch import nn
 from belearn.dataset.analytics import get_rankings, MSE
+
+import seaborn as sns
 
 
 import matplotlib.pyplot as plt
@@ -1061,8 +1064,6 @@ class Viz:
                 fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
             )
 
-        # Show the figure
-        fig.show()
         
     @static_dataset_decorator
     def SHO_Fit_comparison(
@@ -1252,6 +1253,174 @@ class Viz:
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
 
+    @static_dataset_decorator
+    def violin_plot_comparison_SHO(self, state, model, X_data, filename, label="NN"):
+        """
+        Generates a violin plot to compare true parameter values obtained from the SHO LSQF fit 
+        and predicted parameter values from a machine learning model.
+
+        Parameters:
+        -----------
+        state : dict
+            A dictionary containing the necessary state attributes to configure the object.
+        model : object
+            A machine learning model that has a `predict` method to generate parameter predictions 
+            from input data.
+        X_data : array-like
+            Input data for the model to generate predictions.
+        filename : str
+            Filename to save the generated plot. If None, the plot is not saved.
+        label : str
+            Label for the predicted dataset. Defaults to "NN".
+
+        Returns:
+        --------
+        fig : matplotlib.figure.Figure
+            A matplotlib figure object representing the violin plot.
+        """
+        # Set the object attributes using the provided state dictionary
+        self.set_attributes(**state)
+
+        # Initialize an empty dataframe to store the data for plotting
+        df = pd.DataFrame()
+
+        # Use the model to get predicted parameter values and other outputs
+        pred_data, scaled_param, params = model.predict(X_data)
+
+        # Scale the predicted parameters using the SHO scaler
+        scaled_param = self.dataset.SHO_scaler.transform(params)
+
+        # Obtain the true parameter values from the SHO LSQF fit
+        true = self.dataset.SHO_fit_results().reshape(-1, 4)
+
+        # Create dataframes for true and predicted parameter values with appropriate column names
+        true_df = pd.DataFrame(
+            true, columns=["Amplitude", "Resonance", "Q-Factor", "Phase"]
+        )
+        predicted_df = pd.DataFrame(
+            scaled_param, columns=["Amplitude", "Resonance", "Q-Factor", "Phase"]
+        )
+
+        # Concatenate the true and predicted dataframes into a single dataframe for plotting
+        df = pd.concat((true_df, predicted_df))
+
+        # Define the datasets and labels for the violin plot
+        names = [true, scaled_param]
+        names_str = ["LSQF", label]  # Labels for true and predicted datasets
+        labels = ["A", "\u03C9", "Q", "\u03C6"]  # Labels for parameters: Amplitude (A), Resonance (ω), Q-Factor (Q), Phase (φ)
+
+        # Append parameter, value, and dataset information into the dataframe
+        for j, name in enumerate(names):
+            for i, label in enumerate(labels):
+                dict_ = {
+                    "value": name[:, i],  # Parameter values (true or predicted)
+                    "parameter": np.repeat(label, name.shape[0]),  # Parameter type (A, ω, Q, φ)
+                    "dataset": np.repeat(names_str[j], name.shape[0]),  # Dataset label (LSQF or NN)
+                }
+                df = pd.concat((df, pd.DataFrame(dict_)))
+
+        # Initialize a figure for plotting
+        fig, ax = plt.subplots(figsize=(2, 2))
+
+        df = df.reset_index(drop=False)
+         
+        # Generate the violin plot, comparing true and predicted parameter distributions
+        sns.violinplot(
+            data=df, x="parameter", y="value", hue="dataset", split=True, ax=ax, linewidth=.1,
+        )
+
+        # Customize the appearance of the plot
+        labelfigs(ax, 0, style="b")  # Apply custom labeling style to the plot
+        ax.set_ylabel("Scaled SHO Results")  # Set the y-axis label
+        ax.set_xlabel("")  # No label for x-axis
+
+        # Modify the legend associated with the plot
+        legend = ax.get_legend()
+        legend.set_title("")
+
+        # Save the plot if a filename and Printer are provided
+        if self.Printer is not None and filename is not None:
+            self.Printer.savefig(fig, filename)
+            
+    def violin_plot_comparison_hysteresis(self, model, X_data, filename):
+        """
+        Generates a violin plot comparing hysteresis parameters from a neural network model 
+        prediction and the least squares fitting (LSQF) results.
+
+        Args:
+            model: Object
+                Trained model with a `predict` method to generate predictions for the input data.
+            X_data: array-like
+                Input data for which the model will generate predictions.
+            filename: str
+                The filename where the figure will be saved if a Printer object is defined.
+
+        Returns:
+            None
+        """
+        
+        # Initialize an empty DataFrame to store the results
+        df = pd.DataFrame()
+
+        # Use the model to predict the hysteresis parameters for the provided input data
+        pred_data, scaled_param, params = model.predict(X_data, is_SHO=False)
+
+        # Get the true parameters from the least squares fit (LSQF) for hysteresis
+        # The hysteresis parameters are reshaped to a format of (-1, 9)
+        true = self.dataset.LSQF_hysteresis_params().reshape(-1, 9)
+
+        # Scale the true parameters using the same scaler applied during the model training
+        true_scaled = self.dataset.loop_param_scaler.transform(true)
+
+        # Create DataFrames for true and predicted parameters with appropriate column labels
+        true_df = pd.DataFrame(
+            true, columns=["a0", "a1", "a2", "a3", "a4", "b0", "b1", "b2", "b3"]
+        )
+        predicted_df = pd.DataFrame(
+            scaled_param, columns=["a0", "a1", "a2", "a3", "a4", "b0", "b1", "b2", "b3"]
+        )
+
+        # Concatenate true and predicted DataFrames
+        df = pd.concat((predicted_df, true_df))
+
+        # Prepare labels and dataset names for the plot
+        names = [true_scaled, scaled_param]
+        names_str = ["NN", "LSQF"]
+        labels = ["a0", "a1", "a2", "a3", "a4", "b0", "b1", "b2", "b3"]
+
+        # Add each parameter and corresponding label to the DataFrame
+        for j, name in enumerate(names):
+            for i, label in enumerate(labels):
+                dict_ = {
+                    "value": name[:, i],  # Scaled parameter values
+                    "parameter": np.repeat(label, name.shape[0]),  # Label for the parameter
+                    "dataset": np.repeat(names_str[j], name.shape[0]),  # Label for dataset type (NN or LSQF)
+                }
+                df = pd.concat((df, pd.DataFrame(dict_)))
+
+        # Create the figure for plotting
+        fig, ax = plt.subplots(figsize=(4, 4))
+
+        # Reset index to handle potential duplicated columns or indices
+        df = df.reset_index(drop=False)
+
+        # Plot the violin plot with split view for comparing true and predicted values
+        sns.violinplot(
+            data=df, x="parameter", y="value", hue="dataset", split=True, ax=ax, linewidth=.1,
+        )
+
+        # Style the plot with labels
+        labelfigs(ax, 0, style="b")
+        ax.set_ylabel("Scaled SHO Results")
+        ax.set_xlabel("")
+
+        # Remove the legend title
+        legend = ax.get_legend()
+        legend.set_title("")
+
+        # Save the figure if a Printer object and filename are provided
+        if self.Printer is not None and filename is not None:
+            self.Printer.savefig(fig, filename)
 
     
     ###### MOVIES #####
@@ -2612,7 +2781,7 @@ class Viz:
 #                 fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
 #             )
 
-#         fig.show()
+
 
 #     @static_dataset_decorator
 #     def noisy_datasets(
@@ -2675,145 +2844,6 @@ class Viz:
 #                 fig, filename, label_figs=ax_, size=6, loc="bl", inset_fraction=0.2
 #             )
 
-#     @static_dataset_decorator
-#     def violin_plot_comparison(self, state, model, X_data, filename):
-#         self.set_attributes(**state)
-
-#         df = pd.DataFrame()
-
-#         # uses the model to get the predictions
-#         pred_data, scaled_param, params = model.predict(X_data)
-
-#         # scales the parameters
-#         scaled_param = self.dataset.SHO_scaler.transform(params)
-
-#         # gets the parameters from the SHO LSQF fit
-#         true = self.dataset.SHO_fit_results().reshape(-1, 4)
-
-#         # Builds the dataframe for the violin plot
-#         true_df = pd.DataFrame(
-#             true, columns=["Amplitude", "Resonance", "Q-Factor", "Phase"]
-#         )
-#         predicted_df = pd.DataFrame(
-#             scaled_param, columns=["Amplitude",
-#                                    "Resonance", "Q-Factor", "Phase"]
-#         )
-
-#         # merges the two dataframes
-#         df = pd.concat((true_df, predicted_df))
-
-#         # adds the labels to the dataframe
-#         names = [true, scaled_param]
-#         names_str = ["LSQF", "NN"]
-#         # ["Amplitude", "Resonance", "Q-Factor", "Phase"]
-#         labels = ["A", "\u03C9", "Q", "\u03C6"]
-
-#         # adds the labels to the dataframe
-#         for j, name in enumerate(names):
-#             for i, label in enumerate(labels):
-#                 dict_ = {
-#                     "value": name[:, i],
-#                     "parameter": np.repeat(label, name.shape[0]),
-#                     "dataset": np.repeat(names_str[j], name.shape[0]),
-#                 }
-
-#                 df = pd.concat((df, pd.DataFrame(dict_)))
-
-#         # builds the plot
-#         fig, ax = plt.subplots(figsize=(2, 2))
-
-#         # plots the data
-#         sns.violinplot(
-#             data=df, x="parameter", y="value", hue="dataset", split=True, ax=ax
-#         )
-
-#         # labels the figure and does some styling
-#         labelfigs(ax, 0, style="b")
-#         ax.set_ylabel("Scaled SHO Results")
-#         ax.set_xlabel("")
-
-#         # Get the legend associated with the plot
-#         legend = ax.get_legend()
-#         legend.set_title("")
-
-#         # ax.set_aspect(1)
-
-#         # prints the figure
-#         if self.Printer is not None and filename is not None:
-#             self.Printer.savefig(fig, filename)
-
-#         return fig
-
-#     def violin_plot_comparison_hysteresis(self, model, X_data, filename):
-
-#         df = pd.DataFrame()
-
-#         # uses the model to get the predictions
-#         pred_data, scaled_param, params = model.predict(X_data, is_SHO=False)
-
-#         # gets the parameters from the SHO LSQF fit
-#         # true = self.dataset.SHO_fit_results().reshape(-1, 4)
-
-#         true = self.dataset.LSQF_hysteresis_params().reshape(-1, 9)
-
-#         true_scaled = self.dataset.loop_param_scaler.transform(true)
-
-#         # Builds the dataframe for the violin plot
-#         true_df = pd.DataFrame(
-#             true, columns=["a0", "a1", "a2", "a3", "a4",
-#                            "b0", "b1", "b2", "b3"]
-#         )
-#         predicted_df = pd.DataFrame(
-#             scaled_param, columns=["a0", "a1", "a2", "a3", "a4",
-#                                    "b0", "b1", "b2", "b3"]
-#         )
-
-#         # merges the two dataframes
-#         df = pd.concat((predicted_df, true_df))
-
-#         # adds the labels to the dataframe
-#         names = [true_scaled, scaled_param]
-#         names_str = ["NN", "LSQF"]
-
-#         labels = ["a0", "a1", "a2", "a3", "a4", "b0", "b1", "b2", "b3"]
-
-#         # adds the labels to the dataframe
-#         for j, name in enumerate(names):
-#             for i, label in enumerate(labels):
-#                 dict_ = {
-#                     "value": name[:, i],
-#                     "parameter": np.repeat(label, name.shape[0]),
-#                     "dataset": np.repeat(names_str[j], name.shape[0]),
-#                 }
-
-#                 df = pd.concat((df, pd.DataFrame(dict_)))
-
-#         # builds the plot
-#         fig, ax = plt.subplots(figsize=(4, 4))
-
-#         # plots the data
-#         print('df colums',df.columns[df.columns.duplicated()])
-#         print('df index',df.index[df.index.duplicated()])
-
-#         # df = df.loc[:, ~df.columns.duplicated()]
-#         df = df.reset_index(drop=False)
-
-#         sns.violinplot(
-#             data=df, x="parameter", y="value", hue="dataset", split=True, ax=ax, linewidth=.1,
-#         )
-
-#         # labels the figure and does some styling
-#         labelfigs(ax, 0, style="b")
-#         ax.set_ylabel("Scaled SHO Results")
-#         ax.set_xlabel("")
-
-#         # Get the legend associated with the plot
-#         legend = ax.get_legend()
-#         legend.set_title("")
-
-#         # prints the figure
-#         if self.Printer is not None and filename is not None:
-#             self.Printer.savefig(fig, filename)
 
 
 

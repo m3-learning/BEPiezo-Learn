@@ -13,12 +13,15 @@ def static_state_decorator(func):
     Args:
         func (method): any method
     """
+
     def wrapper(*args, **kwargs):
         current_state = args[0].get_state
         out = func(*args, **kwargs)
         args[0].set_attributes(**current_state)
         return out
+
     return wrapper
+
 
 def get_model_filename(basepath, results, noise, optimizer):
     """
@@ -123,18 +126,31 @@ def create_models(basepath, results, noise, dataset, postprocessor, SHO_nn):
 
 
 @static_state_decorator
-def batch_training(dataset, optimizers, noise_list, batch_size, epochs, seed, write_CSV="Batch_Training_Noisy_Data.csv",
-                   basepath=None, early_stopping_loss=None, early_stopping_count=None, early_stopping_time=None, skip=-1, **kwargs,
-                   ):
-
+def batch_training(
+    dataset,
+    optimizers,
+    noise_list,
+    batch_size,
+    epochs,
+    seed,
+    write_CSV="Batch_Training_Noisy_Data.csv",
+    basepath=None,
+    early_stopping_loss=None,
+    early_stopping_count=None,
+    early_stopping_time=None,
+    skip=-1,
+    **kwargs,
+):
     # Generate all combinations
-    combinations = list(itertools.product(
-        optimizers, noise_list, batch_size, epochs, seed))
+    combinations = list(
+        itertools.product(optimizers, noise_list, batch_size, epochs, seed)
+    )
 
     for i, training in enumerate(combinations):
         if i < skip:
             print(
-                f"Skipping combination {i}: {training[0]} {training[1]} {training[2]}  {training[3]}  {training[4]}")
+                f"Skipping combination {i}: {training[0]} {training[1]} {training[2]}  {training[3]}  {training[4]}"
+            )
             continue
 
         optimizer = training[0]
@@ -146,7 +162,7 @@ def batch_training(dataset, optimizers, noise_list, batch_size, epochs, seed, wr
         print(f"The type is {type(training[0])}")
 
         if isinstance(optimizer, dict):
-            optimizer_name = optimizer['name']
+            optimizer_name = optimizer["name"]
         else:
             optimizer_name = optimizer
 
@@ -155,25 +171,27 @@ def batch_training(dataset, optimizers, noise_list, batch_size, epochs, seed, wr
         set_seeds(seed=seed)
 
         # constructs a test train split
-        X_train, X_test, y_train, y_test = dataset.test_train_split_(
-            shuffle=True)
+        X_train, X_test, y_train, y_test = dataset.test_train_split_(shuffle=True)
 
         model_name = f"SHO_{optimizer_name}_noise_{training[1]}_batch_size_{training[2]}_seed_{training[4]}"
 
-        print(f'Working on combination: {model_name}')
+        print(f"Working on combination: {model_name}")
 
         postprocessor = ComplexPostProcessor(dataset)
 
-        model_ = Multiscale1DFitter(SHO_nn,  # function
-                                    dataset.frequency_bin,  # x data
-                                    2,  # input channels
-                                    4,  # output channels
-                                    dataset.SHO_scaler,
-                                    postprocessor)
+        model_ = Multiscale1DFitter(
+            SHO_nn,  # function
+            dataset.frequency_bin,  # x data
+            2,  # input channels
+            4,  # output channels
+            dataset.SHO_scaler,
+            postprocessor,
+        )
 
         # instantiate the model
-        model = Model(model_, dataset, training=True,
-                      model_basename="SHO_Fitter_original_data")
+        model = Model(
+            model_, dataset, training=True, model_basename="SHO_Fitter_original_data"
+        )
 
         # fits the model
         model.fit(
@@ -202,9 +220,11 @@ def clear_all_tensors():
     # Get all objects in global scope
     for obj_name in dir():
         # Filter out objects that are not tensors
-        if not obj_name.startswith('_'):
+        if not obj_name.startswith("_"):
             obj = globals()[obj_name]
-            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+            if torch.is_tensor(obj) or (
+                hasattr(obj, "data") and torch.is_tensor(obj.data)
+            ):
                 del obj
 
     # Clear PyTorch GPU cache

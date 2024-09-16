@@ -139,6 +139,8 @@ def batch_training(
     early_stopping_count=None,
     early_stopping_time=None,
     skip=-1,
+    datafed_path=None,
+    script_path=None,
     **kwargs,
 ):
     # Generate all combinations
@@ -187,10 +189,18 @@ def batch_training(
             dataset.SHO_scaler,
             postprocessor,
         )
+        
+        if i != 0:
+            script_path = None
 
         # instantiate the model
         model = Model(
-            model_, dataset, training=True, model_basename="SHO_Fitter_original_data"
+            model_,
+            dataset,
+            training=True,
+            model_basename="SHO_Fitter_original_data",
+            datafed_path=datafed_path,
+            script_path=script_path,
         )
 
         # fits the model

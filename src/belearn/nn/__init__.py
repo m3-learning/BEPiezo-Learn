@@ -1,5 +1,5 @@
 # Auto-generated __init__.py
 
-from . import analysis
+from . import analysis, inference, nn
 
-__all__ = ['analysis']
+__all__ = ['analysis', 'inference', 'nn']

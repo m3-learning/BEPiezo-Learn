@@ -9,6 +9,7 @@ from m3util.util.h5 import (
 from belearn.dataset.scalers import Raw_Data_Scaler
 from belearn.util.wrappers import static_state_decorator
 from belearn.functions.sho import SHO_nn
+
 # from belearn.dataset.transformers import to_complex
 import numpy as np
 from dataclasses import dataclass, field, InitVar
@@ -24,38 +25,10 @@ from scipy.signal import resample
 from typing import Any, Callable, Dict, Optional
 from BGlib import be as belib
 import torch
-
-#
-
-#
-
-# import numpy as np
-
-# from m3_learning.util.rand_util import extract_number
-# from m3_learning.util.h5_util import make_dataset, make_group, find_groups_with_string, find_measurement
-# import matplotlib.pyplot as plt
-# from matplotlib.patches import ConnectionPatch
-# from m3_learning.viz.layout import layout_fig
-# #
-# 
-#
-# from m3_learning.util.preprocessing import GlobalScaler
-# import torch
-# import torch.nn as nn
-# from torch.utils.data import DataLoader
-# 
-# from m3_learning.be.nn import SHO_nn
-# import m3_learning
-# from m3_learning.be.loop_fitter import loop_fitting_function_torch
-# from pyUSID.io.usi_data import USIDataset
-# from sidpy.hdf.hdf_utils import get_attr
-# from pyUSID.io.hdf_utils import check_if_main, create_results_group, write_reduced_anc_dsets, link_as_main, \
-#     get_dimensionality, get_sort_order, get_unit_values, reshape_to_n_dims, write_main_dataset, reshape_from_n_dims
-# from pyUSID.io.hdf_utils import reshape_to_n_dims, get_auxiliary_datasets
-# from m3_learning.be.filters import clean_interpolate
-
-#
-# from m3_learning.util.h5_util import print_tree, get_tree
+from typing import Optional, Union
+from pathlib import Path
+from datafed_torchflow.datafed import DataFed
+from m3util.util.hashing import calculate_h5file_checksum
 
 
 @dataclass
@@ -68,6 +41,7 @@ class BE_Dataset:
     measurement_state: str = "all"
     resampled: bool = False
     resampled_bins: Optional[int] = field(default=None, init=False)
+    datafed: Optional[Union[None, str, Path]] = None
     LSQF_phase_shift: Optional[float] = None
     NN_phase_shift: Optional[float] = None
     verbose: bool = False
@@ -79,6 +53,7 @@ class BE_Dataset:
     loop_interpolated: bool = False
     tree: Any = field(init=False)
     resampled_data: Dict[str, Any] = field(default_factory=dict, init=False)
+    dataset_id: Optional[str] = None
     kwargs: Dict[str, Any] = field(default_factory=dict)
 
     """A class to represent a Band Excitation (BE) dataset.
@@ -102,6 +77,7 @@ class BE_Dataset:
         hysteresis_function (Callable, optional): The hysteresis function for processing. 
         loop_interpolated (bool, optional): Whether the loop data is interpolated. Defaults to False.
         resampled_data (Dict[str, Any]): Holds resampled data. Initialized post object creation.
+        dataset_id (str, optional): The DataFed ID of the dataset. Defaults to None.
         kwargs (Dict[str, Any], optional): Additional keyword arguments.
     """
 
@@ -112,6 +88,9 @@ class BE_Dataset:
         # Initialize resampled_bins if it's None
         if self.resampled_bins is None:
             self.resampled_bins = self.num_bins
+
+        # Instantiate DataFed object
+        self.instantiate_datafed()
 
         # Set additional attributes from kwargs
         for key, value in self.kwargs.items():
@@ -169,12 +148,10 @@ class BE_Dataset:
         self.SHO_LSQF_data = {}
 
         for dataset in self.raw_datasets:
-
             # data groups in file
             SHO_fits = find_groups_with_string(self.file, f"{dataset}-SHO_Fit_000")[0]
 
             with h5py.File(self.file, "r+") as h5_f:
-
                 # extract the name of the fit
                 name = SHO_fits.split("/")[-1]
 
@@ -191,6 +168,51 @@ class BE_Dataset:
                 self.SHO_LSQF_data[name] = data_.reshape(
                     self.num_pix, self.voltage_steps, 5
                 )[:, :, :-1]
+
+    ##### DATAFED ###
+
+    def instantiate_datafed(self):
+        """
+        Instantiate the DataFed object and upload the dataset to DataFed if applicable.
+
+        This method checks if the `datafed` attribute is provided and valid. If it starts with "d/",
+        it is assumed to be a DataFed ID. Otherwise, it attempts to create a DataFed object and upload
+        the dataset to DataFed, extracting metadata and handling the upload process.
+
+        Raises:
+            ValueError: If the `datafed` attribute is not a valid DataFed path or identifier.
+        """
+        if self.datafed is not None and self.datafed.startswith("d/"):
+            # If datafed is a DataFed ID, set it directly
+            self.dataset_id = self.datafed
+        elif self.datafed is not None:
+            # Instantiate the DataFed object if datafed is a path
+            self.datafed_obj = DataFed(self.datafed)
+
+            # Extract metadata from the HDF5 file structure
+            metadata = self.extract_h5_structure()
+
+            metadata.update(
+                {
+                    "checksum": calculate_h5file_checksum(self.file),
+                }
+            )
+
+            # Create a data record in DataFed with the extracted metadata
+            dc_resp = self.datafed_obj.data_record_create(metadata, self.file.split("/")[-1].split(".")[0])
+
+            # Upload the file to DataFed
+            self.datafed_obj.upload_file(dc_resp, self.file, wait=False)
+
+            # Set the DataFed ID from the response
+            self.dataset_id = dc_resp[0].data[0].id
+
+        elif self.datafed is None:
+            # If datafed is None, set dataset_id to None
+            self.dataset_id = None
+        else:
+            # Raise an error if datafed is not a valid path or identifier
+            raise ValueError("DataFed value is not a valid DataFed path or identifier")
 
     @static_state_decorator
     def SHO_Scaler(self, noise=0):
@@ -263,10 +285,8 @@ class BE_Dataset:
 
         # Open the HDF5 file in read+write mode
         with h5py.File(self.file, "r+") as h5_f:
-
             # Iterate through each noise level provided in the list
             for noise_level in noise_levels:
-
                 if verbose:
                     print(f"Adding noise level {noise_level}")
 
@@ -336,7 +356,7 @@ class BE_Dataset:
             axis = data.ndim - 1
 
         return np.take(data, 0, axis=axis) + 1j * np.take(data, 1, axis=axis)
-    
+
     @staticmethod
     def is_complex(data):
         """
@@ -359,7 +379,7 @@ class BE_Dataset:
             complex_ = complex_.any()
 
         return complex_
-    
+
     ##### SHO FITTERS #####
 
     def SHO_Fitter(
@@ -408,7 +428,6 @@ class BE_Dataset:
         """
 
         with h5py.File(self.file, "r+") as h5_file:
-
             # Record the start time for the fitting process
             start_time_lsqf = time.time()
 
@@ -531,7 +550,6 @@ class BE_Dataset:
         """
 
         with h5py.File(self.file, "r+") as h5_f:
-
             # Inspects the h5 file
             usid.hdf_utils.print_tree(h5_f)
 
@@ -555,6 +573,45 @@ class BE_Dataset:
 
             for key in h5_f.file["/Measurement_000"].attrs:
                 print("{} : {}".format(key, h5_f.file["/Measurement_000"].attrs[key]))
+
+    def extract_h5_structure(self) -> dict:
+        """
+        Extracts the structure, main dataset, ancillary datasets, and metadata from an HDF5 file
+        and returns it as a dictionary.
+
+        Returns:
+            dict: A dictionary containing the file structure, main dataset, ancillary datasets, and metadata.
+        """
+        file_structure = {}
+
+        # Open the HDF5 file
+        with h5py.File(self.file, "r") as h5_f:
+            # Structure of the HDF5 file
+            def get_structure(name, obj):
+                if isinstance(obj, h5py.Group):
+                    file_structure[name] = {"type": "Group", "items": list(obj.keys())}
+                elif isinstance(obj, h5py.Dataset):
+                    file_structure[name] = {
+                        "type": "Dataset",
+                        "shape": obj.shape,
+                        "dtype": str(obj.dtype),
+                    }
+
+            # Populate the file structure
+            h5_f.visititems(get_structure)
+            
+            # Metadata (attributes) from /Measurement_000 group
+            metadata = {}
+            for key, value in h5_f["/Measurement_000"].attrs.items():
+                # Convert possible numpy objects in attributes to native Python types
+                if isinstance(value, np.ndarray):
+                    metadata[key] = value.tolist()
+                else:
+                    metadata[key] = value
+
+            file_structure["metadata"] = metadata
+
+        return file_structure
 
     def get_tree(self):
         """
@@ -669,26 +726,28 @@ class BE_Dataset:
         """BE bandwidth in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"].attrs["BE_band_width_[Hz]"]
-        
+
     @property
     def dc_voltage(self):
         """Gets the DC voltage vector"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f[f"Raw_Data_SHO_Fit/Raw_Data-SHO_Fit_000/Spectroscopic_Values"][0, 1::2]
-        
+            return h5_f[f"Raw_Data_SHO_Fit/Raw_Data-SHO_Fit_000/Spectroscopic_Values"][
+                0, 1::2
+            ]
+
     @property
     def num_cycles(self):
         """
         Property to retrieve the number of cycles in the dataset.
 
         This method opens the HDF5 file associated with the object, reads the number of cycles
-        stored in the "Measurement_000" group, and returns the total number of cycles. 
+        stored in the "Measurement_000" group, and returns the total number of cycles.
         If the measurement was performed both 'in' and 'out-of-field', the number of cycles is doubled.
 
         Returns:
             int: The total number of cycles in the dataset.
         """
-        
+
         # Open the HDF5 file in read/write mode
         with h5py.File(self.file, "r+") as h5_f:
             # Retrieve the number of cycles from the attributes of "Measurement_000"
@@ -696,7 +755,10 @@ class BE_Dataset:
 
             # Check if the measurement was performed 'in and out-of-field'
             # If so, double the number of cycles to account for both directions
-            if h5_f["Measurement_000"].attrs["VS_measure_in_field_loops"] == 'in and out-of-field':
+            if (
+                h5_f["Measurement_000"].attrs["VS_measure_in_field_loops"]
+                == "in and out-of-field"
+            ):
                 cycles *= 2
 
             # Return the total number of cycles
@@ -808,7 +870,7 @@ class BE_Dataset:
         """Spectroscopic values"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"]["Channel_000"]["Spectroscopic_Values"][:]
-    
+
     @property
     def voltage_steps_per_cycle(self):
         """
@@ -840,7 +902,7 @@ class BE_Dataset:
                     int(self.voltage_steps / loop_number) :
                 ]
             )
-            
+
     def raw_data_resampled(self, pixel=None, voltage_step=None):
         """
         raw_data_resampled Resampled real part of the complex data resampled
@@ -854,7 +916,9 @@ class BE_Dataset:
         """
 
         if pixel is not None and voltage_step is not None:
-            return self.resampled_data[self.dataset][[pixel], :, :][:, [voltage_step], :]
+            return self.resampled_data[self.dataset][[pixel], :, :][
+                :, [voltage_step], :
+            ]
         else:
             with h5py.File(self.file, "r+") as h5_f:
                 return self.resampled_data[self.dataset][:]
@@ -917,7 +981,7 @@ class BE_Dataset:
                 "original data must be the same length as the frequency bins or the resampled frequency bins"
             )
         return x
-    
+
     def get_cycle(self, data, axis=0, **kwargs):
         """
         Extracts data for a specific cycle from the hysteresis loop.
@@ -931,10 +995,10 @@ class BE_Dataset:
         Returns:
             np.array: The data corresponding to the specific cycle set by `self.cycle`.
 
-        This function splits the data into multiple cycles based on the attribute `self.num_cycles` 
+        This function splits the data into multiple cycles based on the attribute `self.num_cycles`
         and then returns the data for the specific cycle indicated by `self.cycle`.
         """
-        
+
         # Split the input data along the specified axis into 'num_cycles' parts
         data = np.array_split(data, self.num_cycles, axis=axis, **kwargs)
 
@@ -943,14 +1007,14 @@ class BE_Dataset:
 
         # Return the data corresponding to the specified cycle
         return data
-    
+
     def get_measurement_cycle(self, data, cycle=None, axis=1):
         """
         Retrieves the data for a specific measurement cycle from band excitation data.
 
-        This function extracts a specific cycle from the provided band excitation data. 
-        If a cycle number is provided, it updates the current cycle. The data is first 
-        processed based on the voltage state, and then the corresponding cycle is extracted 
+        This function extracts a specific cycle from the provided band excitation data.
+        If a cycle number is provided, it updates the current cycle. The data is first
+        processed based on the voltage state, and then the corresponding cycle is extracted
         using the `get_cycle` method.
 
         Args:
@@ -976,8 +1040,6 @@ class BE_Dataset:
 
         # Extract and return the data corresponding to the specific cycle along the specified axis
         return self.get_cycle(data, axis=axis)
-
-
 
     def raw_data(self, pixel=None, voltage_step=None):
         """
@@ -1091,7 +1153,6 @@ class BE_Dataset:
 
         # Open the HDF5 file for reading and writing
         with h5py.File(self.file, "r+") as h5_f:
-
             # Flag to determine if data reshaping is needed
             shaper_ = True
 
@@ -1148,7 +1209,6 @@ class BE_Dataset:
 
             # Handle different raw data formats (complex, magnitude spectrum)
             if self.raw_format == "complex":
-                
                 # Apply scaling if enabled
                 if self.scaled:
                     data = self.raw_data_scaler.transform(data.reshape(-1, bins))
@@ -1212,7 +1272,6 @@ class BE_Dataset:
 
         # Open the HDF5 file containing the SHO LSQF data
         with h5py.File(self.file, "r+") as h5_f:
-
             # Copy the SHO LSQF data for the specific dataset
             dataset_ = self.SHO_LSQF_data[f"{self.dataset}-SHO_Fit_000"].copy()
 
@@ -1280,10 +1339,8 @@ class BE_Dataset:
 
         # If a neural network model is not provided, use the Least Squares Fitting (LSQF) method
         if model is None:
-
             # Open the HDF5 file for reading the SHO fitting data
             with h5py.File(self.file, "r+") as h5_f:
-
                 # If a state is provided, set the dataset attributes accordingly
                 if state is not None:
                     self.set_attributes(**state)
@@ -1341,24 +1398,24 @@ class BE_Dataset:
         else:
             # Return data as a 3D array (num_pix, num_voltage_steps, SHO_params)
             return data.reshape(self.num_pix, self.state_num_voltage_steps(), 4)
-    
+
     @static_state_decorator
     def get_raw_data_from_LSQF_SHO(self, model, index=None):
         """
         Extracts raw data from LSQF (Least Squares Fit) SHO (Simple Harmonic Oscillator) fits.
 
         Args:
-            model (dict): A dictionary that defines the state for extracting the SHO fit results. 
+            model (dict): A dictionary that defines the state for extracting the SHO fit results.
                         The dictionary typically contains information about the fitter and its parameters.
-            index (int, optional): The index of the specific data point to extract. Defaults to None, 
+            index (int, optional): The index of the specific data point to extract. Defaults to None,
                                 meaning all data will be returned.
 
         Returns:
-            tuple: 
+            tuple:
                 pred_data (numpy.ndarray): The predicted raw spectra data reconstructed from the SHO fits.
                 params (numpy.ndarray): The SHO parameters used for reconstruction.
 
-        This method extracts the unscaled SHO fit parameters, reconstructs the raw spectra, and optionally 
+        This method extracts the unscaled SHO fit parameters, reconstructs the raw spectra, and optionally
         returns the result for a specific index.
         """
 
@@ -1394,11 +1451,12 @@ class BE_Dataset:
         # If an index is provided, extract only the specified data point and corresponding parameters.
         if index is not None:
             pred_data = pred_data[[index]]  # Select the data at the given index.
-            params = params_shifted[[index]]  # Select the shifted parameters at the given index.
+            params = params_shifted[
+                [index]
+            ]  # Select the shifted parameters at the given index.
 
         # Return the reconstructed spectra (pred_data) and the SHO parameters.
         return pred_data, params
-
 
     @property
     def extraction_state(self):
@@ -1667,13 +1725,10 @@ class BE_Dataset:
 
         # Open the HDF5 file for reading and writing
         with h5py.File(self.file, "r+") as h5_f:
-
             # Check if resampling is needed by comparing the number of bins
             if self.resampled_bins != self.num_bins:
-
                 # Loop through each dataset to perform resampling
                 for data in self.raw_datasets:
-
                     # Resample the data using the provided resampler function
                     resampled_ = self.resampler(
                         self.raw_data_reshaped[data].reshape(-1, self.num_bins), axis=2
@@ -1757,21 +1812,21 @@ class BE_Dataset:
         new_y = np.swapaxes(new_y, axis, 0)
 
         return new_y
-    
+
     def to_nn(self, data):
         """
         Converts band excitation data into a form suitable for training a neural network.
 
-        This utility function takes in band excitation data, typically in the form of real and 
-        imaginary components, and processes it into a tensor format that can be used as input 
+        This utility function takes in band excitation data, typically in the form of real and
+        imaginary components, and processes it into a tensor format that can be used as input
         for neural networks. If the data is already a PyTorch tensor, it returns the data as is.
 
         Args:
-            data (tuple or torch.Tensor): Band excitation data, typically as a tuple of 
+            data (tuple or torch.Tensor): Band excitation data, typically as a tuple of
                                         (real, imag) or directly as a PyTorch tensor.
 
         Returns:
-            torch.Tensor: A tensor with the real and imaginary components stacked along 
+            torch.Tensor: A tensor with the real and imaginary components stacked along
                         a new dimension, ready for neural network training.
         """
 
@@ -1800,38 +1855,38 @@ class BE_Dataset:
         x_data = torch.tensor(x_data, dtype=torch.float32)
 
         return x_data
-    
+
     @staticmethod
     def to_real_imag(data):
         """
         Extracts the real and imaginary components from band excitation (BE) data.
 
-        This function takes in BE data, which may be in either a NumPy array or a PyTorch 
-        tensor format, converts it to its complex form, and then separates the real and 
+        This function takes in BE data, which may be in either a NumPy array or a PyTorch
+        tensor format, converts it to its complex form, and then separates the real and
         imaginary parts.
 
         Args:
             data (np.array or torch.Tensor): BE data, either as a NumPy array or a PyTorch tensor.
 
         Returns:
-            list: A list containing two NumPy arrays: the first array represents the real 
-                components, and the second array represents the imaginary components 
+            list: A list containing two NumPy arrays: the first array represents the real
+                components, and the second array represents the imaginary components
                 of the BE response.
         """
-        
+
         # Convert the data to its complex form using the to_complex method from the BE_Dataset class.
         data = BE_Dataset.to_complex(data)
 
         # Extract and return the real and imaginary components as a list of NumPy arrays.
         return [np.real(data), np.imag(data)]
-    
+
     @staticmethod
     def to_magnitude(data):
         """
-        Converts a complex number representing the photodiode response of the cantilever 
+        Converts a complex number representing the photodiode response of the cantilever
         into its amplitude (magnitude) and phase.
 
-        This function takes the complex photodiode response and calculates both the magnitude 
+        This function takes the complex photodiode response and calculates both the magnitude
         (amplitude) and phase using NumPy's `abs` and `angle` functions, respectively.
 
         Args:
@@ -1847,14 +1902,13 @@ class BE_Dataset:
             - `np.abs(data)` for the magnitude.
             - `np.angle(data)` for the phase.
         """
-        
+
         # Convert the input data to its complex representation
         data = BE_Dataset.to_complex(data)
-        
+
         # Calculate and return the magnitude (absolute value) and phase (angle) of the complex data
         return [np.abs(data), np.angle(data)]
 
-    
     ##### NOISE GETTER and SETTER #####
 
     @property
@@ -1882,10 +1936,12 @@ class BE_Dataset:
             self.dataset = "Raw_Data"
         else:
             self.dataset = f"Noisy_Data_{noise}"
-            
+
     ##### Machine Learning Functions #####
-    
-    def test_train_split_(self, test_size=0.2, random_state=42, resampled=None, scaled=True, shuffle=True):
+
+    def test_train_split_(
+        self, test_size=0.2, random_state=42, resampled=None, scaled=True, shuffle=True
+    ):
         """
         Utility function that performs the train-test split on the neural network data.
 
@@ -1909,18 +1965,18 @@ class BE_Dataset:
 
         # Perform the train-test split using the specified test size, random state, and shuffle options
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-            x_data, y_data,
+            x_data,
+            y_data,
             test_size=test_size,
             random_state=random_state,
-            shuffle=shuffle
+            shuffle=shuffle,
         )
 
-        
         self.extraction_state
 
         # Return the split datasets
         return self.X_train, self.X_test, self.y_train, self.y_test
-    
+
     @static_state_decorator
     def NN_data(self, resampled=None, scaled=True):
         """
@@ -1960,8 +2016,6 @@ class BE_Dataset:
 
         # Return the neural network input data and corresponding fit parameters
         return x_data, y_data
-
-
 
     # def loop_fit_preprocessing(self):
     #     """
@@ -2250,19 +2304,6 @@ class BE_Dataset:
     #     data = self.LSQF_hysteresis_params().reshape(-1, 9)
 
     #     self.loop_param_scaler.fit(data)
-
-   
-
-
-
-    
-
-
-
-
-    
-
-
 
     # def get_loop_path(self):
     #     """

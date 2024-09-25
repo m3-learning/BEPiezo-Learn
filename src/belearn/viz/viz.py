@@ -46,7 +46,9 @@ from m3util.viz.layout import (
     FigDimConverter,
     subfigures,
     get_axis_pos_inches,
+    set_sci_notation_label,
 )
+
 from m3util.util.IO import make_folder
 from m3util.viz.movies import make_movie
 import pandas as pd
@@ -69,8 +71,8 @@ color_palette = {
     "LSQF_P": "#444e86",
     "NN_A": "#955196",
     "NN_P": "#dd5182",
-    "other": "#ff6e54",
-    "other_2": "#ffa600",
+    "real": "#ff6e54",
+    "imag": "#ffa600",
 }
 
 
@@ -274,12 +276,30 @@ class Viz:
         data, x = self.dataset.raw_spectra(pixel, voltage_step, frequency=True)
 
         # Plot real and imaginary components for the true dataset
-        ax1.plot(x, data[0].flatten(), "k", label=self.dataset.label + " Real")
+        ax1.plot(
+            x,
+            data[0].flatten(),
+            color=color_palette["real"],
+            marker="o",
+            markeredgecolor="k",
+            markeredgewidth=0.02,
+            markersize=1,
+            label=self.dataset.label + " Real",
+        )
         ax1.set_xlabel("Frequency (Hz)")
         ax1.set_ylabel("Real (Arb. U.)")
         ax2 = ax1.twinx()
         ax2.set_ylabel("Imag (Arb. U.)")
-        ax2.plot(x, data[1].flatten(), "g", label=self.dataset.label + " Imag")
+        ax2.plot(
+            x,
+            data[1].flatten(),
+            color=color_palette["imag"],
+            marker="s",
+            markeredgecolor="k",
+            markeredgewidth=0.02,
+            markersize=1,
+            label=self.dataset.label + " Imag",
+        )
 
         # If a predicted dataset is provided, plot its real and imaginary components
         if predict is not None:
@@ -372,36 +392,12 @@ class Viz:
         axs[0].set_ylabel("Amplitude (Arb. U.)")
         ax1.set_ylabel("Phase (rad)")
 
-        # # Reset dataset state to complex format
-        # self.dataset.raw_format = "complex"
-
-        # # Get the complex raw spectral data for the selected pixel and voltage step
-        # data, x = self.dataset.raw_spectra(pixel, voltage_step, frequency=True)
-
-        # # Plot real and imaginary components for the true dataset
-        # axs[1].plot(x, data[0].flatten(), "k", label=self.dataset.label + " Real")
-        # axs[1].set_xlabel("Frequency (Hz)")
-        # axs[1].set_ylabel("Real (Arb. U.)")
-        # ax2 = axs[1].twinx()
-        # ax2.set_ylabel("Imag (Arb. U.)")
-        # ax2.plot(x, data[1].flatten(), "g", label=self.dataset.label + " Imag")
-
-        # # If a predicted dataset is provided, plot its real and imaginary components
-        # if predict is not None:
-        #     self.set_attributes(**predict)
-        #     data, x = self.dataset.raw_spectra(
-        #         pixel, voltage_step, frequency=True, **kwargs
-        #     )
-        #     axs[1].plot(x, data[0].flatten(), "ko", label=self.dataset.label + " Real")
-        #     ax2.plot(x, data[1].flatten(), "gs", label=self.dataset.label + " Imag")
-        #     self.set_attributes(**true)
-
-        ax1_imag, ax2_imag = self.plot_real_imainary(
+        ax_real, ax_imag = self.plot_real_imainary(
             axs[1], true, predict, pixel, voltage_step, **kwargs
         )
 
         # Adjust the format of the tick labels and box aspect for all axes
-        axes = [axs[0], ax1_imag, ax1, ax2_imag]
+        axes = [axs[0], ax_real, ax1, ax_imag]
         for ax in axes:
             ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
             ax.set_box_aspect(1)

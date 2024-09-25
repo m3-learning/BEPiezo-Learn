@@ -35,7 +35,18 @@ import os
 
 import torch
 
-from m3util.viz.layout import layout_fig, add_box, inset_connector, add_text_to_figure, labelfigs, scalebar, imagemap, FigDimConverter, subfigures, get_axis_pos_inches
+from m3util.viz.layout import (
+    layout_fig,
+    add_box,
+    inset_connector,
+    add_text_to_figure,
+    labelfigs,
+    scalebar,
+    imagemap,
+    FigDimConverter,
+    subfigures,
+    get_axis_pos_inches,
+)
 from m3util.util.IO import make_folder
 from m3util.viz.movies import make_movie
 import pandas as pd
@@ -67,7 +78,7 @@ def get_lowest_loss_for_noise_level(path, desired_noise_level):
     """
     Retrieves the filename of the checkpoint file with the lowest training loss for a specified noise level.
 
-    This function searches through checkpoint files in the specified directory, extracts the noise level and loss value 
+    This function searches through checkpoint files in the specified directory, extracts the noise level and loss value
     from the filenames, and returns the filename with the lowest loss for the given noise level.
 
     Args:
@@ -75,7 +86,7 @@ def get_lowest_loss_for_noise_level(path, desired_noise_level):
         desired_noise_level (int or str): The noise level to search for. Can be provided as an integer or string.
 
     Returns:
-        str: The filename with the lowest loss for the desired noise level. 
+        str: The filename with the lowest loss for the desired noise level.
              Returns None if no files match the desired noise level.
     """
 
@@ -89,13 +100,10 @@ def get_lowest_loss_for_noise_level(path, desired_noise_level):
 
     # Iterate over all files in the directory
     for root, dirs, files in os.walk(path):
-
         # Loop through each file found in the directory
         for file in files:
-
             # Process only checkpoint files with the ".pth" extension
             if file.endswith(".pth"):
-
                 # Extract the noise value from the filename
                 noise_value = file.split("_noise_")[1].split("_")[0]
 
@@ -113,7 +121,6 @@ def get_lowest_loss_for_noise_level(path, desired_noise_level):
 
     # Check if the desired noise level was found and return the corresponding filename
     if desired_noise_level in lowest_losses:
-
         # Retrieve the lowest loss and associated filename for the desired noise level
         loss, file_name = lowest_losses[desired_noise_level]
 
@@ -122,7 +129,6 @@ def get_lowest_loss_for_noise_level(path, desired_noise_level):
     else:
         # Return None if no files match the desired noise level
         return None
-
 
 
 @dataclass
@@ -198,11 +204,11 @@ class Viz:
             return out
 
         return wrapper
-    
+
     def static_scale_decorator(func):
         """
-        Decorator that preserves the state of the `SHO_ranges` and the dataset attributes 
-        before the decorated function is called and restores them afterward. This ensures 
+        Decorator that preserves the state of the `SHO_ranges` and the dataset attributes
+        before the decorated function is called and restores them afterward. This ensures
         that the function does not alter the state of the object it operates on.
 
         Args:
@@ -214,7 +220,7 @@ class Viz:
 
         def wrapper(self, SHO_data, *args, **kwargs):
             """
-            Wrapper function that preserves the current `SHO_ranges` and dataset state, 
+            Wrapper function that preserves the current `SHO_ranges` and dataset state,
             calls the original function, and then restores the preserved state.
 
             Args:
@@ -231,11 +237,13 @@ class Viz:
             current_SHO_ranges = self.SHO_ranges
 
             # Preserve the current state of the dataset (assuming get_state returns a dictionary)
-            current_dataset_state = self.dataset.get_state  # Assume this returns a dict of the dataset state
+            current_dataset_state = (
+                self.dataset.get_state
+            )  # Assume this returns a dict of the dataset state
 
             # Debugging output to verify the preserved state
-            print('current_SHO_ranges:', current_SHO_ranges)
-            print('current_dataset_state:', current_dataset_state)
+            print("current_SHO_ranges:", current_SHO_ranges)
+            print("current_dataset_state:", current_dataset_state)
 
             # Call the original function with the given arguments
             out = func(self, SHO_data, *args, **kwargs)
@@ -250,8 +258,40 @@ class Viz:
 
         return wrapper
 
-
     ##### GRAPHS #####
+
+    @static_dataset_decorator
+    def plot_real_imainary(
+        self, ax1, true, predict, pixel=None, voltage_step=None, **kwargs
+    ):
+        # Set the attributes for the true dataset
+        self.set_attributes(**true)
+
+        # Reset dataset state to complex format
+        self.dataset.raw_format = "complex"
+
+        # Get the complex raw spectral data for the selected pixel and voltage step
+        data, x = self.dataset.raw_spectra(pixel, voltage_step, frequency=True)
+
+        # Plot real and imaginary components for the true dataset
+        ax1.plot(x, data[0].flatten(), "k", label=self.dataset.label + " Real")
+        ax1.set_xlabel("Frequency (Hz)")
+        ax1.set_ylabel("Real (Arb. U.)")
+        ax2 = ax1.twinx()
+        ax2.set_ylabel("Imag (Arb. U.)")
+        ax2.plot(x, data[1].flatten(), "g", label=self.dataset.label + " Imag")
+
+        # If a predicted dataset is provided, plot its real and imaginary components
+        if predict is not None:
+            self.set_attributes(**predict)
+            data, x = self.dataset.raw_spectra(
+                pixel, voltage_step, frequency=True, **kwargs
+            )
+            ax1.plot(x, data[0].flatten(), "ko", label=self.dataset.label + " Real")
+            ax2.plot(x, data[1].flatten(), "gs", label=self.dataset.label + " Imag")
+            self.set_attributes(**true)
+
+        return ax1, ax2
 
     @static_dataset_decorator
     def raw_data_comparison(
@@ -332,32 +372,36 @@ class Viz:
         axs[0].set_ylabel("Amplitude (Arb. U.)")
         ax1.set_ylabel("Phase (rad)")
 
-        # Reset dataset state to complex format
-        self.dataset.raw_format = "complex"
+        # # Reset dataset state to complex format
+        # self.dataset.raw_format = "complex"
 
-        # Get the complex raw spectral data for the selected pixel and voltage step
-        data, x = self.dataset.raw_spectra(pixel, voltage_step, frequency=True)
+        # # Get the complex raw spectral data for the selected pixel and voltage step
+        # data, x = self.dataset.raw_spectra(pixel, voltage_step, frequency=True)
 
-        # Plot real and imaginary components for the true dataset
-        axs[1].plot(x, data[0].flatten(), "k", label=self.dataset.label + " Real")
-        axs[1].set_xlabel("Frequency (Hz)")
-        axs[1].set_ylabel("Real (Arb. U.)")
-        ax2 = axs[1].twinx()
-        ax2.set_ylabel("Imag (Arb. U.)")
-        ax2.plot(x, data[1].flatten(), "g", label=self.dataset.label + " Imag")
+        # # Plot real and imaginary components for the true dataset
+        # axs[1].plot(x, data[0].flatten(), "k", label=self.dataset.label + " Real")
+        # axs[1].set_xlabel("Frequency (Hz)")
+        # axs[1].set_ylabel("Real (Arb. U.)")
+        # ax2 = axs[1].twinx()
+        # ax2.set_ylabel("Imag (Arb. U.)")
+        # ax2.plot(x, data[1].flatten(), "g", label=self.dataset.label + " Imag")
 
-        # If a predicted dataset is provided, plot its real and imaginary components
-        if predict is not None:
-            self.set_attributes(**predict)
-            data, x = self.dataset.raw_spectra(
-                pixel, voltage_step, frequency=True, **kwargs
-            )
-            axs[1].plot(x, data[0].flatten(), "ko", label=self.dataset.label + " Real")
-            ax2.plot(x, data[1].flatten(), "gs", label=self.dataset.label + " Imag")
-            self.set_attributes(**true)
+        # # If a predicted dataset is provided, plot its real and imaginary components
+        # if predict is not None:
+        #     self.set_attributes(**predict)
+        #     data, x = self.dataset.raw_spectra(
+        #         pixel, voltage_step, frequency=True, **kwargs
+        #     )
+        #     axs[1].plot(x, data[0].flatten(), "ko", label=self.dataset.label + " Real")
+        #     ax2.plot(x, data[1].flatten(), "gs", label=self.dataset.label + " Imag")
+        #     self.set_attributes(**true)
+
+        ax1_imag, ax2_imag = self.plot_real_imainary(
+            axs[1], true, predict, pixel, voltage_step, **kwargs
+        )
 
         # Adjust the format of the tick labels and box aspect for all axes
-        axes = [axs[0], axs[1], ax1, ax2]
+        axes = [axs[0], ax1_imag, ax1, ax2_imag]
         for ax in axes:
             ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
             ax.set_box_aspect(1)
@@ -391,8 +435,8 @@ class Viz:
         filename="Figure_1_random_cantilever_resonance_results",
     ):
         """
-        Plots the raw data and the Band Excitation (BE) waveform for a randomly selected 
-        pixel and voltage step from the provided dataset. 
+        Plots the raw data and the Band Excitation (BE) waveform for a randomly selected
+        pixel and voltage step from the provided dataset.
 
         This function performs the following steps:
         1. Selects a random pixel and voltage step from the dataset.
@@ -400,7 +444,7 @@ class Viz:
         3. Plots the resonance graph using the Fourier transform of the BE waveform.
         4. Plots the hysteresis waveform with a zoomed-in inset.
         5. Changes the dataset state to get the magnitude spectrum and plots it.
-        6. Retrieves the raw spectra in both magnitude and complex format and plots the 
+        6. Retrieves the raw spectra in both magnitude and complex format and plots the
         real and imaginary components.
         7. Saves the figure if a printer object is available.
 
@@ -412,7 +456,7 @@ class Viz:
             inset_pos (list, optional): Position of the inset axes in the plot. Defaults to [0.5, 0.65, 0.48, 0.33].
             filename (str, optional): Name to save the file. Defaults to "Figure_1_random_cantilever_resonance_results".
         """
-        
+
         # Select a random pixel and voltage step from the dataset to plot
         pixel = np.random.randint(0, dataset.num_pix)
         voltagestep = np.random.randint(0, dataset.voltage_steps)
@@ -424,21 +468,21 @@ class Viz:
         be_voltagesteps = len(dataset.be_waveform) / dataset.be_repeats
 
         # Plot the BE waveform
-        ax[0].plot(dataset.be_waveform[:int(be_voltagesteps)])
+        ax[0].plot(dataset.be_waveform[: int(be_voltagesteps)])
         ax[0].set(xlabel="Time (sec)", ylabel="Voltage (V)")
 
         # Perform Fourier Transform on the BE waveform to get the resonance graph
-        resonance_graph = np.fft.fft(dataset.be_waveform[:int(be_voltagesteps)])
+        resonance_graph = np.fft.fft(dataset.be_waveform[: int(be_voltagesteps)])
         fftfreq = fftpack.fftfreq(int(be_voltagesteps)) * dataset.sampling_rate
 
         # Plot the resonance graph
         ax[1].plot(
-            fftfreq[:int(be_voltagesteps) // 2],
-            np.abs(resonance_graph[:int(be_voltagesteps) // 2]),
+            fftfreq[: int(be_voltagesteps) // 2],
+            np.abs(resonance_graph[: int(be_voltagesteps) // 2]),
         )
         ax[1].axvline(
             x=dataset.be_center_frequency,
-            ymax=np.max(resonance_graph[:int(be_voltagesteps) // 2]),
+            ymax=np.max(resonance_graph[: int(be_voltagesteps) // 2]),
             linestyle="--",
             color="r",
         )
@@ -446,8 +490,12 @@ class Viz:
 
         # Set the x-axis limits based on the BE center frequency and bandwidth
         ax[1].set_xlim(
-            dataset.be_center_frequency - dataset.be_bandwidth - dataset.be_bandwidth * 0.25,
-            dataset.be_center_frequency + dataset.be_bandwidth + dataset.be_bandwidth * 0.25,
+            dataset.be_center_frequency
+            - dataset.be_bandwidth
+            - dataset.be_bandwidth * 0.25,
+            dataset.be_center_frequency
+            + dataset.be_bandwidth
+            + dataset.be_bandwidth * 0.25,
         )
 
         # Plot the hysteresis waveform and add a zoomed-in inset
@@ -497,7 +545,9 @@ class Viz:
             dataset.frequency_bin,
             data_[0].flatten(),
         )
-        ax[3].set(xlabel="Frequency (Hz)", ylabel="Amplitude (Arb. U.)", facecolor="none")
+        ax[3].set(
+            xlabel="Frequency (Hz)", ylabel="Amplitude (Arb. U.)", facecolor="none"
+        )
 
         # Plot the phase spectrum on the same plot with a secondary y-axis
         ax2 = ax[3].twinx()
@@ -523,7 +573,7 @@ class Viz:
         # Save the figure if a Printer object is available
         if self.Printer is not None:
             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
-            
+
     @static_scale_decorator
     def SHO_hist(self, SHO_data, filename=None, scaled=False):
         """Plots the SHO hysteresis parameters
@@ -535,7 +585,7 @@ class Viz:
 
         # if the scale is False will not use the scale in the viz
         if self.dataset.scaled or scaled:
-            print('dataset is scaled')
+            print("dataset is scaled")
             self.SHO_ranges = None
 
         # if the SHO data is not a list it will make it a list
@@ -548,7 +598,7 @@ class Viz:
         )
 
         for k, SHO_data_ in enumerate(SHO_data):
-            axs_ = axs[k * 4: (k + 1) * 4]
+            axs_ = axs[k * 4 : (k + 1) * 4]
 
             SHO_data_ = SHO_data_.reshape(-1, 4)
 
@@ -581,14 +631,14 @@ class Viz:
         Plots the SHO loop fit results for a randomly selected pixel or provided data.
 
         Args:
-            data (np.array, optional): The dataset to use for plotting the SHO loop fits. 
+            data (np.array, optional): The dataset to use for plotting the SHO loop fits.
                                     If not provided, data from a randomly selected pixel is used. Defaults to None.
-            filename (str, optional): The filename for saving the plotted figure. 
+            filename (str, optional): The filename for saving the plotted figure.
                                     Defaults to "Figure_2_random_SHO_fit_results".
 
-        This function selects a pixel either randomly or based on the provided data and 
-        plots the SHO (Simple Harmonic Oscillator) loop fit results across various 
-        parameters (defined in self.SHO_labels). The resulting plot is saved using 
+        This function selects a pixel either randomly or based on the provided data and
+        plots the SHO (Simple Harmonic Oscillator) loop fit results across various
+        parameters (defined in self.SHO_labels). The resulting plot is saved using
         the specified filename if a Printer object is available.
         """
 
@@ -612,13 +662,13 @@ class Viz:
         # If a Printer object is defined, save the figure with the specified filename and style
         if self.Printer is not None:
             self.Printer.savefig(fig, filename, label_figs=axs, style="b")
-            
+
     @static_dataset_decorator
     def fit_tester(self, true, predict, pixel=None, voltage_step=None, **kwargs):
         """
         Tests the fit of a model by comparing predicted data against true data for a specific pixel and voltage step.
 
-        If a pixel is not provided, a random pixel will be selected. The method will also determine the appropriate 
+        If a pixel is not provided, a random pixel will be selected. The method will also determine the appropriate
         voltage step if one is not provided. The comparison is visualized using a raw data comparison plot.
 
         Args:
@@ -701,15 +751,14 @@ class Viz:
             self.dataset.extraction_state
 
         if legend:
-            fig.legend(bbox_to_anchor=(1.0, 1),
-                       loc="upper right", borderaxespad=0.1)
+            fig.legend(bbox_to_anchor=(1.0, 1), loc="upper right", borderaxespad=0.1)
 
         # prints the figure
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename, style="b")
-    
+
     ##### Analytics #####
-    
+
     @static_dataset_decorator
     def bmw_nn(
         self,
@@ -722,13 +771,12 @@ class Viz:
         size=(1.25, 1.25),
         filename=None,
         compare_state=None,
-        fit_type='SHO',
+        fit_type="SHO",
         **kwargs,
     ):
-        
-        #TODO: I had to remove this for fitting --
+        # TODO: I had to remove this for fitting --
         # true_state = torch.atleast_3d(torch.tensor(true_state.reshape(-1,96)))
-        
+
         d1, d2, x1, x2, label, index1, mse1 = None, None, None, None, None, None, None
 
         if fit_type == "SHO":
@@ -858,7 +906,7 @@ class Viz:
         if "returns" in kwargs.keys():
             if kwargs["returns"] == True:
                 return d1, d2, index1, mse1
-    
+
     @static_dataset_decorator
     def SHO_switching_maps(
         self,
@@ -889,7 +937,7 @@ class Viz:
         Args:
             SHO_ (torch.Tensor or np.ndarray): SHO data containing amplitude, resonance frequency, quality factor, and phase.
             colorbars (bool): If True, adds colorbars to the plots. Defaults to True.
-            clims (list): List of tuples representing color limits for each type of data (Amplitude, Resonance Frequency, 
+            clims (list): List of tuples representing color limits for each type of data (Amplitude, Resonance Frequency,
                         Quality Factor, Phase). Defaults are provided.
             measurement_state (str): State of the measurement to get the data ('on' or 'off'). Defaults to "off".
             cycle (int): The measurement cycle number to extract the data from. Defaults to 2.
@@ -906,7 +954,7 @@ class Viz:
         Returns:
             fig (matplotlib.figure.Figure): The generated figure containing the switching maps.
         """
-        
+
         # Set the measurement state and cycle in the dataset
         self.dataset.measurement_state = measurement_state
         self.dataset.cycle = cycle
@@ -919,7 +967,10 @@ class Viz:
 
         # Calculate the size of the individual image embeddings in the figure
         embedding_image_size = (
-            fig_width - (inter_gap * (cols - 1)) - intra_gap * 3 * cols - cbar_space * colorbars
+            fig_width
+            - (inter_gap * (cols - 1))
+            - intra_gap * 3 * cols
+            - cbar_space * colorbars
         ) / (cols * 4)
 
         # Calculate the total height of the figure
@@ -1003,7 +1054,7 @@ class Viz:
             ax[0].text(ind, voltage[ind] - vshift, str(i + 1), color="k", fontsize=12)
 
         # Data names for each of the four properties
-        names = ["A", "\u03C9", "Q", "\u03C6"]
+        names = ["A", "\u03c9", "Q", "\u03c6"]
 
         # Plot amplitude, resonant frequency, quality factor, and phase data
         for i, ind in enumerate(inds):
@@ -1040,7 +1091,9 @@ class Viz:
         # Add colorbars to the plots if enabled
         if colorbars:
             bar_ax = []
-            voltage_ax_pos = fig_scalar.to_inches(np.array(ax[0].get_position()).flatten())
+            voltage_ax_pos = fig_scalar.to_inches(
+                np.array(ax[0].get_position()).flatten()
+            )
 
             for i in range(4):
                 # Calculate position and size of colorbars
@@ -1064,7 +1117,6 @@ class Viz:
                 fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
             )
 
-        
     @static_dataset_decorator
     def SHO_Fit_comparison(
         self,
@@ -1081,8 +1133,8 @@ class Viz:
         """
         Generates a comparison plot of SHO (Simple Harmonic Oscillator) fit results.
 
-        This function creates subplots comparing multiple fits (e.g., LSQF, NN) for amplitude and phase of 
-        cantilever responses. It supports comparing multiple fit models, visualizing the predicted and true 
+        This function creates subplots comparing multiple fits (e.g., LSQF, NN) for amplitude and phase of
+        cantilever responses. It supports comparing multiple fit models, visualizing the predicted and true
         responses, and optionally displaying error metrics like Mean Squared Error (MSE) for each fit.
 
         Args:
@@ -1132,7 +1184,9 @@ class Viz:
             d1, d2, x1, x2, label, index1, mse1, params = data
 
             # Loop through datasets for comparison (true vs. predicted data)
-            for bmw, (true, prediction, error, SHO, index1) in enumerate(zip(d1, d2, mse1, params, index1)):
+            for bmw, (true, prediction, error, SHO, index1) in enumerate(
+                zip(d1, d2, mse1, params, index1)
+            ):
                 # Initialize dictionaries for errors and SHO parameters
                 errors = {}
                 SHOs = {}
@@ -1191,7 +1245,9 @@ class Viz:
                             color = "LSQF"
 
                         # Store errors and SHO parameters for the comparison model
-                        errors[color] = self.get_mse_index(index1, model_comparison[step])
+                        errors[color] = self.get_mse_index(
+                            index1, model_comparison[step]
+                        )
                         SHOs[color] = np.array(params).squeeze()
 
                         # Plot the comparison data
@@ -1210,7 +1266,7 @@ class Viz:
 
                         # Display detailed results if requested
                         if display_results == "all":
-                            error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}\n AMP - LSQF: {SHOs['LSQF'][0]:0.2e} NN: {SHOs['NN'][0]:0.2e}\n\u03C9 - LSQF: {SHOs['LSQF'][1]/1000:0.1f} NN: {SHOs['NN'][1]/1000:0.1f} Hz\nQ - LSQF: {SHOs['LSQF'][2]:0.1f} NN: {SHOs['NN'][2]:0.1f}\n\u03C6 - LSQF: {SHOs['LSQF'][3]:0.2f} NN: {SHOs['NN'][3]:0.1f} rad"
+                            error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}\n AMP - LSQF: {SHOs['LSQF'][0]:0.2e} NN: {SHOs['NN'][0]:0.2e}\n\u03c9 - LSQF: {SHOs['LSQF'][1]/1000:0.1f} NN: {SHOs['NN'][1]/1000:0.1f} Hz\nQ - LSQF: {SHOs['LSQF'][2]:0.1f} NN: {SHOs['NN'][2]:0.1f}\n\u03c6 - LSQF: {SHOs['LSQF'][3]:0.2f} NN: {SHOs['NN'][3]:0.1f} rad"
                         elif display_results == "MSE":
                             error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}"
 
@@ -1236,7 +1292,10 @@ class Viz:
 
                 # Set y-axis labels based on output state
                 if out_state is not None:
-                    if "raw_format" in out_state.keys() and out_state["raw_format"] == "magnitude spectrum":
+                    if (
+                        "raw_format" in out_state.keys()
+                        and out_state["raw_format"] == "magnitude spectrum"
+                    ):
                         ax_.set_ylabel("Amplitude (Arb. U.)")
                         ax1.set_ylabel("Phase (rad)")
                     else:
@@ -1256,7 +1315,7 @@ class Viz:
     @static_dataset_decorator
     def violin_plot_comparison_SHO(self, state, model, X_data, filename, label="NN"):
         """
-        Generates a violin plot to compare true parameter values obtained from the SHO LSQF fit 
+        Generates a violin plot to compare true parameter values obtained from the SHO LSQF fit
         and predicted parameter values from a machine learning model.
 
         Parameters:
@@ -1264,7 +1323,7 @@ class Viz:
         state : dict
             A dictionary containing the necessary state attributes to configure the object.
         model : object
-            A machine learning model that has a `predict` method to generate parameter predictions 
+            A machine learning model that has a `predict` method to generate parameter predictions
             from input data.
         X_data : array-like
             Input data for the model to generate predictions.
@@ -1307,15 +1366,24 @@ class Viz:
         # Define the datasets and labels for the violin plot
         names = [true, scaled_param]
         names_str = ["LSQF", label]  # Labels for true and predicted datasets
-        labels = ["A", "\u03C9", "Q", "\u03C6"]  # Labels for parameters: Amplitude (A), Resonance (ω), Q-Factor (Q), Phase (φ)
+        labels = [
+            "A",
+            "\u03c9",
+            "Q",
+            "\u03c6",
+        ]  # Labels for parameters: Amplitude (A), Resonance (ω), Q-Factor (Q), Phase (φ)
 
         # Append parameter, value, and dataset information into the dataframe
         for j, name in enumerate(names):
             for i, label in enumerate(labels):
                 dict_ = {
                     "value": name[:, i],  # Parameter values (true or predicted)
-                    "parameter": np.repeat(label, name.shape[0]),  # Parameter type (A, ω, Q, φ)
-                    "dataset": np.repeat(names_str[j], name.shape[0]),  # Dataset label (LSQF or NN)
+                    "parameter": np.repeat(
+                        label, name.shape[0]
+                    ),  # Parameter type (A, ω, Q, φ)
+                    "dataset": np.repeat(
+                        names_str[j], name.shape[0]
+                    ),  # Dataset label (LSQF or NN)
                 }
                 df = pd.concat((df, pd.DataFrame(dict_)))
 
@@ -1323,10 +1391,16 @@ class Viz:
         fig, ax = plt.subplots(figsize=(2, 2))
 
         df = df.reset_index(drop=False)
-         
+
         # Generate the violin plot, comparing true and predicted parameter distributions
         sns.violinplot(
-            data=df, x="parameter", y="value", hue="dataset", split=True, ax=ax, linewidth=.1,
+            data=df,
+            x="parameter",
+            y="value",
+            hue="dataset",
+            split=True,
+            ax=ax,
+            linewidth=0.1,
         )
 
         # Customize the appearance of the plot
@@ -1341,10 +1415,10 @@ class Viz:
         # Save the plot if a filename and Printer are provided
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename)
-            
+
     def violin_plot_comparison_hysteresis(self, model, X_data, filename):
         """
-        Generates a violin plot comparing hysteresis parameters from a neural network model 
+        Generates a violin plot comparing hysteresis parameters from a neural network model
         prediction and the least squares fitting (LSQF) results.
 
         Args:
@@ -1358,7 +1432,7 @@ class Viz:
         Returns:
             None
         """
-        
+
         # Initialize an empty DataFrame to store the results
         df = pd.DataFrame()
 
@@ -1393,8 +1467,12 @@ class Viz:
             for i, label in enumerate(labels):
                 dict_ = {
                     "value": name[:, i],  # Scaled parameter values
-                    "parameter": np.repeat(label, name.shape[0]),  # Label for the parameter
-                    "dataset": np.repeat(names_str[j], name.shape[0]),  # Label for dataset type (NN or LSQF)
+                    "parameter": np.repeat(
+                        label, name.shape[0]
+                    ),  # Label for the parameter
+                    "dataset": np.repeat(
+                        names_str[j], name.shape[0]
+                    ),  # Label for dataset type (NN or LSQF)
                 }
                 df = pd.concat((df, pd.DataFrame(dict_)))
 
@@ -1406,7 +1484,13 @@ class Viz:
 
         # Plot the violin plot with split view for comparing true and predicted values
         sns.violinplot(
-            data=df, x="parameter", y="value", hue="dataset", split=True, ax=ax, linewidth=.1,
+            data=df,
+            x="parameter",
+            y="value",
+            hue="dataset",
+            split=True,
+            ax=ax,
+            linewidth=0.1,
         )
 
         # Style the plot with labels
@@ -1422,7 +1506,6 @@ class Viz:
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename)
 
-    
     ###### MOVIES #####
 
     @static_dataset_decorator
@@ -1448,9 +1531,9 @@ class Viz:
         Generates a sequence of images depicting SHO (Simple Harmonic Oscillator) fit results
         for various voltage steps, and optionally compiles them into a movie.
 
-        This function creates images showing the fit results of the SHO model for both the 
-        "on" and "off" states at different voltage steps. The images can include multiple 
-        models for comparison, and optional features like colorbars, scalebars, and labels. 
+        This function creates images showing the fit results of the SHO model for both the
+        "on" and "off" states at different voltage steps. The images can include multiple
+        models for comparison, and optional features like colorbars, scalebars, and labels.
         The images are saved to the specified directory, and a movie can be created from them.
 
         Args:
@@ -1515,7 +1598,7 @@ class Viz:
             on_data, off_data = self.get_SHO_data(noise, model)
 
         # Labels for the different SHO parameters (e.g., Amplitude, Frequency, Quality Factor, Phase)
-        names = ["A", "\u03C9", "Q", "\u03C6"]
+        names = ["A", "\u03c9", "Q", "\u03c6"]
 
         # Retrieves the DC voltage data (only for the "on" state)
         voltage = self.dataset.dc_voltage
@@ -1613,8 +1696,7 @@ class Viz:
                         ]
 
                         # Add the colorbar axis to the figure
-                        bar_ax.append(fig.add_axes(
-                            fig_scalar.to_relative(pos_inch)))
+                        bar_ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
 
                         # Add the colorbar to the axis
                         cbar = plt.colorbar(
@@ -1662,9 +1744,9 @@ class Viz:
         """
         Builds a figure layout for generating movie frames with multiple comparison plots.
 
-        This function creates a figure layout that includes multiple rows and columns of 
-        subplots, which are used to display comparison data (e.g., SHO fit results) alongside 
-        a voltage plot. It is designed to accommodate various configurations, including optional 
+        This function creates a figure layout that includes multiple rows and columns of
+        subplots, which are used to display comparison data (e.g., SHO fit results) alongside
+        a voltage plot. It is designed to accommodate various configurations, including optional
         colorbars, labels, and gaps between plots.
 
         Args:
@@ -1729,7 +1811,9 @@ class Viz:
 
         # Reset the x position for embedding plots and adjust the y position
         pos_inch[0] = 0  # Reset left position
-        pos_inch[1] -= embedding_image_size + 0.33 * inter_gap_count  # Adjust bottom position
+        pos_inch[1] -= (
+            embedding_image_size + 0.33 * inter_gap_count
+        )  # Adjust bottom position
 
         # Set the size for embedding images
         pos_inch[2] = embedding_image_size  # Width of embedding image
@@ -1739,7 +1823,9 @@ class Viz:
         for j in range(rows):
             # Add 4 graphs per row
             for i in range(4):
-                ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))  # Add subplot to figure
+                ax.append(
+                    fig.add_axes(fig_scalar.to_relative(pos_inch))
+                )  # Add subplot to figure
 
                 # Adjust the gap between plots within the same row
                 if i == 1:
@@ -1767,42 +1853,40 @@ class Viz:
         # Reorder the axes to make them easier to work with, going left to right, top to bottom
         for j in range(1 + z):
             for i in range(2):
-                ax_.extend(ax[1 + 2 * i + 8 * j: 3 + 2 * i + 8 * j])
-                ax_.extend(ax[5 + 2 * i + 8 * j: 7 + 2 * i + 8 * j])
+                ax_.extend(ax[1 + 2 * i + 8 * j : 3 + 2 * i + 8 * j])
+                ax_.extend(ax[5 + 2 * i + 8 * j : 7 + 2 * i + 8 * j])
 
         return fig, ax_, fig_scalar
 
+    #     def get_model(self, model_path, noise):
+    #         # if a model path is not provided then data is from LSQF
+    #         if model_path is not None:
+    #             # finds the model with the lowest loss for the given noise level
+    #             model_filename = (
+    #                 model_path + "/" +
+    #                 get_lowest_loss_for_noise_level(model_path, noise)
+    #             )
 
-#     def get_model(self, model_path, noise):
-#         # if a model path is not provided then data is from LSQF
-#         if model_path is not None:
-#             # finds the model with the lowest loss for the given noise level
-#             model_filename = (
-#                 model_path + "/" +
-#                 get_lowest_loss_for_noise_level(model_path, noise)
-#             )
+    #             # instantiate the model
+    #             model = SHO_Model(
+    #                 self.dataset, training=False, model_basename="SHO_Fitter_original_data"
+    #             )
 
-#             # instantiate the model
-#             model = SHO_Model(
-#                 self.dataset, training=False, model_basename="SHO_Fitter_original_data"
-#             )
+    #             # loads the weights
+    #             model.load(model_filename)
 
-#             # loads the weights
-#             model.load(model_filename)
+    #             if self.verbose:
+    #                 # prints which model is being used
+    #                 print("Using model: ", model_filename)
 
-#             if self.verbose:
-#                 # prints which model is being used
-#                 print("Using model: ", model_filename)
+    #         elif model is not None:
+    #             pass
 
-#         elif model is not None:
-#             pass
+    #         else:
+    #             # sets the model equal to None if no model is provided
+    #             model = None
 
-#         else:
-#             # sets the model equal to None if no model is provided
-#             model = None
-
-#         return model
-
+    #         return model
 
     ##### GETTERS #####
 
@@ -1838,13 +1922,13 @@ class Viz:
 
         # Return the determined or provided voltage step index
         return voltage_step
-    
+
     def get_SHO_data(self, noise, model, phase_shift=None):
         """
         Retrieves Simple Harmonic Oscillator (SHO) fit results for both "on" and "off" states.
 
-        This function sets the noise level and measurement state of the dataset, then extracts 
-        the SHO fit results for both the "on" and "off" states using the specified model and 
+        This function sets the noise level and measurement state of the dataset, then extracts
+        the SHO fit results for both the "on" and "off" states using the specified model and
         phase shift.
 
         Args:
@@ -1865,21 +1949,17 @@ class Viz:
         self.dataset.measurement_state = "on"
 
         # Retrieve the SHO fit results for the "on" state
-        on_data = self.dataset.SHO_fit_results(
-            model=model, phase_shift=phase_shift
-        )
+        on_data = self.dataset.SHO_fit_results(model=model, phase_shift=phase_shift)
 
         # Set the measurement state to "off" to get the data for the "off" state
         self.dataset.measurement_state = "off"
 
         # Retrieve the SHO fit results for the "off" state
-        off_data = self.dataset.SHO_fit_results(
-            model=model, phase_shift=phase_shift
-        )
+        off_data = self.dataset.SHO_fit_results(model=model, phase_shift=phase_shift)
 
         # Return the fit results for both states as a tuple
         return on_data, off_data
-    
+
     @static_dataset_decorator
     def get_SHO_params(self, index, model, out_state):
         """
@@ -1896,7 +1976,7 @@ class Viz:
             out_state (dict): Dictionary specifying the output state of the data, such as how the output should be formatted.
 
         Returns:
-            np.array, np.array, list: 
+            np.array, np.array, list:
                 - `pred_data`: The predicted SHO data (processed real/imaginary or amplitude/phase data).
                 - `params`: The corresponding SHO parameters (e.g., amplitude, phase, resonance frequency, quality factor).
                 - `labels`: A list of labels describing the parameters for the returned data.
@@ -1942,9 +2022,15 @@ class Viz:
             pred_data = self.dataset.raw_spectra(fit_results=params)
 
             # Reshape the predicted data for correct dimensionality (samples, channels, voltage steps)
-            pred_data = np.array([pred_data[0], pred_data[1]])  # (channels, samples, voltage steps)
-            pred_data = np.swapaxes(pred_data, 0, 1)  # (samples, channels, voltage steps)
-            pred_data = np.swapaxes(pred_data, 1, 2)  # (samples, voltage steps, channels)
+            pred_data = np.array(
+                [pred_data[0], pred_data[1]]
+            )  # (channels, samples, voltage steps)
+            pred_data = np.swapaxes(
+                pred_data, 0, 1
+            )  # (samples, channels, voltage steps)
+            pred_data = np.swapaxes(
+                pred_data, 1, 2
+            )  # (samples, voltage steps, channels)
 
             # Reshape the shifted parameters for consistent handling
             params_shifted = params_shifted.reshape(-1, 4)
@@ -1961,16 +2047,16 @@ class Viz:
 
         # Return the predicted data, SHO parameters, and their corresponding labels
         return pred_data, params, labels
-    
+
     @static_dataset_decorator
     def get_mse_index(self, index, model):
         """
         Computes the Mean Squared Error (MSE) between the raw spectra data and the predicted data
         for a given set of indices and a specified model.
 
-        This function retrieves the raw data from the dataset and compares it with the predicted 
-        data from the provided model. Depending on whether the model is a neural network (`nn.Module`) 
-        or an LSQF model (represented as a dictionary), it handles predictions accordingly and 
+        This function retrieves the raw data from the dataset and compares it with the predicted
+        data from the provided model. Depending on whether the model is a neural network (`nn.Module`)
+        or an LSQF model (represented as a dictionary), it handles predictions accordingly and
         calculates the MSE.
 
         Args:
@@ -2022,7 +2108,9 @@ class Viz:
             pred_data = self.dataset.raw_spectra(fit_results=params)
 
             # Convert the predicted data to a NumPy array
-            pred_data = np.array(pred_data)  # Shape: (real/imaginary, samples, voltage steps)
+            pred_data = np.array(
+                pred_data
+            )  # Shape: (real/imaginary, samples, voltage steps)
 
             # Roll the axes to match the required shape: (samples, voltage steps, real/imaginary)
             pred_data = np.rollaxis(pred_data, 0, pred_data.ndim)
@@ -2032,7 +2120,6 @@ class Viz:
 
         # Compute and return the MSE between the raw data and the predicted data
         return MSE(data.detach().numpy(), predictions)
-
 
     ###### SETTERS ######
 
@@ -2061,280 +2148,272 @@ class Viz:
         if kwargs.get("noise"):
             self.noise = kwargs.get("noise")
 
+    #     def get_freq_values(self, data):
+    #         data = data.flatten()
+    #         if len(data) == self.dataset.resampled_bins:
+    #             x = resample(self.dataset.frequency_bin,
+    #                          self.dataset.resampled_bins)
+    #         elif len(data) == len(self.dataset.frequency_bin):
+    #             x = self.dataset.frequency_bin
+    #         else:
+    #             raise ValueError(
+    #                 "original data must be the same length as the frequency bins or the resampled frequency bins"
+    #             )
+    #         return x
 
+    #     @static_dataset_decorator
+    #     def nn_validation(
+    #         self,
+    #         model,
+    #         data=None,
+    #         unscaled=True,
+    #         pixel=None,
+    #         voltage_step=None,
+    #         index=None,
+    #         legend=True,
+    #         filename=None,
+    #         **kwargs,
+    #     ):
+    #         # Makes the figure
+    #         fig, axs = layout_fig(2, 2, figsize=(5, 1.25))
 
+    #         # sets the dataset state to grab the magnitude spectrum
+    #         state = {"raw_format": "magnitude spectrum", "resampled": True}
+    #         self.set_attributes(**state)
 
+    #         # if set to scaled it will change the label
+    #         if unscaled:
+    #             label = ""
+    #         else:
+    #             label = "scaled"
 
+    #         # if an index is not provided it will select a random index
+    #         # it is also possible to use a voltage step
+    #         if index is None:
+    #             # if a voltage step is provided it will use the voltage step to grab a specific index
+    #             if voltage_step is not None:
+    #                 # if a pixel is not provided it will select a random pixel
+    #                 if pixel is None:
+    #                     # Select a random point and time step to plot
+    #                     pixel = np.random.randint(0, self.dataset.num_pix)
 
+    #                 # gets the voltagestep with consideration of the current state
+    #                 voltage_step = self.get_voltage_step(voltage_step)
 
+    #                 # gets the data based on a specific pixel and voltagestep
+    #                 data, x = self.dataset.raw_spectra(
+    #                     pixel, voltage_step, frequency=True, **kwargs
+    #                 )
 
-#     def get_freq_values(self, data):
-#         data = data.flatten()
-#         if len(data) == self.dataset.resampled_bins:
-#             x = resample(self.dataset.frequency_bin,
-#                          self.dataset.resampled_bins)
-#         elif len(data) == len(self.dataset.frequency_bin):
-#             x = self.dataset.frequency_bin
-#         else:
-#             raise ValueError(
-#                 "original data must be the same length as the frequency bins or the resampled frequency bins"
-#             )
-#         return x
+    #                 SHO_results = self.dataset.SHO_LSQF(pixel, voltage_step)
 
+    #         # if a smaller manual dataset is provided it will use that
+    #         if data is not None:
+    #             # if an index is not provided it will select a random index
+    #             if index is None:
+    #                 index = np.random.randint(0, data.shape[0])
 
-#     @static_dataset_decorator
-#     def nn_validation(
-#         self,
-#         model,
-#         data=None,
-#         unscaled=True,
-#         pixel=None,
-#         voltage_step=None,
-#         index=None,
-#         legend=True,
-#         filename=None,
-#         **kwargs,
-#     ):
-#         # Makes the figure
-#         fig, axs = layout_fig(2, 2, figsize=(5, 1.25))
+    #             # grabs the data based on the index
+    #             data = data[[index]]
 
-#         # sets the dataset state to grab the magnitude spectrum
-#         state = {"raw_format": "magnitude spectrum", "resampled": True}
-#         self.set_attributes(**state)
+    #             # gets the frequency values from the dataset
+    #             x = self.get_freq_values(data[:, :, 0])
 
-#         # if set to scaled it will change the label
-#         if unscaled:
-#             label = ""
-#         else:
-#             label = "scaled"
+    #         # computes the prediction from the nn model
+    #         pred_data, scaled_param, parm = model.predict(data)
 
-#         # if an index is not provided it will select a random index
-#         # it is also possible to use a voltage step
-#         if index is None:
-#             # if a voltage step is provided it will use the voltage step to grab a specific index
-#             if voltage_step is not None:
-#                 # if a pixel is not provided it will select a random pixel
-#                 if pixel is None:
-#                     # Select a random point and time step to plot
-#                     pixel = np.random.randint(0, self.dataset.num_pix)
+    #         # unscales the data
+    #         if unscaled:
+    #             data_complex = self.dataset.raw_data_scaler.inverse_transform(data)
+    #             pred_data_complex = self.dataset.raw_data_scaler.inverse_transform(
+    #                 pred_data.numpy()
+    #             )
+    #         else:
+    #             data_complex = data
+    #             pred_data_complex = self.dataset.to_complex(pred_data.numpy())
 
-#                 # gets the voltagestep with consideration of the current state
-#                 voltage_step = self.get_voltage_step(voltage_step)
+    #         # computes the magnitude spectrum from the data
+    #         data_magnitude = self.dataset.to_magnitude(data_complex)
+    #         pred_data_magnitude = self.dataset.to_magnitude(pred_data_complex)
 
-#                 # gets the data based on a specific pixel and voltagestep
-#                 data, x = self.dataset.raw_spectra(
-#                     pixel, voltage_step, frequency=True, **kwargs
-#                 )
+    #         # plots the data
+    #         axs[0].plot(
+    #             x,
+    #             pred_data_magnitude[0].flatten(),
+    #             "b",
+    #             label=label + " Amplitude \n NN Prediction",
+    #         )
+    #         ax1 = axs[0].twinx()
+    #         ax1.plot(
+    #             x,
+    #             pred_data_magnitude[1].flatten(),
+    #             "r",
+    #             label=label + " Phase \n NN Prediction",
+    #         )
 
-#                 SHO_results = self.dataset.SHO_LSQF(pixel, voltage_step)
+    #         axs[0].plot(x, data_magnitude[0].flatten(),
+    #                     "bo", label=label + " Amplitude")
+    #         ax1.plot(x, data_magnitude[1].flatten(), "ro", label=label + " Phase")
 
-#         # if a smaller manual dataset is provided it will use that
-#         if data is not None:
-#             # if an index is not provided it will select a random index
-#             if index is None:
-#                 index = np.random.randint(0, data.shape[0])
+    #         axs[0].set_xlabel("Frequency (Hz)")
+    #         axs[0].set_ylabel("Amplitude (Arb. U.)")
+    #         ax1.set_ylabel("Phase (rad)")
 
-#             # grabs the data based on the index
-#             data = data[[index]]
+    #         pred_data_complex = self.dataset.to_real_imag(pred_data_complex)
+    #         data_complex = self.dataset.to_real_imag(data_complex)
 
-#             # gets the frequency values from the dataset
-#             x = self.get_freq_values(data[:, :, 0])
+    #         axs[1].plot(
+    #             x,
+    #             pred_data_complex[0].flatten(),
+    #             "k",
+    #             label=label + " Real \n NN Prediction",
+    #         )
+    #         axs[1].set_xlabel("Frequency (Hz)")
+    #         axs[1].set_ylabel("Real (Arb. U.)")
+    #         ax2 = axs[1].twinx()
+    #         ax2.set_ylabel("Imag (Arb. U.)")
+    #         ax2.plot(
+    #             x,
+    #             pred_data_complex[1].flatten(),
+    #             "g",
+    #             label=label + " Imag \n NN Prediction",
+    #         )
 
-#         # computes the prediction from the nn model
-#         pred_data, scaled_param, parm = model.predict(data)
+    #         axs[1].plot(x, data_complex[0].flatten(), "ko", label=label + " Real")
+    #         ax2.plot(x, data_complex[1].flatten(), "gs", label=label + " Imag")
 
-#         # unscales the data
-#         if unscaled:
-#             data_complex = self.dataset.raw_data_scaler.inverse_transform(data)
-#             pred_data_complex = self.dataset.raw_data_scaler.inverse_transform(
-#                 pred_data.numpy()
-#             )
-#         else:
-#             data_complex = data
-#             pred_data_complex = self.dataset.to_complex(pred_data.numpy())
+    #         axes = [axs[0], axs[1], ax1, ax2]
 
-#         # computes the magnitude spectrum from the data
-#         data_magnitude = self.dataset.to_magnitude(data_complex)
-#         pred_data_magnitude = self.dataset.to_magnitude(pred_data_complex)
+    #         for ax in axes:
+    #             ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+    #             ax.set_box_aspect(1)
 
-#         # plots the data
-#         axs[0].plot(
-#             x,
-#             pred_data_magnitude[0].flatten(),
-#             "b",
-#             label=label + " Amplitude \n NN Prediction",
-#         )
-#         ax1 = axs[0].twinx()
-#         ax1.plot(
-#             x,
-#             pred_data_magnitude[1].flatten(),
-#             "r",
-#             label=label + " Phase \n NN Prediction",
-#         )
+    #         if legend:
+    #             fig.legend(bbox_to_anchor=(1.0, 1),
+    #                        loc="upper right", borderaxespad=0.1)
 
-#         axs[0].plot(x, data_magnitude[0].flatten(),
-#                     "bo", label=label + " Amplitude")
-#         ax1.plot(x, data_magnitude[1].flatten(), "ro", label=label + " Phase")
+    #         if "SHO_results" in kwargs:
+    #             if voltage_step is None:
+    #                 SHO_results = kwargs["SHO_results"][[index]]
 
-#         axs[0].set_xlabel("Frequency (Hz)")
-#         axs[0].set_ylabel("Amplitude (Arb. U.)")
-#         ax1.set_ylabel("Phase (rad)")
+    #                 if unscaled:
+    #                     SHO_results = self.dataset.SHO_scaler.inverse_transform(
+    #                         SHO_results)
 
-#         pred_data_complex = self.dataset.to_real_imag(pred_data_complex)
-#         data_complex = self.dataset.to_real_imag(data_complex)
+    #             SHO_results = SHO_results.squeeze()
 
-#         axs[1].plot(
-#             x,
-#             pred_data_complex[0].flatten(),
-#             "k",
-#             label=label + " Real \n NN Prediction",
-#         )
-#         axs[1].set_xlabel("Frequency (Hz)")
-#         axs[1].set_ylabel("Real (Arb. U.)")
-#         ax2 = axs[1].twinx()
-#         ax2.set_ylabel("Imag (Arb. U.)")
-#         ax2.plot(
-#             x,
-#             pred_data_complex[1].flatten(),
-#             "g",
-#             label=label + " Imag \n NN Prediction",
-#         )
+    #             fig.text(
+    #                 0.5,
+    #                 -0.05,
+    #                 f"LSQF: A = {SHO_results[0]:0.2e} ,  \u03C9 = {SHO_results[1]/1000:0.1f} Hz, Q = {SHO_results[2]:0.1f}, \u03C6 = {SHO_results[3]:0.2f} rad",
+    #                 ha="center",
+    #                 fontsize=6,
+    #             )
 
-#         axs[1].plot(x, data_complex[0].flatten(), "ko", label=label + " Real")
-#         ax2.plot(x, data_complex[1].flatten(), "gs", label=label + " Imag")
+    #             parm = parm.detach().numpy().squeeze()
 
-#         axes = [axs[0], axs[1], ax1, ax2]
+    #             fig.text(
+    #                 0.5,
+    #                 -0.15,
+    #                 f"NN: A = {parm[0]:0.2e} ,  \u03C9 = {parm[1]/1000:0.1f} Hz, Q = {parm[2]:0.1f}, \u03C6 = {parm[3]:0.2f} rad",
+    #                 ha="center",
+    #                 fontsize=6,
+    #             )
 
-#         for ax in axes:
-#             ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
-#             ax.set_box_aspect(1)
+    #         # prints the figure
+    #         if self.Printer is not None and filename is not None:
+    #             self.Printer.savefig(fig, filename, label_figs=[
+    #                                  axs[0], axs[1]], style="b")
 
-#         if legend:
-#             fig.legend(bbox_to_anchor=(1.0, 1),
-#                        loc="upper right", borderaxespad=0.1)
+    #     @static_dataset_decorator
+    #     def best_median_worst_reconstructions(
+    #         self,
+    #         model,
+    #         true,
+    #         SHO_values=None,
+    #         labels=["NN", "LSQF"],
+    #         unscaled=True,
+    #         filename=None,
+    #         **kwargs,
+    #     ):
+    #         gaps = (0.8, 0.9)
+    #         size = (1.25, 1.25)
 
-#         if "SHO_results" in kwargs:
-#             if voltage_step is None:
-#                 SHO_results = kwargs["SHO_results"][[index]]
+    #         fig, ax = subfigures(3, 3, gaps=gaps, size=size)
 
-#                 if unscaled:
-#                     SHO_results = self.dataset.SHO_scaler.inverse_transform(
-#                         SHO_results)
+    #         dpi = fig.get_dpi()
 
-#             SHO_results = SHO_results.squeeze()
+    #         prediction, scaled_param, parm = model.predict(true)
 
-#             fig.text(
-#                 0.5,
-#                 -0.05,
-#                 f"LSQF: A = {SHO_results[0]:0.2e} ,  \u03C9 = {SHO_results[1]/1000:0.1f} Hz, Q = {SHO_results[2]:0.1f}, \u03C6 = {SHO_results[3]:0.2f} rad",
-#                 ha="center",
-#                 fontsize=6,
-#             )
+    #         index, mse = model.mse_rankings(true, prediction)
 
-#             parm = parm.detach().numpy().squeeze()
+    #         ind = np.hstack(
+    #             (index[0:3], index[len(index) // 2 -
+    #              1: len(index) // 2 + 2], index[-3:])
+    #         )
+    #         mse = np.hstack(
+    #             (mse[0:3], mse[len(index) // 2 - 1: len(index) // 2 + 2], mse[-3:])
+    #         )
 
-#             fig.text(
-#                 0.5,
-#                 -0.15,
-#                 f"NN: A = {parm[0]:0.2e} ,  \u03C9 = {parm[1]/1000:0.1f} Hz, Q = {parm[2]:0.1f}, \u03C6 = {parm[3]:0.2f} rad",
-#                 ha="center",
-#                 fontsize=6,
-#             )
+    #         x = self.get_freq_values(true[0, :, 0])
 
-#         # prints the figure
-#         if self.Printer is not None and filename is not None:
-#             self.Printer.savefig(fig, filename, label_figs=[
-#                                  axs[0], axs[1]], style="b")
+    #         # unscales the data
+    #         if unscaled:
+    #             true = self.dataset.raw_data_scaler.inverse_transform(true)
+    #             prediction = self.dataset.raw_data_scaler.inverse_transform(
+    #                 prediction.numpy()
+    #             )
 
-#     @static_dataset_decorator
-#     def best_median_worst_reconstructions(
-#         self,
-#         model,
-#         true,
-#         SHO_values=None,
-#         labels=["NN", "LSQF"],
-#         unscaled=True,
-#         filename=None,
-#         **kwargs,
-#     ):
-#         gaps = (0.8, 0.9)
-#         size = (1.25, 1.25)
+    #             if self.dataset.raw_format == "magnitude spectrum":
+    #                 # computes the magnitude spectrum from the data
+    #                 true = self.dataset.to_magnitude(true)
+    #                 prediction = self.dataset.to_magnitude(prediction)
+    #             else:
+    #                 # computes the magnitude spectrum from the data
+    #                 true = self.dataset.to_real_imag(true)
+    #                 prediction = self.dataset.to_real_imag(prediction)
 
-#         fig, ax = subfigures(3, 3, gaps=gaps, size=size)
+    #             SHO_values = self.dataset.SHO_scaler.inverse_transform(SHO_values)
 
-#         dpi = fig.get_dpi()
+    #         else:
+    #             true = true
+    #             prediction = self.dataset.to_complex(prediction.numpy())
 
-#         prediction, scaled_param, parm = model.predict(true)
+    #         ax.reverse()
 
-#         index, mse = model.mse_rankings(true, prediction)
+    #         for i, (ind_, ax_) in enumerate(zip(ind, ax)):
+    #             ax_.plot(
+    #                 x, prediction[0][ind_].flatten(), "b", label=labels[0] + " Amplitude"
+    #             )
+    #             ax1 = ax_.twinx()
+    #             ax1.plot(x, prediction[1][ind_].flatten(),
+    #                      "r", label=labels[0] + " Phase")
 
-#         ind = np.hstack(
-#             (index[0:3], index[len(index) // 2 -
-#              1: len(index) // 2 + 2], index[-3:])
-#         )
-#         mse = np.hstack(
-#             (mse[0:3], mse[len(index) // 2 - 1: len(index) // 2 + 2], mse[-3:])
-#         )
+    #             ax_.plot(x, true[0][ind_].flatten(), "bo", label="Raw Amplitude")
+    #             ax1.plot(x, true[1][ind_].flatten(), "ro", label="Raw Phase")
 
-#         x = self.get_freq_values(true[0, :, 0])
+    #             ax_.set_xlabel("Frequency (Hz)")
+    #             ax_.set_ylabel("Amplitude (Arb. U.)")
+    #             ax1.set_ylabel("Phase (rad)")
 
-#         # unscales the data
-#         if unscaled:
-#             true = self.dataset.raw_data_scaler.inverse_transform(true)
-#             prediction = self.dataset.raw_data_scaler.inverse_transform(
-#                 prediction.numpy()
-#             )
+    #             # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
+    #             text_position_in_inches = (
+    #                 (gaps[0] + size[0]) * (i % 3),
+    #                 (gaps[1] + size[1]) * (3 - i // 3 - 1) - 0.8,
+    #             )
+    #             text = f"MSE: {mse[i]:0.4f}\nA LSQF:{SHO_values[ind_, 0]:0.2e} NN:{parm[ind_, 0]:0.2e}\n\u03C9: LSQF: {SHO_values[ind_, 1]/1000:0.1f} NN: {parm[ind_, 1]/1000:0.1f} Hz\nQ: LSQF: {SHO_values[ind_, 2]:0.1f} NN: {parm[ind_, 2]:0.1f}\n\u03C6: LSQF: {SHO_values[ind_, 3]:0.2f} NN: {parm[ind_, 3]:0.1f} rad"
+    #             add_text_to_figure(fig, text, text_position_in_inches, fontsize=6)
 
-#             if self.dataset.raw_format == "magnitude spectrum":
-#                 # computes the magnitude spectrum from the data
-#                 true = self.dataset.to_magnitude(true)
-#                 prediction = self.dataset.to_magnitude(prediction)
-#             else:
-#                 # computes the magnitude spectrum from the data
-#                 true = self.dataset.to_real_imag(true)
-#                 prediction = self.dataset.to_real_imag(prediction)
+    #             if i == 2:
+    #                 lines, labels = ax_.get_legend_handles_labels()
+    #                 lines2, labels2 = ax1.get_legend_handles_labels()
+    #                 ax_.legend(lines + lines2, labels + labels2, loc="upper right")
 
-#             SHO_values = self.dataset.SHO_scaler.inverse_transform(SHO_values)
+    #         # prints the figure
+    #         if self.Printer is not None and filename is not None:
+    #             self.Printer.savefig(fig, filename, style="b")
 
-#         else:
-#             true = true
-#             prediction = self.dataset.to_complex(prediction.numpy())
-
-#         ax.reverse()
-
-#         for i, (ind_, ax_) in enumerate(zip(ind, ax)):
-#             ax_.plot(
-#                 x, prediction[0][ind_].flatten(), "b", label=labels[0] + " Amplitude"
-#             )
-#             ax1 = ax_.twinx()
-#             ax1.plot(x, prediction[1][ind_].flatten(),
-#                      "r", label=labels[0] + " Phase")
-
-#             ax_.plot(x, true[0][ind_].flatten(), "bo", label="Raw Amplitude")
-#             ax1.plot(x, true[1][ind_].flatten(), "ro", label="Raw Phase")
-
-#             ax_.set_xlabel("Frequency (Hz)")
-#             ax_.set_ylabel("Amplitude (Arb. U.)")
-#             ax1.set_ylabel("Phase (rad)")
-
-#             # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
-#             text_position_in_inches = (
-#                 (gaps[0] + size[0]) * (i % 3),
-#                 (gaps[1] + size[1]) * (3 - i // 3 - 1) - 0.8,
-#             )
-#             text = f"MSE: {mse[i]:0.4f}\nA LSQF:{SHO_values[ind_, 0]:0.2e} NN:{parm[ind_, 0]:0.2e}\n\u03C9: LSQF: {SHO_values[ind_, 1]/1000:0.1f} NN: {parm[ind_, 1]/1000:0.1f} Hz\nQ: LSQF: {SHO_values[ind_, 2]:0.1f} NN: {parm[ind_, 2]:0.1f}\n\u03C6: LSQF: {SHO_values[ind_, 3]:0.2f} NN: {parm[ind_, 3]:0.1f} rad"
-#             add_text_to_figure(fig, text, text_position_in_inches, fontsize=6)
-
-#             if i == 2:
-#                 lines, labels = ax_.get_legend_handles_labels()
-#                 lines2, labels2 = ax1.get_legend_handles_labels()
-#                 ax_.legend(lines + lines2, labels + labels2, loc="upper right")
-
-#         # prints the figure
-#         if self.Printer is not None and filename is not None:
-#             self.Printer.savefig(fig, filename, style="b")
-    
-    #TODO add comments and docstring
+    # TODO add comments and docstring
     def get_best_median_worst(
         self,
         true_state,
@@ -2347,7 +2426,6 @@ class Viz:
         **kwargs,
     ):
         def data_converter(data):
-            
             # converts to a standard form which is a list
             data = self.dataset.to_real_imag(data)
 
@@ -2369,9 +2447,8 @@ class Viz:
 
         # condition if x_data is passed
         else:
-
             true = data_converter(true_state)
-        
+
             # gets the frequency values
             if true[0].ndim == 2:
                 x1 = self.dataset.get_freq_values(true[0].shape[1])
@@ -2427,13 +2504,10 @@ class Viz:
             compare_state = data_converter(compare_state)
 
             # this must take the scaled data
-            index1, mse1, d1, d2 = get_rankings(
-                compare_state, prediction, n=n
-            )
+            index1, mse1, d1, d2 = get_rankings(compare_state, prediction, n=n)
         else:
             # this must take the scaled data
-            index1, mse1, d1, d2 = get_rankings(
-                true, prediction, n=n)
+            index1, mse1, d1, d2 = get_rankings(true, prediction, n=n)
 
         d1, labels = self.out_state(d1, out_state)
         d2, labels = self.out_state(d2, out_state)
@@ -2458,7 +2532,7 @@ class Viz:
         else:
             return (d1, d2, x1, x2, labels, index1, mse1)
 
-    #TODO: add comments and docstring
+    # TODO: add comments and docstring
     def out_state(self, data, out_state):
         # holds the raw state
         current_state = self.dataset.get_state
@@ -2487,6 +2561,7 @@ class Viz:
         self.set_attributes(**current_state)
 
         return data, labels
+
 
 #     @static_dataset_decorator
 #     def get_best_median_worst_hysteresis(self,
@@ -2545,8 +2620,6 @@ class Viz:
 #             index1 = index[index1]
 
 #         return (d1, d2, x1, x2, index1, mse1, params)
-
-
 
 
 #     @static_dataset_decorator
@@ -2782,7 +2855,6 @@ class Viz:
 #             )
 
 
-
 #     @static_dataset_decorator
 #     def noisy_datasets(
 #         self, state, noise_level=None, pixel=None, voltage_step=None, filename=None
@@ -2843,11 +2915,6 @@ class Viz:
 #             self.Printer.savefig(
 #                 fig, filename, label_figs=ax_, size=6, loc="bl", inset_fraction=0.2
 #             )
-
-
-
-
-
 
 
 #     def MSE_compare(self, true_data, predictions, labels):

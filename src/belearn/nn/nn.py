@@ -211,7 +211,7 @@ class BatchTrainer:
                 model_,
                 self.dataset,
                 training=True,
-                model_basename="SHO_Fitter_original_data",
+                model_basename="SHO_Fitter",
                 datafed_path=self.datafed_path,
                 script_path=self.script_path,
                 dataset_id = self.dataset.dataset_id

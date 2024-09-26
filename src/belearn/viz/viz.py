@@ -47,6 +47,8 @@ from m3util.viz.layout import (
     subfigures,
     get_axis_pos_inches,
     set_sci_notation_label,
+    bring_text_to_front,
+    get_zorders,
 )
 
 from m3util.util.IO import make_folder
@@ -398,8 +400,11 @@ class Viz:
 
         # Adjust the format of the tick labels and box aspect for all axes
         axes = [axs[0], ax_real, ax1, ax_imag]
+        
+        set_sci_notation_label(ax_imag, axis="x")
+        set_sci_notation_label(axs[0], axis="x")
+
         for ax in axes:
-            ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
             ax.set_box_aspect(1)
 
         # Optionally print the dataset states
@@ -418,7 +423,7 @@ class Viz:
 
         # Save the figure if a Printer object and filename are provided
         if self.Printer is not None and filename is not None:
-            self.Printer.savefig(fig, filename, label_figs=[axs[0], axs[1]], style="b")
+            self.Printer.savefig(fig, filename, label_figs=[ax1, ax_imag], style="b")
 
     @static_dataset_decorator
     def raw_be(

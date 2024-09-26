@@ -39,17 +39,17 @@ from m3util.viz.layout import (
     layout_fig,
     add_box,
     inset_connector,
-    add_text_to_figure,
-    labelfigs,
     scalebar,
     imagemap,
     FigDimConverter,
     subfigures,
     get_axis_pos_inches,
-    set_sci_notation_label,
-    bring_text_to_front,
-    get_zorders,
 )
+
+from m3util.viz.text import (add_text_to_figure, 
+                             set_sci_notation_label,
+                             labelfigs, 
+                             )
 
 from m3util.util.IO import make_folder
 from m3util.viz.movies import make_movie
@@ -401,8 +401,8 @@ class Viz:
         # Adjust the format of the tick labels and box aspect for all axes
         axes = [axs[0], ax_real, ax1, ax_imag]
         
-        set_sci_notation_label(ax_imag, axis="x")
-        set_sci_notation_label(axs[0], axis="x")
+        set_sci_notation_label(ax_imag, axis="x", stroke_color='w', linewidth=.5)
+        set_sci_notation_label(ax1, axis="x",  stroke_color='w', linewidth=.5)
 
         for ax in axes:
             ax.set_box_aspect(1)
@@ -423,7 +423,7 @@ class Viz:
 
         # Save the figure if a Printer object and filename are provided
         if self.Printer is not None and filename is not None:
-            self.Printer.savefig(fig, filename, label_figs=[ax1, ax_imag], style="b")
+            self.Printer.savefig(fig, filename, label_figs=[ax1, ax_imag], style="bw", loc='bl')
 
     @static_dataset_decorator
     def raw_be(

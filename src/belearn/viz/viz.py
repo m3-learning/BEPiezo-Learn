@@ -46,10 +46,11 @@ from m3util.viz.layout import (
     get_axis_pos_inches,
 )
 
-from m3util.viz.text import (add_text_to_figure, 
-                             set_sci_notation_label,
-                             labelfigs, 
-                             )
+from m3util.viz.text import (
+    add_text_to_figure,
+    set_sci_notation_label,
+    labelfigs,
+)
 
 from m3util.util.IO import make_folder
 from m3util.viz.movies import make_movie
@@ -266,7 +267,7 @@ class Viz:
 
     @static_dataset_decorator
     def plot_real_imainary(
-        self, ax1, true, predict, pixel=None, voltage_step=None, **kwargs
+        self, ax1, true, predict = None, pixel=None, voltage_step=None, **kwargs
     ):
         # Set the attributes for the true dataset
         self.set_attributes(**true)
@@ -312,6 +313,18 @@ class Viz:
             ax1.plot(x, data[0].flatten(), "ko", label=self.dataset.label + " Real")
             ax2.plot(x, data[1].flatten(), "gs", label=self.dataset.label + " Imag")
             self.set_attributes(**true)
+
+        set_sci_notation_label(
+            ax1, corner="top left", axis="y", stroke_color="w", linewidth=0.5
+        )
+        set_sci_notation_label(
+            ax2, corner="top right", axis="y", stroke_color="w", linewidth=0.5
+        )
+        set_sci_notation_label(ax1, axis="x", stroke_color="w", linewidth=0.5)
+        set_sci_notation_label(ax2, axis="x", stroke_color="w", linewidth=0.5)
+        
+        ax1.set_box_aspect(1)
+        ax2.set_box_aspect(1)
 
         return ax1, ax2
 
@@ -400,9 +413,6 @@ class Viz:
 
         # Adjust the format of the tick labels and box aspect for all axes
         axes = [axs[0], ax_real, ax1, ax_imag]
-        
-        set_sci_notation_label(ax_imag, axis="x", stroke_color='w', linewidth=.5)
-        set_sci_notation_label(ax1, axis="x",  stroke_color='w', linewidth=.5)
 
         for ax in axes:
             ax.set_box_aspect(1)
@@ -423,7 +433,9 @@ class Viz:
 
         # Save the figure if a Printer object and filename are provided
         if self.Printer is not None and filename is not None:
-            self.Printer.savefig(fig, filename, label_figs=[ax1, ax_imag], style="bw", loc='bl')
+            self.Printer.savefig(
+                fig, filename, label_figs=[ax1, ax_imag], style="bw", loc="bl"
+            )
 
     @static_dataset_decorator
     def raw_be(

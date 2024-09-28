@@ -44,12 +44,14 @@ from m3util.viz.layout import (
     FigDimConverter,
     subfigures,
     get_axis_pos_inches,
+    draw_line_with_text,
 )
 
 from m3util.viz.text import (
     add_text_to_figure,
     set_sci_notation_label,
     labelfigs,
+    
 )
 
 from m3util.viz.arrows import draw_ellipse_with_arrow
@@ -72,10 +74,10 @@ import matplotlib.pyplot as plt
 color_palette = {
     "LSQF_A": "#003f5c",  # dark blue
     "LSQF_P": "#444e86",  # bluish purple
-    "NN_A": "#955196",    # purple
-    "NN_P": "#dd5182",    # pinkish red
-    "real": "#ff6e54",    # orange
-    "imag": "#ffa600",    # yellow-orange
+    "NN_A": "#955196",  # purple
+    "NN_P": "#dd5182",  # pinkish red
+    "real": "#ff6e54",  # orange
+    "imag": "#ffa600",  # yellow-orange
     "mag": "#2f9eaa",  # cyan
     "phase": "#66c21f",  # green
 }
@@ -327,7 +329,7 @@ class Viz:
 
         if add_arrows is not None:
             # Mandatory keys that must be present
-            required_keys = ["imag_value","real_value", "width", "height"]
+            required_keys = ["imag_value", "real_value", "width", "height"]
 
             # Check if required keys are present
             missing_keys = [key for key in required_keys if key not in add_arrows]
@@ -362,7 +364,7 @@ class Viz:
                 ellipse_props=add_arrows.get("ellipse_props", None),
                 arrow_direction="negative",
             )
-            
+
             draw_ellipse_with_arrow(
                 ax2,
                 x,
@@ -389,8 +391,7 @@ class Viz:
                 ellipse_props=add_arrows.get("ellipse_props", None),
                 arrow_direction="positive",
             )
-            
-            
+
         return ax1, ax2
 
     def _scientific_notation_dual(self, ax1, ax2):
@@ -415,7 +416,17 @@ class Viz:
 
     @static_dataset_decorator
     def plot_magnitude_spectrum(
-        self, ax1, true, predict=None, pixel=None, voltage_step=None, add_arrows=None, **kwargs
+        self,
+        ax1,
+        true,
+        predict=None,
+        pixel=None,
+        voltage_step=None,
+        add_arrows=None,
+        add_labels=False,
+        annotation_kwargs={},
+        line_kwargs={},
+        **kwargs,
     ):
         # Set the attributes for the true dataset
         self.set_attributes(**true)
@@ -434,9 +445,21 @@ class Viz:
         data, x = self.dataset.raw_spectra(pixel, voltage_step, frequency=True)
 
         # Plot amplitude and phase for the true dataset
-        ax1.plot(x, data[0].flatten(), color = color_palette['mag'], marker='s', label=self.dataset.label + " Amplitude")
+        ax1.plot(
+            x,
+            data[0].flatten(),
+            color=color_palette["mag"],
+            marker="s",
+            label=self.dataset.label + " Amplitude",
+        )
         ax2 = ax1.twinx()
-        ax2.plot(x, data[1].flatten(), color = color_palette['phase'], marker='s', label=self.dataset.label + " Phase")
+        ax2.plot(
+            x,
+            data[1].flatten(),
+            color=color_palette["phase"],
+            marker="s",
+            label=self.dataset.label + " Phase",
+        )
 
         # If a predicted dataset is provided, plot its amplitude and phase
         if predict is not None:
@@ -459,7 +482,7 @@ class Viz:
 
         if add_arrows is not None:
             # Mandatory keys that must be present
-            required_keys = ["mag_value","phase_value", "width", "height"]
+            required_keys = ["mag_value", "phase_value", "width", "height"]
 
             # Check if required keys are present
             missing_keys = [key for key in required_keys if key not in add_arrows]
@@ -494,7 +517,7 @@ class Viz:
                 ellipse_props=add_arrows.get("ellipse_props", None),
                 arrow_direction="negative",
             )
-            
+
             draw_ellipse_with_arrow(
                 ax2,
                 x,
@@ -521,9 +544,29 @@ class Viz:
                 ellipse_props=add_arrows.get("ellipse_props", None),
                 arrow_direction="positive",
             )
-            
-        
+
+        if add_labels:
+            _ax = (ax1, ax2)
+            self._SHO_labels(_ax, x, data, line_kwargs, annotation_kwargs)
+
         return ax1, ax2
+
+    def _SHO_labels(self, ax, x, data, line_kwargs ={}, annotation_kwargs={}):
+        amp = data[0].flatten()
+        phase = data[1].flatten()
+
+        draw_line_with_text(
+            ax[0],
+            x,
+            data[0].flatten(),
+            x[np.argmax(amp)],
+            axis="x",
+            span="axis",
+            text="Amplitude",
+            zorder=20,
+            annotation_kwargs=annotation_kwargs,
+            line_kwargs=line_kwargs,
+        )
 
     @static_dataset_decorator
     def raw_data_comparison(
@@ -544,20 +587,13 @@ class Viz:
         and predicted datasets. The function can save the plot if a filename is provided.
 
         Args:
-            true (dict):
-                Attributes of the true dataset to be set.
-            predict (dict, optional):
-                Attributes of the predicted dataset to be set. Defaults to None.
-            filename (str, optional):
-                Name of the file to save the figure. Defaults to None.
-            pixel (int, optional):
-                Pixel index to plot. If None, a random pixel is selected. Defaults to None.
-            voltage_step (int, optional):
-                Voltage step index to plot. If None, it is determined by the dataset. Defaults to None.
-            legend (bool, optional):
-                Whether to display a legend on the plot. Defaults to True.
-            **kwargs (dict):
-                Additional keyword arguments for the dataset's raw_spectra method.
+            true (dict): Attributes of the true dataset to be set.
+            predict (dict, optional): Attributes of the predicted dataset to be set. Defaults to None.
+            filename (str, optional): Name of the file to save the figure. Defaults to None.
+            pixel (int, optional): Pixel index to plot. If None, a random pixel is selected. Defaults to None.
+            voltage_step (int, optional): Voltage step index to plot. If None, it is determined by the dataset. Defaults to None.
+            legend (bool, optional): Whether to display a legend on the plot. Defaults to True.
+            **kwargs: Additional keyword arguments for the dataset's raw_spectra method.
 
         Returns:
             None

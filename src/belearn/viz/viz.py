@@ -432,6 +432,7 @@ class Viz:
         annotation_kwargs={},
         line_kwargs={},
         arrowprops={},
+        halo={},
         **kwargs,
     ):
         # Set the attributes for the true dataset
@@ -560,13 +561,28 @@ class Viz:
         if add_labels:
             _ax = (ax1, ax2)
             self._SHO_labels(
-                fig, _ax, x, data, line_kwargs, annotation_kwargs, arrowprops
+                fig,
+                ax=_ax,
+                x=x,
+                data=data,
+                line_kwargs=line_kwargs,
+                annotation_kwargs=annotation_kwargs,
+                arrowprops=arrowprops,
+                halo=halo,
             )
 
         return ax1, ax2
 
     def _SHO_labels(
-        self, fig, ax, x, data, line_kwargs={}, annotation_kwargs={}, arrowprops={}
+        self,
+        fig,
+        ax,
+        x,
+        data,
+        line_kwargs={},
+        annotation_kwargs={},
+        arrowprops={},
+        halo={},
     ):
         amp = data[0].flatten()
         phase = data[1].flatten()
@@ -589,38 +605,45 @@ class Viz:
             ax=ax,
             arrowprops=arrowprops,
             line_style={"color": "gray", "lw": 1, "ls": "--"},
+            halo=halo,
             **annotation_kwargs,
         )
 
-        # point_0 = obj_offset(
-        #     (x_[1], y_[1]),  # position
-        #     offset=(0,0),
-        #     offset_units=offset_units,
-        #     ax=ax,
-        # )
+        ######## Labels the Resonance Frequency ########
 
-        # point_1 = obj_offset(
-        #     (x_[1], y_[1]),  # position
-        #     offset=(0,0),
-        #     offset_units=offset_units,
-        #     ax=ax,
-        # )
+        x_ = (ax.get_xlim()[0], x[ind_max])
+        y_ = (0, 0)
+        offset = (0, 0)
 
-        # arrow = DrawArrow(
-        #     fig,
-        #     point_0,
-        #     point_1,
-        #     text="Resonance Frequency",
-        #     ax=ax,
-        #     text_position="center",
-        #     text_alignment="center",
-        #     vertical_text_displacement=None,
-        #     units="points",
-        #     scale=annotation_kwargs.get("xycoords", "data"),
-        #     arrowprops=arrowprops,
-        # )
+        point_0 = obj_offset(
+            (x_[0], y_[0]),  # position
+            offset=offset,
+            offset_units=offset_units,
+            ax=ax,
+        )
 
-        # arrow.draw()
+        point_1 = obj_offset(
+            (x_[1], y_[1]),  # position
+            offset=offset,
+            offset_units=offset_units,
+            ax=ax,
+        )
+
+        arrow = DrawArrow(
+            fig,
+            point_0,
+            point_1,
+            text="Resonance Freq.",
+            ax=ax,
+            text_position="center",
+            text_alignment="center",
+            units="points",
+            scale=annotation_kwargs.get("xycoords", "data"),
+            vertical_text_displacement="bottom",
+            arrowprops=arrowprops,
+        )
+
+        arrow.draw()
 
     @static_dataset_decorator
     def raw_data_comparison(

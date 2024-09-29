@@ -51,10 +51,14 @@ from m3util.viz.text import (
     add_text_to_figure,
     set_sci_notation_label,
     labelfigs,
-    
+    obj_offset,
 )
 
-from m3util.viz.arrows import draw_ellipse_with_arrow
+from m3util.viz.arrows import (
+    draw_ellipse_with_arrow,
+    DrawArrow,
+    draw_extended_arrow_indicator,
+)
 
 from m3util.util.IO import make_folder
 from m3util.viz.movies import make_movie
@@ -422,10 +426,12 @@ class Viz:
         predict=None,
         pixel=None,
         voltage_step=None,
+        fig=None,
         add_arrows=None,
         add_labels=False,
         annotation_kwargs={},
         line_kwargs={},
+        arrowprops={},
         **kwargs,
     ):
         # Set the attributes for the true dataset
@@ -460,6 +466,12 @@ class Viz:
             marker="s",
             label=self.dataset.label + " Phase",
         )
+
+        # Ensure ax2 is drawn on top of ax1 by setting a higher zorder
+        ax1.set_zorder(ax2.get_zorder() + 1)
+
+        # Remove the axes background (set to transparent)
+        ax1.set_facecolor("none")
 
         # If a predicted dataset is provided, plot its amplitude and phase
         if predict is not None:
@@ -547,26 +559,68 @@ class Viz:
 
         if add_labels:
             _ax = (ax1, ax2)
-            self._SHO_labels(_ax, x, data, line_kwargs, annotation_kwargs)
+            self._SHO_labels(
+                fig, _ax, x, data, line_kwargs, annotation_kwargs, arrowprops
+            )
 
         return ax1, ax2
 
-    def _SHO_labels(self, ax, x, data, line_kwargs ={}, annotation_kwargs={}):
+    def _SHO_labels(
+        self, fig, ax, x, data, line_kwargs={}, annotation_kwargs={}, arrowprops={}
+    ):
         amp = data[0].flatten()
         phase = data[1].flatten()
 
-        draw_line_with_text(
-            ax[0],
-            x,
-            data[0].flatten(),
-            x[np.argmax(amp)],
-            axis="x",
-            span="axis",
+        ind_max = np.argmax(amp)
+
+        x_ = (x[ind_max], x[ind_max])
+        y_ = (0, amp[ind_max])
+        offset = (-0.4, 0)
+        ax = ax[0]
+        offset_units = "fraction"
+
+        draw_extended_arrow_indicator(
+            fig,
+            x_,
+            y_,
             text="Amplitude",
-            zorder=20,
-            annotation_kwargs=annotation_kwargs,
-            line_kwargs=line_kwargs,
+            offset=offset,
+            offset_units=offset_units,
+            ax=ax,
+            arrowprops=arrowprops,
+            line_style={"color": "gray", "lw": 1, "ls": "--"},
+            **annotation_kwargs,
         )
+
+        # point_0 = obj_offset(
+        #     (x_[1], y_[1]),  # position
+        #     offset=(0,0),
+        #     offset_units=offset_units,
+        #     ax=ax,
+        # )
+
+        # point_1 = obj_offset(
+        #     (x_[1], y_[1]),  # position
+        #     offset=(0,0),
+        #     offset_units=offset_units,
+        #     ax=ax,
+        # )
+
+        # arrow = DrawArrow(
+        #     fig,
+        #     point_0,
+        #     point_1,
+        #     text="Resonance Frequency",
+        #     ax=ax,
+        #     text_position="center",
+        #     text_alignment="center",
+        #     vertical_text_displacement=None,
+        #     units="points",
+        #     scale=annotation_kwargs.get("xycoords", "data"),
+        #     arrowprops=arrowprops,
+        # )
+
+        # arrow.draw()
 
     @static_dataset_decorator
     def raw_data_comparison(
@@ -606,7 +660,7 @@ class Viz:
         fig, axs = layout_fig(2, 2, figsize=(5, 1.25))
 
         ax_mag, ax_phase = self.plot_magnitude_spectrum(
-            axs[0], true, predict, pixel, voltage_step, **kwargs
+            axs[0], true, predict, pixel, voltage_step, fig=fig, **kwargs
         )
 
         ax_real, ax_imag = self.plot_real_imainary(

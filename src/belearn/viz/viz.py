@@ -72,6 +72,7 @@ from belearn.dataset.analytics import get_rankings, MSE
 
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scipy.signal import find_peaks
 
 
 # Defines the color palettes for the plots
@@ -1199,6 +1200,48 @@ class Viz:
             if kwargs["returns"] == True:
                 return d1, d2, index1, mse1
 
+    @staticmethod
+    def find_fwhm(x, y, return_points=False):
+        """
+        Find the Full Width Half Maximum (FWHM) of a curve given x and y values.
+
+        Parameters:
+        x (numpy array): Array of x values.
+        y (numpy array): Array of y values.
+        return_points (bool): If True, return the left and right half-max points as tuples of (x, y).
+
+        Returns:
+        fwhm (float): Full Width Half Maximum.
+        left_x (float): x-coordinate of the left half-max point.
+        right_x (float): x-coordinate of the right half-max point.
+        or
+        points (tuple): Tuple containing the left and right half-max points if return_points is True.
+        """
+        
+        # Find the maximum value and its index
+        max_value = np.max(y)
+        half_max = max_value / 2
+
+        # Find the peak location
+        peaks, _ = find_peaks(y)
+        if len(peaks) == 0:
+            raise ValueError("No peaks found in the data.")
+        peak_index = peaks[np.argmax(y[peaks])]
+
+        # Find the two points where the function is equal to half_max
+        # These are the points on either side of the peak where y crosses half_max
+        left_index = np.where(y[:peak_index] <= half_max)[0][-1]
+        right_index = np.where(y[peak_index:] <= half_max)[0][0] + peak_index
+
+        # Full Width at Half Maximum (FWHM) is the difference between these x values
+        fwhm = x[right_index] - x[left_index]
+
+        if return_points:
+            return ((x[left_index], y[left_index]), (x[right_index], y[right_index]))
+        else:
+            # Return the FWHM and the left/right points
+            return fwhm, x[left_index], x[right_index]
+    
     @static_dataset_decorator
     def SHO_switching_maps(
         self,

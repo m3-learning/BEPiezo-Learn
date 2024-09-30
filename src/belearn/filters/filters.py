@@ -1,48 +1,59 @@
 import numpy as np
-from scipy.interpolate import CubicSpline
+from scipy.interpolate import interp1d
 
-
-def clean_interpolate(arr, axis=0):
-    """Function that removes bad data points by interpolating them.
+def clean_interpolate(arr, axis=0, method='cubic', verbose=False):
+    """
+    Function that removes bad data points by interpolating them.
 
     Args:
-        arr (np.array): np array to clean
-        axis (int, optional): axis which to interpolate along. Defaults to 0.
+        arr (np.array): NumPy array to clean.
+        axis (int, optional): Axis along which to interpolate. Defaults to 0.
+        method (str, optional): Interpolation method ('linear', 'nearest', 'cubic'). Defaults to 'linear'.
+        debug (bool, optional): If True, print debugging information. Defaults to False.
 
     Raises:
-        ValueError: error that is returned if the wrong axis is selected
+        ValueError: Raised if the selected axis is out of bounds.
 
     Returns:
-        np.array: cleaned data
+        np.array: Cleaned array with bad data points interpolated.
     """
-    # Check the axis validity
+    # Check if the axis is valid
     if axis < 0 or axis >= arr.ndim:
-        raise ValueError("Axis is out of bounds for the array.")
+        raise ValueError(f"Axis {axis} is out of bounds for the array.")
 
-    # Move the interpolation axis to the beginning and reshape to 2D
-    new_shape = [arr.shape[axis]] + [-1]
-    transposed_axes = [axis] + [i for i in range(arr.ndim) if i != axis]
-    arr_reshaped = np.transpose(arr, transposed_axes).reshape(new_shape)
+    # Move interpolation axis to the front
+    arr_transposed = np.moveaxis(arr, axis, 0)
+    
+    # Reshape to 2D, keeping all dimensions except the selected axis flat
+    original_shape = arr_transposed.shape
+    arr_flat = arr_transposed.reshape(arr_transposed.shape[0], -1)
 
-    # Iterate through the 2D reshaped array and interpolate along the specified axis
-    for i in range(arr_reshaped.shape[1]):
-        slice_ = arr_reshaped[:, i]
-        finite_indices = np.where(np.isfinite(slice_))[0]
-        non_finite_indices = np.where(~np.isfinite(slice_))[0]
+    # Process each "slice" along the flattened axis
+    for i in range(arr_flat.shape[1]):
+        slice_ = arr_flat[:, i]
+        finite_mask = np.isfinite(slice_)
+        finite_indices = np.where(finite_mask)[0]
+        non_finite_indices = np.where(~finite_mask)[0]
 
         if len(finite_indices) < 2:
-            # If there are fewer than 2 finite points, spline interpolation cannot be applied
+            # If there are fewer than 2 finite points, skip interpolation
+            if debug:
+                print(f"Skipping slice {i} due to insufficient finite data points.")
             continue
 
-        # Compute the cubic spline interpolation
-        spline = CubicSpline(finite_indices, slice_[finite_indices])
+        if len(non_finite_indices) == 0:
+            # No need to interpolate if there are no bad data points
+            continue
 
-        # Interpolate the non-finite values using the cubic spline
-        interpolated_values = spline(non_finite_indices)
-        slice_[non_finite_indices] = interpolated_values
+        # Perform interpolation on non-finite values
+        interp_func = interp1d(finite_indices, slice_[finite_indices], kind=method, bounds_error=False, fill_value="extrapolate")
+        slice_[non_finite_indices] = interp_func(non_finite_indices)
 
-    # Reshape back to the original n-dimensional shape
-    interpolated_arr = arr_reshaped.reshape(
-        arr.shape[axis], *arr.shape[:axis], *arr.shape[axis+1:]).transpose(np.argsort(transposed_axes))
+        if debug:
+            print(f"Interpolated {len(non_finite_indices)} bad data points in slice {i}.")
 
-    return interpolated_arr
+    # Reshape back to the original shape
+    arr_cleaned = arr_flat.reshape(original_shape)
+
+    # Move the axis back to its original position
+    return np.moveaxis(arr_cleaned, 0, axis)

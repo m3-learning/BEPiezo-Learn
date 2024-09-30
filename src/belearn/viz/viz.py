@@ -580,19 +580,20 @@ class Viz:
         ax,
         x,
         data,
+        amp_offset = (-0.4, 0),
+        fwhm_offset = (0, -0.2),
         line_kwargs={},
         annotation_kwargs={},
         arrowprops={},
         halo={},
     ):
         amp = data[0].flatten()
-        phase = data[1].flatten()
 
         ind_max = np.argmax(amp)
 
         x_ = (x[ind_max], x[ind_max])
         y_ = (0, amp[ind_max])
-        offset = (-0.4, 0)
+        
         ax = ax[0]
         offset_units = "fraction"
 
@@ -601,7 +602,7 @@ class Viz:
             x_,
             y_,
             text="Amplitude",
-            offset=offset,
+            offset=amp_offset,
             offset_units=offset_units,
             ax=ax,
             arrowprops=arrowprops,
@@ -645,6 +646,30 @@ class Viz:
         )
 
         arrow.draw()
+        
+        ##### Full-Width Half-Maximum #####
+        
+        point_0, point_1 = self.__class__.find_fwhm(x, amp, return_points=True)
+        
+        x_ = (point_0[0], point_1[0])
+        y_ = (point_0[1], point_1[1])
+        
+        print(x_, y_)
+        
+        draw_extended_arrow_indicator(
+            fig,
+            x_,
+            y_,
+            text="FWHM",
+            offset=fwhm_offset,
+            offset_units=offset_units,
+            direction="horizontal",
+            ax=ax,
+            arrowprops=arrowprops,
+            line_style={"color": "gray", "lw": 1, "ls": "--"},
+            halo=halo,
+            **annotation_kwargs,
+        )
 
     @static_dataset_decorator
     def raw_data_comparison(
@@ -1237,11 +1262,10 @@ class Viz:
         fwhm = x[right_index] - x[left_index]
 
         if return_points:
-            return ((x[left_index], y[left_index]), (x[right_index], y[right_index]))
+            return (x[left_index], y[left_index]), (x[right_index], y[right_index])
         else:
-            # Return the FWHM and the left/right points
-            return fwhm, x[left_index], x[right_index]
-    
+            return fwhm
+        
     @static_dataset_decorator
     def SHO_switching_maps(
         self,

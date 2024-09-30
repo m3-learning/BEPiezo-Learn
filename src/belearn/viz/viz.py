@@ -816,38 +816,7 @@ class Viz:
             + dataset.be_bandwidth * 0.25,
         )
 
-        # Plot the hysteresis waveform and add a zoomed-in inset
-        ax[2].plot(dataset.waveform_constructor())
-        ax_new = ax[2].inset_axes(inset_pos)
-        ax_new.plot(dataset.waveform_constructor())
-        ax_new.set_xlim(x_start, x_end)
-        ax_new.set_ylim(-2, 20)
-
-        # Draw the inset connector lines
-        inset_connector(
-            fig,
-            ax[2],
-            ax_new,
-            [(x_start, 0), (x_end, 0)],
-            [(x_start, 0), (x_end, 0)],
-            color="k",
-            linestyle="--",
-            linewidth=0.5,
-        )
-
-        # Add a box around the inset area on the main plot
-        add_box(
-            ax[2],
-            (x_start, 0, x_end, 15),
-            edgecolor="k",
-            linestyle="--",
-            facecolor="none",
-            linewidth=0.5,
-            zorder=10,
-        )
-
-        ax[2].set_xlabel("Voltage Steps")
-        ax[2].set_ylabel("Voltage (V)")
+        self.plot_hysteresis_waveform(fig, ax[2], inset_pos, x_start, x_end)
 
         # Set the dataset state to retrieve the magnitude spectrum
         dataset.scaled = False
@@ -892,6 +861,42 @@ class Viz:
         if self.Printer is not None:
             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
 
+    @static_dataset_decorator
+    def plot_hysteresis_waveform(self, fig, ax, inset_pos, x_start, x_end, y_inset_min=-2, y_inset_max=20):
+        
+        # Plot the hysteresis waveform and add a zoomed-in inset
+        ax.plot(self.dataset.waveform_constructor())
+        ax_new = ax.inset_axes(inset_pos)
+        ax_new.plot(self.dataset.waveform_constructor())
+        ax_new.set_xlim(x_start, x_end)
+        ax_new.set_ylim(-2, 20)
+
+        # Draw the inset connector lines
+        inset_connector(
+            fig,
+            ax,
+            ax_new,
+            [(x_start, y_inset_min), (x_end, y_inset_min)],
+            [(x_start, y_inset_min), (x_end, y_inset_min)],
+            color="k",
+            linestyle="--",
+            linewidth=0.5,
+        )
+
+        # Add a box around the inset area on the main plot
+        add_box(
+            ax,
+            (x_start, y_inset_min, x_end, y_inset_max),
+            edgecolor="k",
+            linestyle="--",
+            facecolor="none",
+            linewidth=0.5,
+            zorder=10,
+        )
+
+        ax.set_xlabel("Voltage Steps")
+        ax.set_ylabel("Voltage (V)")
+        
     @static_scale_decorator
     def SHO_hist(self, SHO_data, filename=None, scaled=False):
         """Plots the SHO hysteresis parameters
@@ -1774,6 +1779,165 @@ class Viz:
         # Save the plot if a filename and Printer are provided
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename)
+            
+    def hysteresis_comparison(self,
+                             data,
+                             row=None,
+                             col=None,
+                             cycle=None,
+                             size=(1.25, 1.25),
+                             gaps=(1, 0.66),
+                             nn_model=None,
+                             measurement_state=None,
+                             filename="hysteresis_comparison"):
+        """
+        Plot a comparison of the hysteresis loop.
+
+        Args:
+            data (list): List of data types to plot.
+            row (int, optional): Row to plot. Defaults to None.
+            col (int, optional): Column to plot. Defaults to None.
+            cycle (int, optional): Cycle to plot. Defaults to None.
+            size (tuple, optional): Size of the image to plot. Defaults to (1.25, 1.25).
+            gaps (tuple, optional): Gaps between subplots. Defaults to (1, 0.66).
+            nn_model (object, optional): Neural network model for comparison. Defaults to None.
+            measurement_state (str, optional): Measurement state to plot. Defaults to None.
+            filename (str, optional): Filename to save the plot. Defaults to "hysteresis_comparison".
+        """
+
+        # sets the measurement state
+        if self.dataset.measurement_state is not None:
+            self.dataset.measurement_state = measurement_state
+
+        # if only the LSQF is to be plotted
+        if 'LSQF' in data and 'NN' not in data:
+            # gets the LSQF Hysteresis Loops from the Dataset
+            loops, raw_hysteresis_loop_scaled, voltage = self.dataset.get_LSQF_hysteresis_fits(compare=True, index=False)
+
+            raw_hysteresis_loop = self.dataset.hysteresis_scaler.inverse_transform(raw_hysteresis_loop_scaled)
+
+            # selects a point to plot
+            row, col, cycle = self.get_selected_hysteresis(
+                raw_hysteresis_loop, row, col, cycle)
+
+            self.random_hysteresis(raw_hysteresis_loop,
+                                   loops,
+                                   voltage,
+                                   filename,
+                                   size,
+                                   row, col, cycle)
+            return
+
+        # gets the LSQF Hysteresis Loops from the Dataset
+        loops, raw_hysteresis_loop_scaled, voltage = self.dataset.get_LSQF_hysteresis_fits(compare=True)
+
+        # scales the loops for comparison
+        loops_scaled = self.dataset.hysteresis_scaler.transform(loops)
+        raw_hysteresis_loop = self.dataset.hysteresis_scaler.inverse_transform(raw_hysteresis_loop_scaled)
+
+        # gets the NN data for comparison
+        if nn_model is not None:
+            # gets the data for model prediction with the NN
+            _data, voltage = self.dataset.get_hysteresis(scaled=True, loop_interpolated=True)
+            _data = torch.atleast_3d(torch.tensor(_data.reshape(-1, self.dataset.voltage_steps_per_cycle))).float()
+
+            NN_pred_data, NN_scaled_params, NN_params = nn_model.predict(
+                _data, translate_params=False, is_SHO=False)
+            NN_loops = loop_fitting_function_torch(NN_params, voltage[:, 0].squeeze()).to(
+                'cpu').detach().numpy().squeeze()
+            NN_loops_scaled = self.dataset.hysteresis_scaler.transform(NN_loops)
+
+        # if we are plotting the NN and LSQF results
+        fig, ax = subfigures(3, len(data), gaps=gaps, size=size)
+
+        # loops around the models provided
+        for j, model in enumerate(data):
+
+            if model == 'LSQF':
+                out = self.ranked_mse(raw_hysteresis_loop_scaled,
+                                      {'LSQF': loops_scaled},
+                                      {'NN': NN_loops_scaled})
+
+            elif model == 'NN':
+                out = self.ranked_mse(raw_hysteresis_loop_scaled,
+                                      {'NN': NN_loops_scaled},
+                                      {'LSQF': loops_scaled})
+
+            for i, results in enumerate(out):
+
+                # sets the index for the plots
+                plot_idx = i * 2 + j
+
+                index = int(results['Original Index'])
+
+                ax[plot_idx].plot(voltage,
+                                  raw_hysteresis_loop[index], 'o', label="Raw Data")
+
+                ax[plot_idx].plot(voltage,
+                                  loops[index], 'r', label='LSQF')
+
+                ax[plot_idx].plot(voltage,
+                                  NN_loops[index], 'g', label='NN')
+
+                ax[plot_idx].ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+
+                # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
+                text_position_in_inches = (
+                    -1 * (gaps[0] + size[0]) * ((2 - i) % 3) + size[0] / 2,
+                    (gaps[1] + size[1]) * (1.25 - i // 3 - 1.25) - gaps[1],
+                )
+
+                # gets the axis position in inches - gets the bottom center
+                center = get_axis_pos_inches(fig, ax[plot_idx])
+
+                # selects the text position as an offset from the bottom center
+                text_position_in_inches = (center[0], center[1] - 0.32 + .125)
+
+                error = results['MSE_LSQF']
+
+                error_string = f"LSQF MSE: {error:0.4f}"
+
+                add_text_to_figure(
+                    fig,
+                    error_string,
+                    text_position_in_inches,
+                    fontsize=6,
+                    ha="center",
+                )
+
+                # selects the text position as an offset from the bottom center
+                text_position_in_inches = (center[0], center[1] - 0.3)
+
+                error = results['MSE_NN']
+
+                error_string = f"NN MSE: {error:0.4f}"
+
+                add_text_to_figure(
+                    fig,
+                    error_string,
+                    text_position_in_inches,
+                    fontsize=6,
+                    ha="center",
+                )
+
+                ax[plot_idx - 1].set_ylabel("(Arb. U.)")
+                ax[plot_idx].set_ylabel("(Arb. U.)")
+
+        # add a legend just for the last one
+        lines, labels = ax[plot_idx - 1].get_legend_handles_labels()
+        ax[plot_idx - 1].legend(lines, labels, loc="upper right")
+        lines, labels = ax[plot_idx].get_legend_handles_labels()
+        ax[plot_idx].legend(lines, labels, loc="upper right")
+
+        ax[plot_idx - 1].set_xlabel("Voltage (V)")
+        ax[plot_idx].set_xlabel("Voltage (V)")
+        ax[plot_idx - 1].xaxis.set_label_coords(0.5, -0.28)
+        ax[plot_idx].xaxis.set_label_coords(0.5, -0.28)
+
+        # prints the figure
+        if self.Printer is not None and filename is not None:
+            self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+
 
     def violin_plot_comparison_hysteresis(self, model, X_data, filename):
         """
@@ -3514,160 +3678,3 @@ class Viz:
 
 #         return best_example, middle_example, worst_example
 
-#     def hysteresis_comparison(self,
-#                              data,
-#                              row=None,
-#                              col=None,
-#                              cycle=None,
-#                              size=(1.25, 1.25),
-#                              gaps=(1, 0.66),
-#                              nn_model=None,
-#                              measurement_state=None,
-#                              filename="hysteresis_comparison"):
-#         """
-#         Plot a comparison of the hysteresis loop.
-
-#         Args:
-#             data (list): List of data types to plot.
-#             row (int, optional): Row to plot. Defaults to None.
-#             col (int, optional): Column to plot. Defaults to None.
-#             cycle (int, optional): Cycle to plot. Defaults to None.
-#             size (tuple, optional): Size of the image to plot. Defaults to (1.25, 1.25).
-#             gaps (tuple, optional): Gaps between subplots. Defaults to (1, 0.66).
-#             nn_model (object, optional): Neural network model for comparison. Defaults to None.
-#             measurement_state (str, optional): Measurement state to plot. Defaults to None.
-#             filename (str, optional): Filename to save the plot. Defaults to "hysteresis_comparison".
-#         """
-
-#         # sets the measurement state
-#         if self.dataset.measurement_state is not None:
-#             self.dataset.measurement_state = measurement_state
-
-#         # if only the LSQF is to be plotted
-#         if 'LSQF' in data and 'NN' not in data:
-#             # gets the LSQF Hysteresis Loops from the Dataset
-#             loops, raw_hysteresis_loop_scaled, voltage = self.dataset.get_LSQF_hysteresis_fits(compare=True, index=False)
-
-#             raw_hysteresis_loop = self.dataset.hysteresis_scaler.inverse_transform(raw_hysteresis_loop_scaled)
-
-#             # selects a point to plot
-#             row, col, cycle = self.get_selected_hysteresis(
-#                 raw_hysteresis_loop, row, col, cycle)
-
-#             self.random_hysteresis(raw_hysteresis_loop,
-#                                    loops,
-#                                    voltage,
-#                                    filename,
-#                                    size,
-#                                    row, col, cycle)
-#             return
-
-#         # gets the LSQF Hysteresis Loops from the Dataset
-#         loops, raw_hysteresis_loop_scaled, voltage = self.dataset.get_LSQF_hysteresis_fits(compare=True)
-
-#         # scales the loops for comparison
-#         loops_scaled = self.dataset.hysteresis_scaler.transform(loops)
-#         raw_hysteresis_loop = self.dataset.hysteresis_scaler.inverse_transform(raw_hysteresis_loop_scaled)
-
-#         # gets the NN data for comparison
-#         if nn_model is not None:
-#             # gets the data for model prediction with the NN
-#             _data, voltage = self.dataset.get_hysteresis(scaled=True, loop_interpolated=True)
-#             _data = torch.atleast_3d(torch.tensor(_data.reshape(-1, self.dataset.voltage_steps_per_cycle))).float()
-
-#             NN_pred_data, NN_scaled_params, NN_params = nn_model.predict(
-#                 _data, translate_params=False, is_SHO=False)
-#             NN_loops = loop_fitting_function_torch(NN_params, voltage[:, 0].squeeze()).to(
-#                 'cpu').detach().numpy().squeeze()
-#             NN_loops_scaled = self.dataset.hysteresis_scaler.transform(NN_loops)
-
-#         # if we are plotting the NN and LSQF results
-#         fig, ax = subfigures(3, len(data), gaps=gaps, size=size)
-
-#         # loops around the models provided
-#         for j, model in enumerate(data):
-
-#             if model == 'LSQF':
-#                 out = self.ranked_mse(raw_hysteresis_loop_scaled,
-#                                       {'LSQF': loops_scaled},
-#                                       {'NN': NN_loops_scaled})
-
-#             elif model == 'NN':
-#                 out = self.ranked_mse(raw_hysteresis_loop_scaled,
-#                                       {'NN': NN_loops_scaled},
-#                                       {'LSQF': loops_scaled})
-
-#             for i, results in enumerate(out):
-
-#                 # sets the index for the plots
-#                 plot_idx = i * 2 + j
-
-#                 index = int(results['Original Index'])
-
-#                 ax[plot_idx].plot(voltage,
-#                                   raw_hysteresis_loop[index], 'o', label="Raw Data")
-
-#                 ax[plot_idx].plot(voltage,
-#                                   loops[index], 'r', label='LSQF')
-
-#                 ax[plot_idx].plot(voltage,
-#                                   NN_loops[index], 'g', label='NN')
-
-#                 ax[plot_idx].ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
-
-#                 # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
-#                 text_position_in_inches = (
-#                     -1 * (gaps[0] + size[0]) * ((2 - i) % 3) + size[0] / 2,
-#                     (gaps[1] + size[1]) * (1.25 - i // 3 - 1.25) - gaps[1],
-#                 )
-
-#                 # gets the axis position in inches - gets the bottom center
-#                 center = get_axis_pos_inches(fig, ax[plot_idx])
-
-#                 # selects the text position as an offset from the bottom center
-#                 text_position_in_inches = (center[0], center[1] - 0.32 + .125)
-
-#                 error = results['MSE_LSQF']
-
-#                 error_string = f"LSQF MSE: {error:0.4f}"
-
-#                 add_text_to_figure(
-#                     fig,
-#                     error_string,
-#                     text_position_in_inches,
-#                     fontsize=6,
-#                     ha="center",
-#                 )
-
-#                 # selects the text position as an offset from the bottom center
-#                 text_position_in_inches = (center[0], center[1] - 0.3)
-
-#                 error = results['MSE_NN']
-
-#                 error_string = f"NN MSE: {error:0.4f}"
-
-#                 add_text_to_figure(
-#                     fig,
-#                     error_string,
-#                     text_position_in_inches,
-#                     fontsize=6,
-#                     ha="center",
-#                 )
-
-#                 ax[plot_idx - 1].set_ylabel("(Arb. U.)")
-#                 ax[plot_idx].set_ylabel("(Arb. U.)")
-
-#         # add a legend just for the last one
-#         lines, labels = ax[plot_idx - 1].get_legend_handles_labels()
-#         ax[plot_idx - 1].legend(lines, labels, loc="upper right")
-#         lines, labels = ax[plot_idx].get_legend_handles_labels()
-#         ax[plot_idx].legend(lines, labels, loc="upper right")
-
-#         ax[plot_idx - 1].set_xlabel("Voltage (V)")
-#         ax[plot_idx].set_xlabel("Voltage (V)")
-#         ax[plot_idx - 1].xaxis.set_label_coords(0.5, -0.28)
-#         ax[plot_idx].xaxis.set_label_coords(0.5, -0.28)
-
-#         # prints the figure
-#         if self.Printer is not None and filename is not None:
-#             self.Printer.savefig(fig, filename, label_figs=ax, style="b")

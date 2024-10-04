@@ -9,6 +9,9 @@ from m3util.util.h5 import (
 from belearn.dataset.scalers import Raw_Data_Scaler
 from belearn.util.wrappers import static_state_decorator
 from belearn.functions.sho import SHO_nn
+from belearn.functions.hysteresis import hysteresis_nn
+from belearn.filters.filters import clean_interpolate
+from m3util.ml.preprocessor import GlobalScaler
 
 # from belearn.dataset.transformers import to_complex
 import numpy as np
@@ -50,7 +53,7 @@ class BE_Dataset:
     cleaned: bool = False
     basegroup: str = "/Measurement_000/Channel_000"
     SHO_fit_func_LSQF: Callable = field(default=SHO_nn)
-    hysteresis_function: Optional[Callable] = None
+    hysteresis_function: Optional[Callable] = hysteresis_nn
     loop_interpolated: bool = False
     tree: Any = field(init=False)
     resampled_data: Dict[str, Any] = field(default_factory=dict, init=False)
@@ -903,6 +906,21 @@ class BE_Dataset:
                     int(self.voltage_steps / loop_number) :
                 ]
             )
+            
+    def get_loop_path(self):
+        """
+        get_loop_path gets the path where the hysteresis loops are located
+
+        Returns:
+            str: string pointing to the path where the hysteresis loops are located
+        """
+
+        if self.noise == 0 or self.noise is None:
+            prefix = 'Raw_Data'
+            return f"Measurement_000/{prefix}-SHO_Fit_000/Fit-Loop_Fit_000"
+        else:
+            prefix = f"Noisy_Data_{self.noise}"
+            return f"/Noisy_Data_{self.noise}_SHO_Fit/Noisy_Data_{self.noise}-SHO_Fit_000/Guess-Loop_Fit_000"
 
     def raw_data_resampled(self, pixel=None, voltage_step=None):
         """
@@ -2094,7 +2112,7 @@ class BE_Dataset:
             # reshape the vdc_vec into DC_step by Loop
             spec_nd, _ = reshape_to_n_dims(spec_values, h5_spec=spec_ind)
             loop_spec_dims = np.array(spec_nd.shape[1:])
-            loop_spec_labels = get_attr(spec_values, 'labels')
+            loop_spec_labels = sidpy.hdf.hdf_utils.get_attr(spec_values, 'labels')
 
             spec_step_dim_ind = np.where(loop_spec_labels == 'DC_Offset')[0][0]
 
@@ -2169,48 +2187,50 @@ class BE_Dataset:
 
         return loops
 
-    # def loop_fit_preprocessing(self):
-    #     """
-    #     loop_fit_preprocessing preprocessing for the loop fit results
-    #     """
+    def loop_fit_preprocessing(self):
+        """
+        loop_fit_preprocessing preprocessing for the loop fit results
+        """
 
-    #     # gets the hysteresis loops
-    #     hysteresis, bias = self.get_hysteresis(
-    #         plotting_values=True, output_shape="index")
+        # gets the hysteresis loops
+        hysteresis, bias = self.get_hysteresis(
+            plotting_values=True, output_shape="index")
 
-    #     # interpolates any missing points in the data
-    #     cleaned_hysteresis = clean_interpolate(hysteresis)
+        # interpolates any missing points in the data
+        cleaned_hysteresis = clean_interpolate(hysteresis)
 
-    #     # instantiates and computes the global scaler
-    #     self.hysteresis_scaler_ = GlobalScaler()
-    #     self.hysteresis_scaler_.fit_transform(cleaned_hysteresis)
+        # instantiates and computes the global scaler
+        self.hysteresis_scaler_ = GlobalScaler()
+        self.hysteresis_scaler_.fit_transform(cleaned_hysteresis)
 
-    #     try:
-    #         self.LoopParmScaler()
-    #     except:
-    #         pass
+        try:
+            self.LoopParmScaler()
+        except:
+            pass
 
-    # @property
-    # def hysteresis_scaler(self):
-    #     """
-    #     get_hysteresis_scaler gets the hysteresis scaler
+    @property
+    def hysteresis_scaler(self):
+        """
+        get_hysteresis_scaler gets the hysteresis scaler
 
-    #     Returns:
-    #         scaler: scaler for the hysteresis loops
-    #     """
+        Returns:
+            scaler: scaler for the hysteresis loops
+        """
 
-    #     return self.hysteresis_scaler_
+        return self.hysteresis_scaler_
 
-    # @property
-    # def get_voltage(self):
-    #     """
-    #     get_voltage gets the voltage vector
+    @property
+    def get_voltage(self):
+        """
+        get_voltage gets the voltage vector
 
-    #     Returns:
-    #         np.array: voltage vector
-    #     """
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return h5_f['Measurement_000']['Channel_000']['UDVS'][::2][:, 1][24:120] * -1
+        Returns:
+            np.array: voltage vector
+        """
+        
+        # TODO: Look for a way to refactor and not hard code. 
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f['Measurement_000']['Channel_000']['UDVS'][::2][:, 1][24:120] * -1
 
     # @property
     # def get_hysteresis_voltage_len(self):
@@ -2281,196 +2301,184 @@ class BE_Dataset:
     #         except KeyError:
     #             print("Dataset not found, could not be deleted")
 
-    # def measure_group(self):
-    #     """
-    #     measure_group gets the measurement group based on a noise level
+    def measure_group(self):
+        """
+        measure_group gets the measurement group based on a noise level
 
-    #     Returns:
-    #         str: string for the measurement group for the data
-    #     """
+        Returns:
+            str: string for the measurement group for the data
+        """
 
-    #     if self.noise == 0:
-    #         return "Raw_Data_SHO_Fit"
-    #     else:
-    #         return f"Noisy_Data_{self.noise}"
+        if self.noise == 0:
+            return "Raw_Data_SHO_Fit"
+        else:
+            return f"Noisy_Data_{self.noise}"
 
-    # def LSQF_Loop_Fit(self,
-    #                   main_dataset=None,
-    #                   h5_target_group=None,
-    #                   max_cores=None,
-    #                   force=False,
-    #                   h5_sho_targ_grp=None):
-    #     """
-    #     LSQF_Loop_Fit Function that conducts the hysteresis loop fits based on the LSQF results.
+    def LSQF_Loop_Fit(self,
+                      main_dataset=None,
+                      h5_target_group=None,
+                      max_cores=None,
+                      force=False,
+                      h5_sho_targ_grp=None):
+        """
+        LSQF_Loop_Fit Function that conducts the hysteresis loop fits based on the LSQF results.
 
-    #     This is adapted from BGlib
+        This is adapted from BGlib
 
-    #     Args:
-    #         main_dataset (str, optional): main dataset where loop fits are conducted from. Defaults to None.
-    #         h5_target_group (str, optional): path where the data will be saved to. Defaults to None.
-    #         max_cores (int, optional): number of cores the fitter will use, -1 will use all cores. Defaults to None.
-    #         h5_sho_targ_grp (str, optional): path where the SHO fits are saved. Defaults to None.
+        Args:
+            main_dataset (str, optional): main dataset where loop fits are conducted from. Defaults to None.
+            h5_target_group (str, optional): path where the data will be saved to. Defaults to None.
+            max_cores (int, optional): number of cores the fitter will use, -1 will use all cores. Defaults to None.
+            h5_sho_targ_grp (str, optional): path where the SHO fits are saved. Defaults to None.
 
-    #     Raises:
-    #         TypeError: _description_
+        Raises:
+            TypeError: _description_
 
-    #     Returns:
-    #         tuple: results from the loop fit, group where the loop fit is
-    #     """
+        Returns:
+            tuple: results from the loop fit, group where the loop fit is
+        """
 
-    #     with h5py.File(self.file, "r+") as h5_file:
+        with h5py.File(self.file, "r+") as h5_file:
 
-    #         # finds the main dataset location in the file
-    #         if main_dataset is None:
-    #             h5_main = usid.hdf_utils.find_dataset(
-    #                 h5_file, 'Raw_Data')[0]
-    #         else:
-    #             h5_main = usid.hdf_utils.find_dataset(
-    #                 h5_file, main_dataset)[0]
+            # finds the main dataset location in the file
+            if main_dataset is None:
+                h5_main = usid.hdf_utils.find_dataset(
+                    h5_file, 'Raw_Data')[0]
+            else:
+                h5_main = usid.hdf_utils.find_dataset(
+                    h5_file, main_dataset)[0]
 
-    #         # gets the measurement group name
-    #         h5_meas_grp = h5_main.parent.parent
+            # gets the measurement group name
+            h5_meas_grp = h5_main.parent.parent
 
-    #         # does the SHO_fit if it does not exist.
-    #         sho_fit_points = 5  # The number of data points at each step to use when fitting
-    #         sho_override = False  # Force recompute if True
-    #         sho_fitter = belib.analysis.BESHOfitter(
-    #             h5_main, cores=max_cores, verbose=False, h5_target_group=h5_meas_grp)
-    #         sho_fitter.set_up_guess(
-    #             guess_func=belib.analysis.be_sho_fitter.SHOGuessFunc.complex_gaussian, num_points=sho_fit_points)
-    #         h5_sho_guess = sho_fitter.do_guess(override=sho_override)
-    #         sho_fitter.set_up_fit()
-    #         h5_sho_fit = sho_fitter.do_fit(override=sho_override)
-    #         h5_sho_grp = h5_sho_fit.parent
+            # does the SHO_fit if it does not exist.
+            sho_fit_points = 5  # The number of data points at each step to use when fitting
+            sho_override = False  # Force recompute if True
+            sho_fitter = belib.analysis.BESHOfitter(
+                h5_main, cores=max_cores, verbose=False, h5_target_group=h5_meas_grp)
+            sho_fitter.set_up_guess(
+                guess_func=belib.analysis.be_sho_fitter.SHOGuessFunc.complex_gaussian, num_points=sho_fit_points)
+            h5_sho_guess = sho_fitter.do_guess(override=sho_override)
+            sho_fitter.set_up_fit()
+            h5_sho_fit = sho_fitter.do_fit(override=sho_override)
+            h5_sho_grp = h5_sho_fit.parent
 
-    #         # gets the experiment type from the file
-    #         expt_type = sidpy.hdf.hdf_utils.get_attr(h5_file, 'data_type')
+            # gets the experiment type from the file
+            expt_type = sidpy.hdf.hdf_utils.get_attr(h5_file, 'data_type')
 
-    #         # finds the dataset from the file
-    #         h5_meas_grp = usid.hdf_utils.find_dataset(
-    #             h5_file, self.measure_group())
+            # finds the dataset from the file
+            h5_meas_grp = usid.hdf_utils.find_dataset(
+                h5_file, self.measure_group())
 
-    #         # extract the voltage mode
-    #         vs_mode = sidpy.hdf.hdf_utils.get_attr(
-    #             h5_file["/Measurement_000"], 'VS_mode')
+            # extract the voltage mode
+            vs_mode = sidpy.hdf.hdf_utils.get_attr(
+                h5_file["/Measurement_000"], 'VS_mode')
 
-    #         try:
-    #             vs_cycle_frac = sidpy.hdf.hdf_utils.get_attr(
-    #                 h5_file["/Measurement_000"], 'VS_cycle_fraction')
+            try:
+                vs_cycle_frac = sidpy.hdf.hdf_utils.get_attr(
+                    h5_file["/Measurement_000"], 'VS_cycle_fraction')
 
-    #         except KeyError:
-    #             print('VS cycle fraction could not be found. Setting to default value')
-    #             vs_cycle_frac = 'full'
+            except KeyError:
+                print('VS cycle fraction could not be found. Setting to default value')
+                vs_cycle_frac = 'full'
 
-    #         sho_fit, sho_dataset = self.SHO_Fitter(fit_group=True)
+            sho_fit, sho_dataset = self.SHO_Fitter(fit_group=True)
 
-    #         # instantiates the loop fitter using belib
-    #         loop_fitter = belib.analysis.BELoopFitter(h5_sho_fit,
-    #                                                   expt_type, vs_mode, vs_cycle_frac,
-    #                                                   #   h5_target_group=h5_meas_grp,
-    #                                                   cores=max_cores,
-    #                                                   verbose=False)
+            # instantiates the loop fitter using belib
+            loop_fitter = belib.analysis.BELoopFitter(h5_sho_fit,
+                                                      expt_type, vs_mode, vs_cycle_frac,
+                                                        #  h5_target_group=h5_meas_grp,
+                                                      cores=max_cores,
+                                                      verbose=False)
 
-    #         # computes the guess for the loop fits
-    #         loop_fitter.set_up_guess()
-    #         h5_loop_guess = loop_fitter.do_guess(override=force)
+            # computes the guess for the loop fits
+            loop_fitter.set_up_guess()
+            h5_loop_guess = loop_fitter.do_guess(override=force)
 
-    #         # Calling explicitly here since Fitter won't do it automatically
-    #         h5_guess_loop_parms = loop_fitter.extract_loop_parameters(
-    #             h5_loop_guess)
-    #         loop_fitter.set_up_fit()
-    #         h5_loop_fit = loop_fitter.do_fit(override=force)
+            # Calling explicitly here since Fitter won't do it automatically
+            h5_guess_loop_parms = loop_fitter.extract_loop_parameters(
+                h5_loop_guess)
+            loop_fitter.set_up_fit()
+            h5_loop_fit = loop_fitter.do_fit(override=force)
 
-    #         # save the path where the loop fit results are saved
-    #         h5_loop_group = h5_loop_fit.parent
+            # save the path where the loop fit results are saved
+            h5_loop_group = h5_loop_fit.parent
 
-    #     return h5_loop_fit, h5_loop_group
+        return h5_loop_fit, h5_loop_group
 
-    # @property
-    # def num_cols(self):
-    #     """Number of columns in the data"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return h5_f['Measurement_000'].attrs["grid_num_cols"]
+    @property
+    def num_cols(self):
+        """Number of columns in the data"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f['Measurement_000'].attrs["grid_num_cols"]
 
-    # @property
-    # def num_rows(self):
-    #     """Number of rows in the data"""
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         return h5_f['Measurement_000'].attrs["grid_num_rows"]
+    @property
+    def num_rows(self):
+        """Number of rows in the data"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f['Measurement_000'].attrs["grid_num_rows"]
 
     # @property
     # def resampled_freq(self):
     #     """Gets the resampled frequency"""
     #     return resample(self.frequency_bin, self.resampled_bins)
 
-    # @static_state_decorator
-    # def LSQF_hysteresis_params(self, output_shape=None, scaled=None, measurement_state=None):
-    #     """
-    #     LSQF_hysteresis_params Gets the LSQF hysteresis parameters
+    @static_state_decorator
+    def LSQF_hysteresis_params(self, output_shape=None, scaled=None, measurement_state=None):
+        """
+        LSQF_hysteresis_params Gets the LSQF hysteresis parameters
 
-    #     Args:
-    #         output_shape (str, optional): pixel or list. Defaults to None.
-    #         scaled (bool, optional): selects if to scale the data. Defaults to None.
-    #         measurement_state (any, optional): sets the measurement state. Defaults to None.
+        Args:
+            output_shape (str, optional): pixel or list. Defaults to None.
+            scaled (bool, optional): selects if to scale the data. Defaults to None.
+            measurement_state (any, optional): sets the measurement state. Defaults to None.
 
-    #     Returns:
-    #         np.array: hysteresis loop parameters from LSQF
-    #     """
+        Returns:
+            np.array: hysteresis loop parameters from LSQF
+        """
 
-    #     if measurement_state is not None:
-    #         self.measurement_state = measurement_state
+        if measurement_state is not None:
+            self.measurement_state = measurement_state
 
-    #     # sets output shape if provided
-    #     if output_shape is not None:
-    #         self.output_shape = output_shape
+        # sets output shape if provided
+        if output_shape is not None:
+            self.output_shape = output_shape
 
-    #     # sets data to be scaled is provided
-    #     if scaled is not None:
-    #         self.scaled = scaled
+        # sets data to be scaled is provided
+        if scaled is not None:
+            self.scaled = scaled
 
-    #     # extracts the hysteresis parameters from the H5 file
-    #     with h5py.File(self.file, "r+") as h5_f:
-    #         data = h5_f[f"/Measurement_000/{self.dataset}-SHO_Fit_000/Fit-Loop_Fit_000/Fit"][:]
-    #         data = data.reshape(self.num_rows, self.num_cols, self.num_cycles)
-    #         data = np.array([data['a_0'], data['a_1'], data['a_2'], data['a_3'], data['a_4'],
-    #                         data['b_0'], data['b_1'], data['b_2'], data['b_3']]).transpose((1, 2, 3, 0))
+        # extracts the hysteresis parameters from the H5 file
+        with h5py.File(self.file, "r+") as h5_f:
+            data = h5_f[f"/Measurement_000/{self.dataset}-SHO_Fit_000/Fit-Loop_Fit_000/Fit"][:]
+            data = data.reshape(self.num_rows, self.num_cols, self.num_cycles)
+            data = np.array([data['a_0'], data['a_1'], data['a_2'], data['a_3'], data['a_4'],
+                            data['b_0'], data['b_1'], data['b_2'], data['b_3']]).transpose((1, 2, 3, 0))
 
-    #         if self.scaled:
-    #             # TODO: add the scaling here
-    #             data = self.loop_param_scaler.fit(data)
+            if self.scaled:
+                # TODO: add the scaling here
+                data = self.loop_param_scaler.fit(data)
 
-    #             # Warning("Scaling not implemented yet")
-    #             # pass
+                # Warning("Scaling not implemented yet")
+                # pass
 
-    #         if self.output_shape == "index":
-    #             data = data.reshape(
-    #                 self.num_pix, self.num_cycles, data.shape[-1])
+            if self.output_shape == "index":
+                data = data.reshape(
+                    self.num_pix, self.num_cycles, data.shape[-1])
 
-    #         data = self.hysteresis_measurement_state(data)
+            data = self.hysteresis_measurement_state(data)
 
-    #         return data
+            return data
 
-    # def LoopParmScaler(self):
+    def LoopParmScaler(self):
+        
+        # TODO: Could update not to be hard coded
+        self.loop_param_scaler = StandardScaler()
+        data = self.LSQF_hysteresis_params().reshape(-1, 9)
 
-    #     self.loop_param_scaler = StandardScaler()
-    #     data = self.LSQF_hysteresis_params().reshape(-1, 9)
+        self.loop_param_scaler.fit(data)
 
-    #     self.loop_param_scaler.fit(data)
 
-    # def get_loop_path(self):
-    #     """
-    #     get_loop_path gets the path where the hysteresis loops are located
-
-    #     Returns:
-    #         str: string pointing to the path where the hysteresis loops are located
-    #     """
-
-    #     if self.noise == 0 or self.noise is None:
-    #         prefix = 'Raw_Data'
-    #         return f"Measurement_000/{prefix}-SHO_Fit_000/Fit-Loop_Fit_000"
-    #     else:
-    #         prefix = f"Noisy_Data_{self.noise}"
-    #         return f"/Noisy_Data_{self.noise}_SHO_Fit/Noisy_Data_{self.noise}-SHO_Fit_000/Guess-Loop_Fit_000"
 
     
     # def get_bias_vector(self, plotting_values=True):
@@ -2519,47 +2527,47 @@ class BE_Dataset:
 
     #         return bias_vec
 
-    # def hysteresis_measurement_state(self, hysteresis_data):
-    #     """utility function to extract the measurement state from the hysteresis data
+    def hysteresis_measurement_state(self, hysteresis_data):
+        """utility function to extract the measurement state from the hysteresis data
 
-    #     Args:
-    #         hysteresis_data (np.array): hysteresis data to extract the measurement state from
+        Args:
+            hysteresis_data (np.array): hysteresis data to extract the measurement state from
 
-    #     Returns:
-    #         np.array: hysteresis data with the measurement state extracted
-    #     """
+        Returns:
+            np.array: hysteresis data with the measurement state extracted
+        """
 
-    #     if self.measurement_state == "all" or self.measurement_state is None:
-    #         return hysteresis_data
-    #     if self.measurement_state == "off":
-    #         return hysteresis_data[:, :, hysteresis_data.shape[2]//2:hysteresis_data.shape[2], :]
-    #     if self.measurement_state == "on":
-    #         return hysteresis_data[:, :, 0:hysteresis_data.shape[2]//2, :]
+        if self.measurement_state == "all" or self.measurement_state is None:
+            return hysteresis_data
+        if self.measurement_state == "off":
+            return hysteresis_data[:, :, hysteresis_data.shape[2]//2:hysteresis_data.shape[2], :]
+        if self.measurement_state == "on":
+            return hysteresis_data[:, :, 0:hysteresis_data.shape[2]//2, :]
 
-    # def roll_hysteresis(self, bias_vector, hysteresis=None,
-    #                     shift=4):
-    #     """
-    #     roll_hysteresis function to shift the bias vector and the hysteresis loop by a quarter cycle. This is to compensate for the difference in how the data is stored.
+    def roll_hysteresis(self, bias_vector, hysteresis=None,
+                        shift=4):
+        """
+        roll_hysteresis function to shift the bias vector and the hysteresis loop by a quarter cycle. This is to compensate for the difference in how the data is stored.
 
-    #     Args:
-    #         hysteresis (np.array): array for the hysteresis loop
-    #         bias_vector (np.array): array for the bias vector
-    #         shift (int, optional): fraction to roll the hysteresis loop by. Defaults to 4.
+        Args:
+            hysteresis (np.array): array for the hysteresis loop
+            bias_vector (np.array): array for the bias vector
+            shift (int, optional): fraction to roll the hysteresis loop by. Defaults to 4.
 
-    #     Returns:
-    #         _type_: _description_
-    #     """
+        Returns:
+            _type_: _description_
+        """
 
-    #     # TODO: long term this is likely the wrong way to do this, should get this from the USID file spectroscopic index
+        # TODO: long term this is likely the wrong way to do this, should get this from the USID file spectroscopic index
 
-    #     # Shift the bias vector and the loops by a quarter cycle
-    #     shift_ind = int(-1 * bias_vector.shape[0] / shift)
-    #     bias_vector = np.roll(bias_vector, shift_ind, axis=0)
-    #     if hysteresis is None:
-    #         return bias_vector
-    #     else:
-    #         proj_nd_shifted = np.roll(hysteresis, shift_ind, axis=2)
-    #         return proj_nd_shifted, bias_vector
+        # Shift the bias vector and the loops by a quarter cycle
+        shift_ind = int(-1 * bias_vector.shape[0] / shift)
+        bias_vector = np.roll(bias_vector, shift_ind, axis=0)
+        if hysteresis is None:
+            return bias_vector
+        else:
+            proj_nd_shifted = np.roll(hysteresis, shift_ind, axis=2)
+            return proj_nd_shifted, bias_vector
 
     # @property
     # def BE_superposition_state(self):

@@ -3456,54 +3456,54 @@ class Viz:
 #             # prints the MSE
 #             print(f"{label} Mean Squared Error: {out:0.4f}")
 
-#     def get_selected_hysteresis(self,
-#                                 data,
-#                                 row=None,
-#                                 col=None,
-#                                 cycle=None):
-#         """
-#          Function that extracts a dataset or chooses a random dataset from the hysteresis loop
+    def get_selected_hysteresis(self,
+                                data,
+                                row=None,
+                                col=None,
+                                cycle=None):
+        """
+         Function that extracts a dataset or chooses a random dataset from the hysteresis loop
 
-#         Returns:
-#             np.array: get selected hysteresis loop
-#         """
+        Returns:
+            np.array: get selected hysteresis loop
+        """
 
-#         if row is None:
-#             row = np.random.randint(0, data.shape[0], 1)
+        if row is None:
+            row = np.random.randint(0, data.shape[0], 1)
 
-#         if col is None:
-#             col = np.random.randint(0, data.shape[1], 1)
+        if col is None:
+            col = np.random.randint(0, data.shape[1], 1)
 
-#         if cycle is None:
-#             cycle = np.random.randint(0, data.shape[2], 1)
+        if cycle is None:
+            cycle = np.random.randint(0, data.shape[2], 1)
 
-#         return (row, col, cycle)
+        return (row, col, cycle)
 
-#     def random_hysteresis(self,
-#                           raw_hysteresis_loop,
-#                           lsqf_hysteresis_loop,
-#                           voltage,
-#                           filename,
-#                           size,
-#                           row, col, cycle):
-
-
-#         fig, ax = subfigures(1, 1, size=size)
-
-#         ax[0].plot(voltage.squeeze(),
-#                     raw_hysteresis_loop[row, col, cycle, :].squeeze(), 'o', label="Raw Data")
+    def random_hysteresis(self,
+                          raw_hysteresis_loop,
+                          lsqf_hysteresis_loop,
+                          voltage,
+                          filename,
+                          size,
+                          row, col, cycle):
 
 
-#         ax[0].plot(voltage.squeeze(),
-#                     lsqf_hysteresis_loop[row, col, cycle, :].squeeze(), 'r', label='LSQF')
+        fig, ax = subfigures(1, 1, size=size)
 
-#         ax[0].set_xlabel('Voltage (V)')
-#         ax[0].set_ylabel('Amplitude (Arb. U.)')
-#         ax[0].legend()
+        ax[0].plot(voltage.squeeze(),
+                    raw_hysteresis_loop[row, col, cycle, :].squeeze(), 'o', label="Raw Data")
 
-#         # prints the figure
-#         if self.Printer is not None and filename is not None:
-#             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+
+        ax[0].plot(voltage.squeeze(),
+                    lsqf_hysteresis_loop[row, col, cycle, :].squeeze(), 'r', label='LSQF')
+
+        ax[0].set_xlabel('Voltage (V)')
+        ax[0].set_ylabel('Amplitude (Arb. U.)')
+        ax[0].legend()
+
+        # prints the figure
+        if self.Printer is not None and filename is not None:
+            self.Printer.savefig(fig, filename, label_figs=ax, style="b")
 
 
 #     def hysteresis_maps(

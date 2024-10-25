@@ -191,7 +191,7 @@ class BE_Dataset:
             self.dataset_id = self.datafed
         elif self.datafed is not None:
             # Instantiate the DataFed object if datafed is a path
-            self.datafed_obj = DataFed(self.datafed)
+            self.datafed_obj = DataFed(self.datafed, dataset_id_or_path = self.dataset_id, logging = True)
 
             # Extract metadata from the HDF5 file structure
             metadata = self.extract_h5_structure()
@@ -202,14 +202,18 @@ class BE_Dataset:
                 }
             )
 
-            # Create a data record in DataFed with the extracted metadata
-            dc_resp = self.datafed_obj.data_record_create(metadata, self.file.split("/")[-1].split(".")[0])
+            self.dataset_id = self.datafed_obj.upload_dataset_to_DataFed()
 
-            # Upload the file to DataFed
-            self.datafed_obj.upload_file(dc_resp, self.file, wait=False)
+            # # Create a data record in DataFed with the extracted metadata
+            # dc_resp = self.datafed_obj.data_record_create(metadata, self.file.split("/")[-1].split(".")[0])
 
-            # Set the DataFed ID from the response
-            self.dataset_id = dc_resp[0].data[0].id
+            # # Set the DataFed ID from the response
+            # self.dataset_id = dc_resp[0].data[0].id
+
+            # # Upload the file to DataFed
+            # self.datafed_obj.upload_file(self.dataset_id , self.file, wait=False)
+
+        
 
         elif self.datafed is None:
             # If datafed is None, set dataset_id to None

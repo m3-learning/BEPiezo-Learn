@@ -234,8 +234,12 @@ class BatchTrainer:
             )
 
             # Update script path if necessary
-            if self.datafed_path is not None:
-                self.script_path = model.script_path
+            
+            # JGoddy commented out the below lines because 
+            # script_path should stay as the local path so it is accessible
+            # for the checksum generator 
+            # if self.datafed_path is not None: 
+            #     self.script_path = model.script_path
 
             del model, X_train, X_test, y_train, y_test
 

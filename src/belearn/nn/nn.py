@@ -1,5 +1,6 @@
 from autophyslearn.spectroscopic.nn import Multiscale1DFitter, Model
 from m3util.ml.rand import set_seeds
+from m3util.pandas.filter import find_min_max_by_group
 import itertools
 from autophyslearn.postprocessing.complex import ComplexPostProcessor
 from belearn.functions.sho import SHO_nn
@@ -10,6 +11,7 @@ from typing import List, Optional, Dict, Any
 import itertools
 import torch
 import gc
+import os
 
 
 def static_state_decorator(func):
@@ -28,20 +30,20 @@ def static_state_decorator(func):
     return wrapper
 
 
-def get_model_filename(basepath, results, noise, optimizer):
-    """
-    Get the model filename for a specific optimizer from the results dictionary.
+# def get_model_filename(basepath, results, noise, optimizer):
+#     """
+#     Get the model filename for a specific optimizer from the results dictionary.
 
-    Parameters:
-    basepath (str): The base directory path where the model file is located.
-    results (dict): The dictionary containing model information.
-    noise (float): The noise level for which to retrieve the model.
-    optimizer (str): The optimizer type ('Adam', 'Trust Region CG', etc.).
+#     Parameters:
+#     basepath (str): The base directory path where the model file is located.
+#     results (dict): The dictionary containing model information.
+#     noise (float): The noise level for which to retrieve the model.
+#     optimizer (str): The optimizer type ('Adam', 'Trust Region CG', etc.).
 
-    Returns:
-    str: The full path to the model file.
-    """
-    return basepath + "/" + results[(noise, optimizer)]["filename"].split("//")[-1]
+#     Returns:
+#     str: The full path to the model file.
+#     """
+#     return basepath + "/" + results[(noise, optimizer)]["filename"].split("//")[-1]
 
 
 def instantiate_fitter(
@@ -92,30 +94,103 @@ def instantiate_model(fitter_model, dataset, noise, optimizer, training=True):
     )
 
 
-def create_models(basepath, results, noise, dataset, postprocessor, SHO_nn):
+def get_model(
+    df,
+    optimizer_name="Adam",
+    noise=0,
+    optimized_result="train_loss",
+    find="min",
+    exclude_kwargs={"early_stopping": True},
+    file_name=r".*\.pth$",
+    **kwargs,
+):
     """
-    Create and instantiate models for both Adam and Trust Region optimizers.
+    Retrieve the model from the dataframe based on optimization results.
 
     Parameters:
-    basepath (str): The base directory path where the model files are located.
-    results (dict): Dictionary containing the trained models' results.
-    noise (float): The noise level to search for the best model.
-    dataset (object): The dataset to be used for the model.
-    postprocessor (callable): The post-processing function.
-    SHO_nn (callable): The SHO function used for the Multiscale1DFitter.
+    df (pd.DataFrame): The dataframe containing model information.
+    noise (float): The noise level for which to retrieve the model. Default is 0.
+    optimized_result (str): The column name in the dataframe to optimize. Default is "train_loss".
+    find (str): Whether to find the "min" or "max" value in the optimized_result column. Default is "min".
+    exclude_kwargs (dict): Dictionary of keyword arguments to exclude from the search. Default is {"early_stopping": True}.
+    file_name (str): Regex pattern to match the model file name. Default is r".*\.pth$".
+    **kwargs: Additional keyword arguments to pass to the find_min_max_by_group function.
 
     Returns:
-    tuple: A tuple containing the Adam model and the Trust Region model.
+    dict: The model information dictionary.
     """
-    # Get filenames for both optimizers
-    model_name_adam = get_model_filename(basepath, results, noise, "Adam")
-    model_name_trust_region = get_model_filename(
-        basepath, results, noise, "Trust Region CG"
+
+    # Find the model in the dataframe based on the specified criteria
+    model = find_min_max_by_group(
+        df=df,
+        optimized_result=optimized_result,
+        find=find,
+        exclude_kwargs=exclude_kwargs,
+        noise_level=noise,
+        optimizer_name=optimizer_name,
+        file_name=file_name,
+        **kwargs,
     )
 
+    return model
+
+
+def create_models(
+    basepath,
+    df,
+    dataset,
+    noise=0,
+    optimized_result="train_loss",
+    find="min",
+    postprocessor=None,
+    function=SHO_nn,
+    exclude_kwargs={},
+    file_name=r".*\.pth$",
+    **kwargs,
+):
+    # Remove any keys from kwargs that are explicitly passed in get_model
+    filtered_kwargs = {
+        k: v
+        for k, v in kwargs.items()
+        if k
+        not in {
+            "col_name",
+            "find",
+            "exclude_kwargs",
+            "noise_level",
+            "optimizer_name",
+            "file_name",
+        }
+    }
+
+    adam_df = get_model(
+        df,
+        optimized_result=optimized_result,
+        find=find,
+        exclude_kwargs=exclude_kwargs,
+        noise=noise,
+        optimizer_name="Adam",
+        file_name=file_name,
+        **filtered_kwargs,
+    )
+
+    TR_df = get_model(
+        df,
+        optimized_result=optimized_result,
+        find=find,
+        exclude_kwargs=exclude_kwargs,
+        noise=noise,
+        optimizer_name="Trust Region CG",
+        file_name=file_name,
+        **filtered_kwargs,
+    )
+
+    adam_path = os.path.join(basepath, adam_df["file_name"])
+    TR_path = os.path.join(basepath, TR_df["file_name"])
+
     # Instantiate the model fitters
-    adam_fitter = instantiate_fitter(SHO_nn, dataset, postprocessor)
-    trust_region_fitter = instantiate_fitter(SHO_nn, dataset, postprocessor)
+    adam_fitter = instantiate_fitter(function, dataset, postprocessor)
+    trust_region_fitter = instantiate_fitter(function, dataset, postprocessor)
 
     # Instantiate the models
     adam_model = instantiate_model(adam_fitter, dataset, noise, "Adam")
@@ -123,12 +198,10 @@ def create_models(basepath, results, noise, dataset, postprocessor, SHO_nn):
         trust_region_fitter, dataset, noise, "Trust Region CG"
     )
 
-    adam_model.load(model_name_adam)
+    adam_model.load(adam_path)
+    trust_region_model.load(TR_path)
 
-    trust_region_model.load(model_name_trust_region)
-
-    return adam_model, trust_region_model
-
+    return adam_model, trust_region_model, adam_df, TR_df
 
 
 @dataclass
@@ -214,7 +287,7 @@ class BatchTrainer:
                 model_basename="SHO_Fitter",
                 datafed_path=self.datafed_path,
                 script_path=self.script_path,
-                dataset_id = self.dataset.dataset_id
+                dataset_id=self.dataset.dataset_id,
             )
 
             # fits the model

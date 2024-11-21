@@ -204,8 +204,9 @@ class BE_Dataset:
 
             self.dataset_id = self.datafed_obj.upload_dataset_to_DataFed()
 
-            # # Create a data record in DataFed with the extracted metadata
-            # dc_resp = self.datafed_obj.data_record_create(metadata, self.file.split("/")[-1].split(".")[0])
+            # Upload the file to DataFed
+            self.datafed_obj.upload_file(dc_resp[0].data[0].id, self.file, wait=False)
+
 
             # # Set the DataFed ID from the response
             # self.dataset_id = dc_resp[0].data[0].id

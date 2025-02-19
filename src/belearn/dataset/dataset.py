@@ -35,6 +35,143 @@ from m3util.util.hashing import calculate_h5file_checksum
 from pyUSID.io.hdf_utils import reshape_to_n_dims, get_auxiliary_datasets
 
 
+# This is the class for the raw H5 File operators
+class h5_file:
+    
+    @property
+    def tree(self):
+        """
+        tree is a property that returns the tree from the H5 file
+        """
+
+        with h5py.File(self.file, "r+") as h5_f:
+            return get_tree(h5_f)
+        
+    def find_datasets(self, name, datasets=[]):
+        """
+        Finds and returns datasets within the HDF5 file that match a given name pattern.
+
+        This method searches for datasets within the specified HDF5 file, particularly
+        under the "Measurement_000/Channel_000" group, that match the provided name pattern.
+        It appends the found datasets to the provided list and returns it.
+
+        Args:
+            name (str): The name pattern to search for within the datasets.
+            datasets (list, optional): A list to which the found datasets will be appended.
+                                       Defaults to an empty list.
+
+        Returns:
+            list: A list containing the datasets that match the specified name pattern.
+
+        Example:
+            datasets = obj.find_datasets("Raw_Data")
+            This will search for datasets named "Raw_Data" within the HDF5 file and return them.
+        """
+        with h5py.File(self.file, "r+") as h5_f:
+            datasets.extend(
+                usid.hdf_utils.find_dataset(
+                    h5_f["Measurement_000/Channel_000"], name
+                )
+            )
+            return datasets
+
+class DataFormat:
+    pass
+
+class SHOPreprocessor(DataFormat):
+    
+    def preprocess(self):
+        """
+        preprocess conducts the preprocessing on the SHO fit results
+        """
+
+        # extract the raw data and reshapes is
+        self.set_raw_data()
+
+        # # resamples the data if necessary
+        self.set_raw_data_resampler()
+
+        # computes the scalar on the raw data
+        self.raw_data_scaler = Raw_Data_Scaler(self.raw_data())
+
+        try:
+            # gets the LSQF results
+            self.set_SHO_LSQF()
+
+            # computes the SHO scaler
+            self.SHO_Scaler()
+        except:
+            pass
+        
+    @static_state_decorator
+    def get_raw_data(self):
+        """
+        get_raw_data Function that parses the datafile and extracts the raw data names
+        """
+        
+        datasets = self.find_datasets("Noisy")
+        datasets = self.find_datasets("Raw_Data", datasets)
+
+            # TODO, this is really bad, we should just get it from the h5 file
+            # # loops around all the datasets and stores them reshaped in a dictionary
+            # for dataset in datasets:
+            #     self.raw_data_reshaped[dataset.name.split("/")[-1]] = dataset[
+            #         :
+            #     ].reshape(self.num_pix, self.voltage_steps, self.num_bins)
+
+            #     self.raw_datasets.extend([dataset.name.split("/")[-1]])
+
+class LoopPreprocessor(DataFormat):
+    pass
+
+class preprocessors(SHOPreprocessor, LoopPreprocessor):
+     
+    def set_preprocessing(self):
+        """
+        set_preprocessing searches the dataset to see what preprocessing is required.
+        """
+
+        # does preprocessing for the SHO_fit results
+        if in_list(self.tree, "*SHO_Fit*"):
+            SHOPreprocessor.preprocess(self)
+        else:
+            Warning("No SHO fit found")
+
+        # does preprocessing for the loop fit results
+        if in_list(self.tree, "*Fit-Loop_Fit*"):
+            LoopPreprocessor.preprocess(self)
+
+class output_state:
+    pass
+
+class SimpleHarmonicOscillator(SHOPreprocessor):
+    
+    def __init__(self, file):
+        super().__init__(file)
+    
+    @property
+    def data(self):
+        pass
+    
+    @property
+    def reshaped_data(self):
+        pass
+    
+    @property
+    def raw_data(self):
+        pass
+    
+class Loops:
+    pass
+
+class Experiments:
+    pass
+
+class DataFed:
+    pass
+
+
+
 @dataclass
 class BE_Dataset:
     file: str
@@ -87,7 +224,7 @@ class BE_Dataset:
 
     def __post_init__(self):
         self.noise = self.noise_state
-        self.tree = self.get_tree()
+        # self.tree = self.get_tree()
 
         # Initialize resampled_bins if it's None
         if self.resampled_bins is None:
@@ -105,43 +242,7 @@ class BE_Dataset:
         self.set_raw_data()
         self.SHO_preprocessing()
 
-    def set_preprocessing(self):
-        """
-        set_preprocessing searches the dataset to see what preprocessing is required.
-        """
-
-        # does preprocessing for the SHO_fit results
-        if in_list(self.tree, "*SHO_Fit*"):
-            self.SHO_preprocessing()
-        else:
-            Warning("No SHO fit found")
-
-        # does preprocessing for the loop fit results
-        if in_list(self.tree, "*Fit-Loop_Fit*"):
-            self.loop_fit_preprocessing()
-
-    def SHO_preprocessing(self):
-        """
-        SHO_preprocessing conducts the preprocessing on the SHO fit results
-        """
-
-        # extract the raw data and reshapes is
-        self.set_raw_data()
-
-        # # resamples the data if necessary
-        self.set_raw_data_resampler()
-
-        # computes the scalar on the raw data
-        self.raw_data_scaler = Raw_Data_Scaler(self.raw_data())
-
-        try:
-            # gets the LSQF results
-            self.set_SHO_LSQF()
-
-            # computes the SHO scaler
-            self.SHO_Scaler()
-        except:
-            pass
+   
 
     def set_SHO_LSQF(self):
         """
@@ -622,50 +723,9 @@ class BE_Dataset:
 
         return file_structure
 
-    def get_tree(self):
-        """
-        get_tree reads the tree from the H5 file
+    
 
-        Returns:
-            list: list of the tree from the H5 file
-        """
-
-        with h5py.File(self.file, "r+") as h5_f:
-            return get_tree(h5_f)
-
-    @static_state_decorator
-    def set_raw_data(self):
-        """
-        set_raw_data Function that parses the datafile and extracts the raw data names
-        """
-
-        with h5py.File(self.file, "r+") as h5_f:
-            # initializes the dictionary
-            self.raw_data_reshaped = {}
-
-            # list of datasets to be read
-            datasets = []
-            self.raw_datasets = []
-
-            # Finds all the datasets
-            datasets.extend(
-                usid.hdf_utils.find_dataset(
-                    h5_f["Measurement_000/Channel_000"], "Noisy"
-                )
-            )
-            datasets.extend(
-                usid.hdf_utils.find_dataset(
-                    h5_f["Measurement_000/Channel_000"], "Raw_Data"
-                )
-            )
-
-            # loops around all the datasets and stores them reshaped in a dictionary
-            for dataset in datasets:
-                self.raw_data_reshaped[dataset.name.split("/")[-1]] = dataset[
-                    :
-                ].reshape(self.num_pix, self.voltage_steps, self.num_bins)
-
-                self.raw_datasets.extend([dataset.name.split("/")[-1]])
+    
 
     ##### GETTERS #####
 

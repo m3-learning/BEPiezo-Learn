@@ -1,6 +1,7 @@
 from m3util.ml.preprocessor import GlobalScaler
 from belearn.dataset.transformers import is_complex, to_complex
 import numpy as np
+
 class Raw_Data_Scaler:
         """
         Raw_Data_Scaler class that defines the scaler for band excitation data

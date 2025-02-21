@@ -7,6 +7,7 @@ from m3util.util.h5 import (
     make_group,
 )
 from belearn.dataset.scalers import Raw_Data_Scaler
+from belearn.dataset.analytics import print_mse
 from belearn.util.wrappers import static_state_decorator
 from belearn.functions.sho import SHO_nn
 from belearn.functions.hysteresis import hysteresis_nn
@@ -77,7 +78,7 @@ class BE_Dataset:
         noise_state (int, optional): Noise level. Defaults to 0.
         cleaned (bool, optional): Whether the data is cleaned. Defaults to False.
         basegroup (str, optional): The base group in the HDF5 file. Defaults to '/Measurement_000/Channel_000'.
-        SHO_fit_func_LSQF (Callable, optional): The fitting function for SHO in NN.
+        SHO_fit_func_LSQF (Callable, optional): The fitting function for SHO is NN.
         hysteresis_function (Callable, optional): The hysteresis function for processing. 
         loop_interpolated (bool, optional): Whether the loop data is interpolated. Defaults to False.
         resampled_data (Dict[str, Any]): Holds resampled data. Initialized post object creation.
@@ -204,8 +205,8 @@ class BE_Dataset:
 
             self.dataset_id = self.datafed_obj.upload_dataset_to_DataFed()
 
-            # Upload the file to DataFed
-            #self.datafed_obj.upload_file(dc_resp[0].data[0].id, self.file, wait=False)
+            # # Upload the file to DataFed
+            # self.datafed_obj.upload_file(dc_resp[0].data[0].id, self.file, wait=False)
 
 
             # # Set the DataFed ID from the response
@@ -762,13 +763,16 @@ class BE_Dataset:
             # Retrieve the number of cycles from the attributes of "Measurement_000"
             cycles = h5_f["Measurement_000"].attrs["VS_number_of_cycles"]
 
+
+            # JGODDY comments this out for now 
+            
             # Check if the measurement was performed 'in and out-of-field'
             # If so, double the number of cycles to account for both directions
-            if (
-                h5_f["Measurement_000"].attrs["VS_measure_in_field_loops"]
-                == "in and out-of-field"
-            ):
-                cycles *= 2
+            # if (
+            #     h5_f["Measurement_000"].attrs["VS_measure_in_field_loops"]
+            #     == "in and out-of-field"
+            # ):
+            #     cycles *= 2
 
             # Return the total number of cycles
             return cycles
@@ -960,13 +964,18 @@ class BE_Dataset:
             int: The number of voltage steps corresponding to the current measurement state.
         """
 
+        # JGODDY commented out the if statement and replaced with voltage_step = self.voltage_steps
+
         # Check if the current measurement state is set to 'all'
-        if self.measurement_state == "all":
-            # If 'all', return the full number of voltage steps
-            voltage_step = self.voltage_steps
-        else:
-            # If not 'all', return half the number of voltage steps
-            voltage_step = int(self.voltage_steps / 2)
+        # if self.measurement_state == "all":
+        #     # If 'all', return the full number of voltage steps
+        #     voltage_step = self.voltage_steps
+        # else:
+        #     # If not 'all', return half the number of voltage steps
+        #     voltage_step = int(self.voltage_steps / 2)
+        
+        
+        voltage_step = self.voltage_steps
 
         # Return the computed number of voltage steps
         return voltage_step
@@ -1859,7 +1868,7 @@ class BE_Dataset:
             return data
 
         # Determine the number of bins based on whether the data has been resampled or not.
-        if self.resampled:
+        if self.resampled: 
             bins = self.resampled_bins
         else:
             bins = self.num_bins
@@ -1956,7 +1965,7 @@ class BE_Dataset:
             ValueError: error if the noise value does not exist in the dataset
         """
 
-        if noise == 0:
+        if noise == 0 or noise is None:
             self.dataset = "Raw_Data"
         else:
             self.dataset = f"Noisy_Data_{noise}"
@@ -2238,14 +2247,14 @@ class BE_Dataset:
             return h5_f['Measurement_000']['Channel_000']['UDVS'][::2][:, 1][24:120] * -1
 
     # @property
-    # def get_hysteresis_voltage_len(self):
-    #     """
-    #     Get the length of the voltage vector for hysteresis measurements.
+    def get_hysteresis_voltage_len(self):
+        """
+        Get the length of the voltage vector for hysteresis measurements.
 
-    #     Returns:
-    #         int: Length of the voltage vector.
-    #     """
-    #     return self.get_voltage.shape[0]  # Return the length of the voltage vector
+        Returns:
+            int: Length of the voltage vector.
+        """
+        return self.get_voltage.shape[0]  # Return the length of the voltage vector
 
     # def default_state(self):
     #     """
@@ -2552,7 +2561,8 @@ class BE_Dataset:
     def roll_hysteresis(self, bias_vector, hysteresis=None,
                         shift=4):
         """
-        roll_hysteresis function to shift the bias vector and the hysteresis loop by a quarter cycle. This is to compensate for the difference in how the data is stored.
+        roll_hysteresis function to shift the bias vector and the hysteresis loop by a quarter cycle. 
+        This is to compensate for the difference in how the data is stored.
 
         Args:
             hysteresis (np.array): array for the hysteresis loop
@@ -2617,20 +2627,32 @@ class BE_Dataset:
 
     
 
-    # def hysteresis_tensor(self, data):
-    #     """
-    #     hysteresis_tensor utility function that converts data to a tensor
+    def hysteresis_tensor(self, data):
+        """
+        hysteresis_tensor utility function that converts data to a tensor
 
-    #     Args:
-    #         data (np.array): data to convert to a tensor
+        Args:
+            data (np.array): data to convert to a tensor
 
-    #     Returns:
-    #         torch.tensor: tensor of the data
-    #     """
-    #     return torch.atleast_3d(torch.tensor(data.reshape(-1, self.get_hysteresis_voltage_len)))
+        Returns:
+            torch.tensor: tensor of the data
+        """
+        return torch.atleast_3d(torch.tensor(data.reshape(-1, self.get_hysteresis_voltage_len())))
 
-    # def print_hysteresis_mse(self, model, data, labels):
+    def print_hysteresis_mse(self, model, data, labels):
 
-    #     data = tuple(self.hysteresis_tensor(item) for item in data)
+        data = tuple(self.hysteresis_tensor(item) for item in data)
 
-    #     model.print_mse(data, labels, is_SHO=False)
+        print_mse(model, model, data, labels,is_SHO=False)
+
+
+
+#def print_mse(model_obj, model_predictor, data, labels):
+
+# Args:
+        # model_obj: The object containing the dataset and any necessary methods for data extraction.
+        # model_predictor: The object or model responsible for making predictions on the input data.
+        # data (tuple): A tuple of datasets used to calculate the MSE. Each dataset can either be 
+        #               a PyTorch tensor or a dictionary containing data for prediction.
+        # labels (list): A list of strings corresponding to the names of the datasets, used for labeling the output.
+

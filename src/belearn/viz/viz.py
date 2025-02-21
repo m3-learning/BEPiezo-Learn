@@ -18,10 +18,10 @@
 
 # from m3_learning.be.nn import SHO_Model
 # from m3_learning.be.loop_fitter import loop_fitting_function_torch
-# from mpl_toolkits.axes_grid1 import make_axes_locatable
-# from m3_learning.nn.Fitter1D.Fitter1D import Model
-# from m3_learning.nn.Fitter1D import Fitter1D
-# # import m3_learning
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+#from m3_learning.nn.Fitter1D.Fitter1D import Model
+#from m3_learning.nn.Fitter1D import Fitter1D
+# import m3_learning
 # # from m3_learning.util.rand_util import get_tuple_names
 # import torch
 # from torch import nn
@@ -73,6 +73,9 @@ from belearn.dataset.analytics import get_rankings, MSE
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
+from matplotlib.ticker import ScalarFormatter
+
+from autophyslearn.spectroscopic.nn import Multiscale1DFitter, Model
 
 
 # Defines the color palettes for the plots
@@ -175,8 +178,8 @@ class Viz:
     SHO_labels: List[Dict[str, str]] = field(
         default_factory=lambda: [
             {"title": "Amplitude", "y_label": "Amplitude \n (Arb. U.)"},
-            {"title": "Resonance Frequency", "y_label": "Resonance Frequency \n (Hz)"},
-            {"title": "Dampening", "y_label": "Quality Factor \n (Arb. U.)"},
+            {"title": "Resonance Frequency", "y_label": "Resonance \n  Frequency (Hz)"},
+            {"title": "Dampening", "y_label": "Quality \n  Factor (Arb. U.)"},
             {"title": "Phase", "y_label": "Phase \n (rad)"},
         ]
     )
@@ -275,7 +278,7 @@ class Viz:
     ##### GRAPHS #####
 
     @static_dataset_decorator
-    def plot_real_imainary(
+    def plot_real_imaginary(
         self,
         ax1,
         true,
@@ -712,7 +715,7 @@ class Viz:
             axs[0], true, predict, pixel, voltage_step, fig=fig, **kwargs
         )
 
-        ax_real, ax_imag = self.plot_real_imainary(
+        ax_real, ax_imag = self.plot_real_imaginary(
             axs[1], true, predict, pixel, voltage_step, **kwargs
         )
 
@@ -856,10 +859,20 @@ class Viz:
         ax3 = ax[4].twinx()
         ax3.plot(dataset.frequency_bin, data_[1].flatten(), "r", label="Imaginary")
         ax3.set(xlabel="Frequency (Hz)", ylabel="Imag (Arb. U.)", facecolor="none")
+        
+        
+        set_sci_notation_label(ax[1],axis="x",corner = "bottom right")
+        set_sci_notation_label(ax[2],axis="x",corner = "bottom right")
+        set_sci_notation_label(ax[3],axis="x",corner = "bottom right")
+        set_sci_notation_label(ax[4],axis="x",corner = "bottom right")
+
+        
 
         # Save the figure if a Printer object is available
         if self.Printer is not None:
             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+            
+        return fig
 
     @static_dataset_decorator
     def plot_hysteresis_waveform(self, fig, ax, inset_pos, x_start, x_end, y_inset_min=-2, y_inset_max=20):
@@ -897,14 +910,26 @@ class Viz:
         ax.set_xlabel("Voltage Steps")
         ax.set_ylabel("Voltage (V)")
         
+        set_sci_notation_label(ax_new,axis="x",corner="bottom right")
+        
     @static_scale_decorator
     def SHO_hist(self, SHO_data, filename=None, scaled=False):
+        
+
+
         """Plots the SHO hysteresis parameters
 
         Args:
             SHO_data (numpy): SHO fit results
             filename (str, optional): filename where to save the results. Defaults to "".
         """
+
+        # from matplotlib.ticker import ScalarFormatter
+
+        # xfmt = ScalarFormatter()
+        # xfmt.set_powerlimits()  # Or whatever your limits are . . .
+
+
 
         # if the scale is False will not use the scale in the viz
         if self.dataset.scaled or scaled:
@@ -917,7 +942,7 @@ class Viz:
 
         # check distributions of each parameter before and after scaling
         fig, axs = layout_fig(
-            4 * len(SHO_data), 4, figsize=(5.25, 1.25 * len(SHO_data))
+            4 * len(SHO_data), 4, figsize=(15, 1.25 * len(SHO_data)) # figsize=(5.25, 1.25 * len(SHO_data))
         )
 
         for k, SHO_data_ in enumerate(SHO_data):
@@ -935,10 +960,14 @@ class Viz:
                 if i == 0:
                     ax.set(ylabel="counts")
                 ax.set(xlabel=label["y_label"])
-                ax.ticklabel_format(axis="x", style="sci", scilimits=(0, 0))
-                ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+                # ax.ticklabel_format(axis="x", style="sci", scilimits=(0, 0),useMathText=True)
+                # ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0),useMathText=True)
+                
+                set_sci_notation_label(ax,axis="x",corner="bottom right")
+                set_sci_notation_label(ax,axis="y",corner="top left")
 
-                ax.xaxis.labelpad = 10
+                
+                ax.xaxis.labelpad = 0 #10
 
                 ax.set_box_aspect(1)
 
@@ -1063,6 +1092,8 @@ class Viz:
         ax2 = axs.twinx()
         ax2.set_ylabel("Imag (Arb. U.)")
         ax2.plot(x, data[1].flatten(), "g", label=self.dataset.label + " Imag")
+        self._scientific_notation_dual(axs,ax2)
+
 
         axes = [axs, ax2]
 
@@ -1090,7 +1121,7 @@ class Viz:
         model=None,
         out_state=None,
         n=1,
-        gaps=(0.8, 0.33),
+        gaps=(0.8,0.4),
         size=(1.25, 1.25),
         filename=None,
         compare_state=None,
@@ -1103,7 +1134,7 @@ class Viz:
         d1, d2, x1, x2, label, index1, mse1 = None, None, None, None, None, None, None
 
         if fit_type == "SHO":
-            d1, d2, x1, x2, label, index1, mse1 = self.get_best_median_worst(
+            d1, d2, x1, x2, label,full_indices, index1, mse1 = self.get_best_median_worst(
                 true_state,
                 prediction=prediction,
                 model=model,
@@ -1146,7 +1177,7 @@ class Viz:
                     label=f"Raw {label[1]}",
                 )
 
-                ax_.set_xlabel("Frequency (Hz)")
+                ax_.set_xlabel("Frequency (Hz)",labelpad = 0)
 
                 # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
                 text_position_in_inches = (
@@ -1161,40 +1192,51 @@ class Viz:
                 if out_state is not None:
                     if "measurement state" in out_state.keys():
                         if out_state["raw_format"] == "magnitude spectrum":
-                            ax_.set_ylabel("Amplitude (Arb. U.)")
-                            ax1.set_ylabel("Phase (rad)")
+                            ax_.set_ylabel("Amplitude (Arb. U.)",labelpad=1)
+                            ax1.set_ylabel("Phase (rad)",labelpad=1)
                     else:
-                        ax_.set_ylabel("Real (Arb. U.)")
-                        ax1.set_ylabel("Imag (Arb. U.)")
+                        ax_.set_ylabel("Real (Arb. U.)",labelpad=1)
+                        ax1.set_ylabel("Imag (Arb. U.)",labelpad=1)
+                        
+                self._scientific_notation_dual(ax_,ax1)
 
             # add a legend just for the last one
             lines, labels = ax_.get_legend_handles_labels()
             lines2, labels2 = ax1.get_legend_handles_labels()
             ax_.legend(lines + lines2, labels + labels2, loc="upper right")
+            
 
         elif fit_type == "hysteresis":
-            d1, d2, x1, x2, index1, mse1, _ = self.get_best_median_worst_hysteresis(
+            d1, d2, x1, x2, label, full_indices, index1, mse1 = self.get_best_median_worst(
                 true_state,
                 prediction=prediction,
                 n=n,
                 **kwargs,
+                fit_type = fit_type,
             )
 
+
+            
+            
             fig, ax = subfigures(1, 3, gaps=gaps, size=size)
 
             for i, (true, prediction, error) in enumerate(zip(d1, d2, mse1)):
                 ax_ = ax[i]
+                
+                #unscale the hysteresis loops for plotting
+                prediction = self.dataset.hysteresis_scaler.inverse_transform(prediction)
+                true = self.dataset.hysteresis_scaler.inverse_transform(true)
 
                 ax_.plot(
                     x2,
-                    prediction.flatten(),
+                    prediction,
                     color=color_palette["NN_A"],
                     # label=f"NN {label[0]}",
                 )
 
                 ax_.plot(
                     x1,
-                    true.flatten(),
+                    true,
                     "o",
                     color=color_palette["NN_A"],
                     # label=f"Raw {label[0]}",
@@ -1218,6 +1260,9 @@ class Viz:
                 # add a legend just for the last one
                 lines, labels = ax_.get_legend_handles_labels()
                 ax_.legend(lines, labels, loc="upper right")
+                
+                set_sci_notation_label(ax_, axis = "y", corner = 'top left')
+
 
         else:
             raise ValueError("fit_type must be SHO or hysteresis")
@@ -1290,9 +1335,10 @@ class Viz:
         voltage_plot_height=1.25,  # height of the voltage plot in inches
         intra_gap=0.02,  # gap between individual plots in inches
         inter_gap=0.05,  # gap between plot rows in inches
-        cbar_gap=0.5,  # gap between colorbars in inches
+        cbar_gap=0.4,  # gap between colorbars in inches
         cbar_space=1.3,  # space reserved for colorbars on the right
         filename=None,  # optional filename to save the figure
+        labels = None,
     ):
         """
         Generates a plot of switching maps for SHO data (Amplitude, Resonance Frequency, Quality Factor, Phase)
@@ -1380,12 +1426,15 @@ class Viz:
             else:
                 pos_inch[0] += inter_gap
 
-        # Retrieve the DC voltage data from the dataset
-        voltage = self.dataset.dc_voltage
+        # # Retrieve the DC voltage data from the dataset
+        # voltage = self.dataset.dc_voltage
 
-        # Select a specific cycle from the dataset, if applicable
-        if hasattr(self.dataset, "cycle") and self.dataset.cycle is not None:
-            voltage = self.dataset.get_cycle(voltage)
+        # # Select a specific cycle from the dataset, if applicable
+        # if hasattr(self.dataset, "cycle") and self.dataset.cycle is not None:
+        #     voltage = self.dataset.get_cycle(voltage)
+        
+        _,voltage = self.dataset.get_hysteresis()
+        voltage = self.dataset.roll_hysteresis(voltage)
 
         # Get indices of the voltage steps to plot
         inds = np.linspace(0, len(voltage) - 1, number_of_steps, dtype=int)
@@ -1422,6 +1471,7 @@ class Viz:
 
         # Plot amplitude, resonant frequency, quality factor, and phase data
         for i, ind in enumerate(inds):
+            
             for j in range(4):
                 imagemap(
                     ax[i * 4 + j + 1],
@@ -1451,6 +1501,7 @@ class Viz:
                 loc="bl",
                 inset_fraction=(0.2, 0.2),
             )
+            
 
         # Add colorbars to the plots if enabled
         if colorbars:
@@ -1458,28 +1509,38 @@ class Viz:
             voltage_ax_pos = fig_scalar.to_inches(
                 np.array(ax[0].get_position()).flatten()
             )
-
+        
             for i in range(4):
                 # Calculate position and size of colorbars
                 cbar_h = (voltage_ax_pos[1] - inter_gap - 2 * intra_gap - 0.33) / 2
                 cbar_w = (cbar_space - inter_gap - 2 * cbar_gap) / 2
                 pos_inch = [
-                    voltage_ax_pos[2] - (2 - i % 2) * (cbar_gap + cbar_w) + inter_gap,
+                    voltage_ax_pos[2] - (2 - i % 2) * (cbar_gap + cbar_w) + inter_gap+ 0.1,
                     voltage_ax_pos[1] - (i // 2) * (inter_gap + cbar_h) - 0.33 - cbar_h,
-                    cbar_w,
-                    cbar_h,
+                    cbar_w - 0.02,
+                    cbar_h - 0.1,
                 ]
 
                 # Add colorbar to the figure
                 bar_ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
-                cbar = plt.colorbar(ax[i + 1].images[0], cax=bar_ax[i], format="%.1e")
-                cbar.set_label(names[i])  # Add label to the colorbar
+                #cbar = plt.colorbar(ax[i + 1].images[0], cax=bar_ax[i], format="%.1e")
+                #cbar.set_label(names[i])  # Add label to the colorbar
 
+                # adds the colorbars to the plots 
+                fmt = ScalarFormatter(useMathText=True)
+                fmt.set_powerlimits((0, 0))
+                cbar = plt.colorbar(ax[i + 1].images[0],
+                                    cax=bar_ax[i], format=fmt)
+                cbar.set_label(names[i])  # Add a label to the colorbar
+                
+                
         # Save the figure if a filename is provided
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(
                 fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
             )
+        
+        return fig
 
     @static_dataset_decorator
     def SHO_Fit_comparison(
@@ -1545,7 +1606,7 @@ class Viz:
         # Loop through each fit and the associated data
         for step, (data, name) in enumerate(zip(data, names)):
             # Unpack the data (true, predicted values, indices, etc.)
-            d1, d2, x1, x2, label, index1, mse1, params = data
+            d1, d2, x1, x2, label,full_labels, index1, mse1, params = data
 
             # Loop through datasets for comparison (true vs. predicted data)
             for bmw, (true, prediction, error, SHO, index1) in enumerate(
@@ -1630,7 +1691,9 @@ class Viz:
 
                         # Display detailed results if requested
                         if display_results == "all":
-                            error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}\n AMP - LSQF: {SHOs['LSQF'][0]:0.2e} NN: {SHOs['NN'][0]:0.2e}\n\u03c9 - LSQF: {SHOs['LSQF'][1]/1000:0.1f} NN: {SHOs['NN'][1]/1000:0.1f} Hz\nQ - LSQF: {SHOs['LSQF'][2]:0.1f} NN: {SHOs['NN'][2]:0.1f}\n\u03c6 - LSQF: {SHOs['LSQF'][3]:0.2f} NN: {SHOs['NN'][3]:0.1f} rad"
+                            #error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}\n AMP - LSQF: {SHOs['LSQF'][0]:0.2e} NN: {SHOs['NN'][0]:0.2e}\n\u03c9 - LSQF: {SHOs['LSQF'][1]/1000:0.1f} NN: {SHOs['NN'][1]/1000:0.1f} Hz\nQ - LSQF: {SHOs['LSQF'][2]:0.1f} NN: {SHOs['NN'][2]:0.1f}\n\u03c6 - LSQF: {SHOs['LSQF'][3]:0.2f} NN: {SHOs['NN'][3]:0.1f} rad"
+                            error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}\n AMP - LSQF: {format(SHOs['LSQF'][0],'0.2e').split('e')[0]}$\\times10^{'{'}{format(SHOs['LSQF'][0],'0.2e').split('e')[-1]}{'}'}$ NN: {format(SHOs['LSQF'][0],'0.2e').split('e')[0]}$\\times10^{'{'}{format(SHOs['NN'][0],'0.2e').split('e')[-1]}{'}'}$ \n\u03c9 - LSQF: {SHOs['LSQF'][1]/1000:0.1f} NN: {SHOs['NN'][1]/1000:0.1f} Hz\nQ - LSQF: {SHOs['LSQF'][2]:0.1f} NN: {SHOs['NN'][2]:0.1f}\n\u03c6 - LSQF: {SHOs['LSQF'][3]:0.2f} NN: {SHOs['NN'][3]:0.1f} rad"
+
                         elif display_results == "MSE":
                             error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}"
 
@@ -1671,10 +1734,15 @@ class Viz:
                     lines, labels = ax_.get_legend_handles_labels()
                     lines2, labels2 = ax1.get_legend_handles_labels()
                     ax_.legend(lines + lines2, labels + labels2, loc="upper right")
+                    
+                set_sci_notation_label(ax_,axis="x",corner = "bottom right")
+
 
         # Save the figure if filename is provided
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+            
+        return fig
 
     @static_dataset_decorator
     def violin_plot_comparison_SHO(self, state, model, X_data, filename, label="NN"):
@@ -1780,6 +1848,83 @@ class Viz:
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename)
             
+        return fig
+    
+    ## JGoddy just putting the loop_fitting_function_torch function here for now 
+    ## also added self for keyword ordering 
+    
+    
+
+    
+
+    def loop_fitting_function_torch(self, y, V, type='9 parameters', device='cuda'):
+        """Hysteresis loop fitting function using torch tensors
+
+        Args:
+            y (np.array): hysteresis loop data
+            V (np.array): voltage array
+            type (str, optional): loop fitting function to use. Defaults to '9 parameters'.
+            device (str, optional): device to run neural network. Defaults to 'cuda'.
+
+        Returns:
+            np.array: neural network fit results
+        """
+
+        V = torch.tensor(V)
+
+        try:
+            y = torch.from_numpy(y)
+            if len(y.shape) == 1:
+                y = torch.unsqueeze(y, 0)
+        except:
+            pass
+
+        half_len = len(V) // 2
+        V = V.type(torch.float64).to(device)
+        y = y.type(torch.float64).to(device)
+
+        # print(y.shape)
+        # expands the tensor
+        y = y.unsqueeze(-1)#.repeat(1, 1, half_len)
+        # print("y-shape")
+        # print(y.shape)
+
+        if (type == '9 parameters'):
+
+            a0, a1, a2, a3, a4, b0, b1, b2, b3 = [y[:, i] for i in range(9)]
+
+            V1, V2 = V[:half_len], V[half_len:]
+
+            g1 = (b1 - b0) / 2 * (torch.erf((V1 - a2) * 1000) + 1) + b0
+            g2 = (b3 - b2) / 2 * (torch.erf((V2 - a3) * 1000) + 1) + b2
+
+            y1 = (g1 * torch.erf((V1 - a2) / g1) + b0) / (b0 + b1)
+            y2 = (g2 * torch.erf((V2 - a3) / g2) + b2) / (b2 + b3)
+
+            f1 = a0 + a1 * y1 + a4 * V1
+            f2 = a0 + a1 * y2 + a4 * V2
+
+            return torch.cat((f1, f2), axis=1)
+
+        elif type == '13 parameters':
+            Warning('13 parameters not implemented yet')
+            # a1, a2, a3, b1, b2, b3, b4, b5, b6, b7, b8, Au, Al = [
+            #     y[:, i] for i in range(13)]
+
+            # S1 = (b1 + b2) / 2 + (b2 - b1) / 2 * torch.erf((V - b7) / b5)
+            # S2 = (b4 + b3) / 2 + (b3 - b4) / 2 * torch.erf((V - b8) / b6)
+
+            # Branch1 = (a1 + a2) / 2 + (a2 - a1) / 2 * \
+            #     torch.erf((V - Au) / S1) + a3 * V
+            # Branch2 = (a1 + a2) / 2 + (a2 - a1) / 2 * \
+            #     torch.erf((V - Al) / S2) + a3 * V
+
+            # return torch.squeeze(torch.cat((Branch1, torch.flipud(Branch2)), axis=0))
+
+    
+    
+    
+            
     def hysteresis_comparison(self,
                              data,
                              row=None,
@@ -1843,7 +1988,7 @@ class Viz:
 
             NN_pred_data, NN_scaled_params, NN_params = nn_model.predict(
                 _data, translate_params=False, is_SHO=False)
-            NN_loops = loop_fitting_function_torch(NN_params, voltage[:, 0].squeeze()).to(
+            NN_loops = self.loop_fitting_function_torch(y=NN_params, V=voltage[:, 0].squeeze()).to(
                 'cpu').detach().numpy().squeeze()
             NN_loops_scaled = self.dataset.hysteresis_scaler.transform(NN_loops)
 
@@ -1879,7 +2024,10 @@ class Viz:
                 ax[plot_idx].plot(voltage,
                                   NN_loops[index], 'g', label='NN')
 
-                ax[plot_idx].ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+                #ax[plot_idx].ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+                
+                set_sci_notation_label(ax[plot_idx], axis = "y", corner = 'top left')
+
 
                 # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
                 text_position_in_inches = (
@@ -1933,10 +2081,13 @@ class Viz:
         ax[plot_idx].set_xlabel("Voltage (V)")
         ax[plot_idx - 1].xaxis.set_label_coords(0.5, -0.28)
         ax[plot_idx].xaxis.set_label_coords(0.5, -0.28)
+        
 
         # prints the figure
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+            
+        return fig
 
 
     def violin_plot_comparison_hysteresis(self, model, X_data, filename):
@@ -2017,7 +2168,7 @@ class Viz:
         )
 
         # Style the plot with labels
-        labelfigs(ax, 0, style="b")
+        labelfigs(ax, 0, style="b",inset_fraction = (0.4,0.15))
         ax.set_ylabel("Scaled SHO Results")
         ax.set_xlabel("")
 
@@ -2028,6 +2179,8 @@ class Viz:
         # Save the figure if a Printer object and filename are provided
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename)
+            
+        return fig
 
     ###### MOVIES #####
 
@@ -2222,10 +2375,12 @@ class Viz:
                         bar_ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
 
                         # Add the colorbar to the axis
+                        fmt = ScalarFormatter(useMathText=True)
+                        fmt.set_powerlimits((0, 0))
                         cbar = plt.colorbar(
                             ax[i + 1].images[0],
                             cax=bar_ax[i],
-                            format="%.1e",
+                            format=fmt,
                             ticks=np.linspace(
                                 self.SHO_ranges[i][0], self.SHO_ranges[i][1], 5
                             ),
@@ -2413,7 +2568,7 @@ class Viz:
 
     ##### GETTERS #####
 
-    def get_voltage_step(self, voltage_step):
+    def get_voltage_step(self, voltage_step=None):
         """
         Determine and return a valid voltage step index.
 
@@ -2946,6 +3101,7 @@ class Viz:
         SHO_results=False,
         index=None,
         compare_state=None,
+        fit_type = "SHO",
         **kwargs,
     ):
         def data_converter(data):
@@ -2960,21 +3116,31 @@ class Viz:
 
             return data
 
-        if type(true_state) is dict:
-            self.set_attributes(**true_state)
+        if fit_type=="SHO":
+            if type(true_state) is dict:
+                self.set_attributes(**true_state)
 
-            # the data must be scaled to rank the results
-            self.dataset.scaled = True
+                # the data must be scaled to rank the results
+                self.dataset.scaled = True
 
-            true, x1 = self.dataset.raw_spectra(frequency=True)
+                true, x1 = self.dataset.raw_spectra(frequency=True)
 
-        # condition if x_data is passed
-        else:
-            true = data_converter(true_state)
+            # condition if x_data is passed
+            elif np.iscomplex(true_state).all():
+                true = data_converter(true_state)
 
-            # gets the frequency values
-            if true[0].ndim == 2:
-                x1 = self.dataset.get_freq_values(true[0].shape[1])
+                # gets the frequency values
+                if true[0].ndim == 2:
+                    x1 = self.dataset.get_freq_values(true[0].shape[1])
+            else:
+                pass
+        elif fit_type =="hysteresis":
+             # gets the true data
+             
+             # gets the x values
+            data, voltage = self.dataset.get_hysteresis(scaled=True, loop_interpolated=True)
+
+            x1 = self.dataset.get_voltage
 
         # holds the raw state
         current_state = self.dataset.get_state
@@ -2982,21 +3148,38 @@ class Viz:
         if isinstance(prediction, nn.Module):
             fitter = "NN"
 
-            # sets the phase shift to zero for parameters
-            # This is important if doing the fits because the fits will be wrong if the phase is shifted.
-            self.dataset.NN_phase_shift = 0
+            if fit_type == "SHO":
+            
+                # sets the phase shift to zero for parameters
+                # This is important if doing the fits because the fits will be wrong if the phase is shifted.
+                self.dataset.NN_phase_shift = 0
 
-            data = self.dataset.to_nn(true)
+                data = self.dataset.to_nn(true)
 
-            pred_data, scaled_params, params = prediction.predict(data)
+                pred_data, scaled_params, params = prediction.predict(data)
+                
+                self.dataset.scaled = True
 
-            self.dataset.scaled = True
+                prediction, x2 = self.dataset.raw_spectra(
+                    fit_results=params, frequency=True
+                )
+            elif fit_type == "hysteresis":    
+                pred_data, scaled_params, params = prediction.predict(torch.tensor(data.reshape(-1,96,1)),is_SHO=False)
+                x2=self.dataset.get_voltage
 
-            prediction, x2 = self.dataset.raw_spectra(
-                fit_results=params, frequency=True
-            )
+
+                self.dataset.scaled = True
+
+            # prediction, x2 = self.dataset.raw_spectra(
+            #     fit_results=params, voltage_step = self.get_voltage_step(), frequency=True
+            # )
+            
+            # prediction, embedding = self.model(data) #or maybe true_state 
+            # prediction = prediction.to(torch.float32)
+            # prediction = prediction.reshape(prediction.shape[0],prediction.shape[1],1)
 
         elif isinstance(prediction, dict):
+
             fitter = prediction["fitter"]
 
             exec(f"self.dataset.{prediction['fitter']}_phase_shift =0")
@@ -3010,7 +3193,7 @@ class Viz:
             self.dataset.scaled = True
 
             prediction, x2 = self.dataset.raw_spectra(
-                fit_results=params, frequency=True
+                fit_results=params, voltage_step = self.get_voltage_step(), frequency=True
             )
 
         if "x2" not in locals():
@@ -3030,10 +3213,17 @@ class Viz:
             index1, mse1, d1, d2 = get_rankings(compare_state, prediction, n=n)
         else:
             # this must take the scaled data
-            index1, mse1, d1, d2 = get_rankings(true, prediction, n=n)
+            if fit_type == "SHO":
+                
+                full_indices, index1, mse1, d1, d2 = get_rankings(true, prediction, n=n)
+
+            elif fit_type == "hysteresis":
+                full_indices, index1, mse1, d1, d2 = get_rankings(torch.tensor(data).reshape(-1,96,1), pred_data, n=n,fit_type='hysteresis')
+            #index1, mse1, d1, d2 = get_rankings(data, pred_data.reshape(60,60,4,96), n=n)
 
         d1, labels = self.out_state(d1, out_state)
         d2, labels = self.out_state(d2, out_state)
+
 
         # saves just the parameters that are needed
         params = params[index1]
@@ -3051,9 +3241,9 @@ class Viz:
                 params[:, 3] = eval(
                     f"self.dataset.shift_phase(params[:, 3], self.dataset.{fitter}_phase_shift)"
                 )
-            return (d1, d2, x1, x2, labels, index1, mse1, params)
+            return (d1, d2, x1, x2, labels, full_indices, index1, mse1, params)
         else:
-            return (d1, d2, x1, x2, labels, index1, mse1)
+            return (d1, d2, x1, x2, labels, full_indices, index1, mse1)
 
     # TODO: add comments and docstring
     def out_state(self, data, out_state):
@@ -3085,297 +3275,309 @@ class Viz:
 
         return data, labels
 
+# JGODDY UNCOMMENTED get_best_median_worst_hysteresis
+    @static_dataset_decorator
+    def get_best_median_worst_hysteresis(self,
+                                         true_state,
+                                         prediction=None,
+                                        #  out_state=None,
+                                         n=1,
+                                        index=None,
+                                         **kwargs):
 
-#     @static_dataset_decorator
-#     def get_best_median_worst_hysteresis(self,
-#                                          true_state,
-#                                          prediction=None,
-#                                         #  out_state=None,
-#                                          n=1,
-#                                         index=None,
-#                                          **kwargs):
+        true = true_state
+        x1 = self.dataset.get_voltage
 
-#         true = true_state
-#         x1 = self.dataset.get_voltage
+        data = torch.tensor(true).float()
 
-#         data = torch.tensor(true).float()
+        # for some reason the isinstance function returns False so JGoddy commented it out 
+        # if isinstance(prediction, Model):
+        if str(type(prediction)) == str(Model):
+            pred_data, scaled_params, params = prediction.predict(
+                data, translate_params=False, is_SHO=False)
+        elif isinstance(prediction, np.ndarray):
+            pred_data = prediction
+        else:
+            raise ValueError("prediction must be a Model or a numpy array")
 
-#         if isinstance(prediction, Fitter1D.Model):
-#             pred_data, scaled_params, params = prediction.predict(
-#                 data, translate_params=False, is_SHO=False)
-#         elif isinstance(prediction, np.ndarray):
-#             pred_data = prediction
-#         else:
-#             raise ValueError("prediction must be a Model or a numpy array")
+        prediction = pred_data
 
-#         prediction = pred_data
+        x2 = self.dataset.get_voltage
 
-#         x2 = self.dataset.get_voltage
+        # # index the data if provided
+        # if index is not None:
+        #     true = [true[0][index], true[1][index]]
+        #     prediction = [prediction[0][index], prediction[1][index]]
 
-#         # # index the data if provided
-#         # if index is not None:
-#         #     true = [true[0][index], true[1][index]]
-#         #     prediction = [prediction[0][index], prediction[1][index]]
+        # converts to numpy from tensor if needed
+        try:
+            prediction = prediction.detach().numpy()
+            true = true.detach().numpy()
+        except:
+            pass
 
-#         # converts to numpy from tensor if needed
-#         try:
-#             prediction = prediction.detach().numpy()
-#             true = true.detach().numpy()
-#         except:
-#             pass
+        prediction = np.rollaxis(prediction, 0, prediction.ndim - 1)
+        true = np.rollaxis(true, 0, true.ndim - 1)
 
-#         prediction = np.rollaxis(prediction, 0, prediction.ndim - 1)
-#         true = np.rollaxis(true, 0, true.ndim - 1)
+        # this must take the scaled data
+        index1, mse1, d1, d2 = Model.get_rankings(
+            true, prediction, n=n)
 
-#         # this must take the scaled data
-#         index1, mse1, d1, d2 = Model.get_rankings(
-#             true, prediction, n=n)
+        # saves the parameters if the model is provided
+        try:
+            # saves just the parameters that are needed
+            params = params[index1]
+        except:
+            params = None
 
-#         # saves the parameters if the model is provided
-#         try:
-#             # saves just the parameters that are needed
-#             params = params[index1]
-#         except:
-#             params = None
+        # gets the original index values
+        if index is not None:
+            index1 = index[index1]
 
-#         # gets the original index values
-#         if index is not None:
-#             index1 = index[index1]
-
-#         return (d1, d2, x1, x2, index1, mse1, params)
+        return (d1, d2, x1, x2, index1, mse1, params)
 
 
-#     @static_dataset_decorator
-#     def SHO_switching_maps_test(
-#         self,
-#         SHO_,
-#         colorbars=True,
-#         clims=[
-#             (0, 1.4e-4),  # amplitude
-#             (1.31e6, 1.33e6),  # resonance frequency
-#             (-230, -160),  # quality factor
-#             (-np.pi, np.pi),
-#         ],  # phase
-#         measurement_state="off",  # sets the measurement state to get the data
-#         cycle=2,  # sets the cycle to get the data
-#         cols=3,
-#         fig_width=6.5,  # figure width in inches
-#         number_of_steps=9,  # number of steps on the graph
-#         voltage_plot_height=1.25,  # height of the voltage plot
-#         intra_gap=0.02,  # gap between the graphs,
-#         inter_gap=0.05,  # gap between the graphs,
-#         cbar_gap=0.5,  # gap between the graphs of colorbars
-#         cbar_space=1.3,  # space on the right where the cbar is not
-#         filename=None,
-#         labels=None,
-#     ):
-#         if type(SHO_) is not list:
-#             SHO_ = [SHO_]
+    @static_dataset_decorator
+    def SHO_switching_maps_test(
+        self,
+        SHO_,
+        colorbars=True,
+        clims=[
+            (0, 1.4e-4),  # amplitude
+            (1.31e6, 1.33e6),  # resonance frequency
+            (-230, -160),  # quality factor
+            (-np.pi, np.pi),
+        ],  # phase
+        measurement_state="off",  # sets the measurement state to get the data
+        cycle=2,  # sets the cycle to get the data
+        cols=3,
+        fig_width=6.5,  # figure width in inches
+        number_of_steps=9,  # number of steps on the graph
+        voltage_plot_height=1.25,  # height of the voltage plot
+        intra_gap=0.02,  # gap between the graphs,
+        inter_gap=0.05,  # gap between the graphs,
+        cbar_gap=0.4,  # gap between the graphs of colorbars
+        cbar_space=1.3,  # space on the right where the cbar is not
+        filename=None,
+        labels=None,
+    ):
+        if type(SHO_) is not list:
+            SHO_ = [SHO_]
 
-#         comp_number = len(SHO_)
+        comp_number = len(SHO_)
 
-#         # sets the voltage state to off, and the cycle to get
-#         self.dataset.measurement_state = measurement_state
-#         self.dataset.cycle = cycle
+        # sets the voltage state to off, and the cycle to get
+        self.dataset.measurement_state = measurement_state
+        self.dataset.cycle = cycle
 
-#         # instantiates the list of axes
-#         ax = []
+        # instantiates the list of axes
+        ax = []
 
-#         # number of rows
-#         rows = np.ceil(number_of_steps * comp_number / 3)
+        # number of rows
+        rows = np.ceil(number_of_steps * comp_number / 3)
 
-#         # calculates the size of the embedding image
-#         embedding_image_size = (
-#             fig_width
-#             - (inter_gap * (cols - 1))
-#             - intra_gap * 3 * cols
-#             - cbar_space * colorbars
-#         ) / (cols * 4)
+        # calculates the size of the embedding image
+        embedding_image_size = (
+            fig_width
+            - (inter_gap * (cols - 1))
+            - intra_gap * 3 * cols
+            - cbar_space * colorbars
+        ) / (cols * 4)
 
-#         # calculates the figure height based on the image details
-#         fig_height = (
-#             rows * (embedding_image_size + inter_gap)
-#             + voltage_plot_height
-#             + 0.33
-#             + inter_gap * (comp_number - 1)
-#         )
+        # calculates the figure height based on the image details
+        fig_height = (
+            rows * (embedding_image_size + inter_gap)
+            + voltage_plot_height
+            + 0.33
+            + inter_gap * (comp_number - 1)
+        )
 
-#         # defines a scalar to convert inches to relative coordinates
-#         fig_scalar = FigDimConverter((fig_width, fig_height))
+        # defines a scalar to convert inches to relative coordinates
+        fig_scalar = FigDimConverter((fig_width, fig_height))
 
-#         # creates the figure
-#         fig = plt.figure(figsize=(fig_width, fig_height))
+        # creates the figure
+        fig = plt.figure(figsize=(fig_width, fig_height))
 
-#         # left bottom width height
-#         pos_inch = [
-#             0.33,
-#             fig_height - voltage_plot_height,
-#             6.5 - 0.33,
-#             voltage_plot_height,
-#         ]
+        # left bottom width height
+        pos_inch = [
+            0.33,
+            fig_height - voltage_plot_height,
+            6.5 - 0.33,
+            voltage_plot_height,
+        ]
 
-#         # adds the plot for the voltage
-#         ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
+        # adds the plot for the voltage
+        ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
 
-#         # resets the x0 position for the embedding plots
-#         pos_inch[0] = 0
-#         pos_inch[1] -= embedding_image_size + 0.33
+        # resets the x0 position for the embedding plots
+        pos_inch[0] = 0
+        pos_inch[1] -= embedding_image_size + 0.33
 
-#         # sets the embedding size of the image
-#         pos_inch[2] = embedding_image_size
-#         pos_inch[3] = embedding_image_size
+        # sets the embedding size of the image
+        pos_inch[2] = embedding_image_size
+        pos_inch[3] = embedding_image_size
 
-#         # This makes the figures
-#         for k, _SHO in enumerate(SHO_):
-#             # adds the embedding plots
-#             for i in range(number_of_steps):
-#                 # loops around the amp, phase, and freq
-#                 for j in range(4):
-#                     # adds the plot to the figure
-#                     ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
+        # This makes the figures
+        for k, _SHO in enumerate(SHO_):
+            # adds the embedding plots
+            for i in range(number_of_steps):
+                # loops around the amp, phase, and freq
+                for j in range(4):
+                    # adds the plot to the figure
+                    ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
 
-#                     # adds the inter plot gap
-#                     pos_inch[0] += embedding_image_size + intra_gap
+                    # adds the inter plot gap
+                    pos_inch[0] += embedding_image_size + intra_gap
 
-#                 # if the last column in row, moves the position to the next row
-#                 if (i + 1) % cols == 0 and i != 0:
-#                     # resets the x0 position for the embedding plots
-#                     pos_inch[0] = 0
+                # if the last column in row, moves the position to the next row
+                if (i + 1) % cols == 0 and i != 0:
+                    # resets the x0 position for the embedding plots
+                    pos_inch[0] = 0
 
-#                     # moves the y0 position to the next row
-#                     pos_inch[1] -= embedding_image_size + inter_gap
+                    # moves the y0 position to the next row
+                    pos_inch[1] -= embedding_image_size + inter_gap
 
-#                     if (i + 1) % (cols * comp_number) == 0 and comp_number > 1:
-#                         pos_inch[1] -= inter_gap
+                    if (i + 1) % (cols * comp_number) == 0 and comp_number > 1:
+                        pos_inch[1] -= inter_gap
 
-#                 else:
-#                     # adds the small gap between the plots
-#                     pos_inch[0] += inter_gap
+                else:
+                    # adds the small gap between the plots
+                    pos_inch[0] += inter_gap
 
-#         # gets the DC voltage data - this is for only the on state or else it would all be 0
-#         voltage = self.dataset.dc_voltage
+        # gets the DC voltage data - this is for only the on state or else it would all be 0
+        # voltage = self.dataset.dc_voltage
 
-#         # gets just part of the loop
-#         if hasattr(self.dataset, "cycle") and self.dataset.cycle is not None:
-#             # gets the cycle of interest
-#             voltage = self.dataset.get_cycle(voltage)
+        # # gets just part of the loop
+        # if hasattr(self.dataset, "cycle") and self.dataset.cycle is not None:
+        #     # gets the cycle of interest
+        #     voltage = self.dataset.get_cycle(voltage)
+        
+        _,voltage = self.dataset.get_hysteresis()
+        voltage = self.dataset.roll_hysteresis(voltage)
 
-#         # gets the index of the voltage steps to plot
-#         inds = np.linspace(0, len(voltage) - 1, number_of_steps, dtype=int)
 
-#         # plots the voltage
-#         ax[0].plot(voltage, "k")
-#         ax[0].set_ylabel("Voltage (V)")
-#         ax[0].set_xlabel("Step")
+        # gets the index of the voltage steps to plot
+        inds = np.linspace(0, len(voltage) - 1, number_of_steps, dtype=int)
 
-#         # Plot the data with different markers
-#         for i, ind in enumerate(inds):
-#             # this adds the labels to the graphs
-#             ax[0].plot(ind, voltage[ind], "o", color="k", markersize=10)
-#             vshift = (ax[0].get_ylim()[1] - ax[0].get_ylim()[0]) * 0.25
+        # plots the voltage
+        ax[0].plot(voltage, "k")
+        ax[0].set_ylabel("Voltage (V)")
+        ax[0].set_xlabel("Step")
 
-#             # positions the location of the labels
-#             if voltage[ind] - vshift - 0.15 < ax[0].get_ylim()[0]:
-#                 vshift = -vshift / 2
+        # Plot the data with different markers
+        for i, ind in enumerate(inds):
+            # this adds the labels to the graphs
+            ax[0].plot(ind, voltage[ind], "o", color="k", markersize=10)
+            vshift = (ax[0].get_ylim()[1] - ax[0].get_ylim()[0]) * 0.25
 
-#             # adds the text to the graphs
-#             ax[0].text(ind, voltage[ind] - vshift,
-#                        str(i + 1), color="k", fontsize=12)
+            # positions the location of the labels
+            if voltage[ind] - vshift - 0.15 < ax[0].get_ylim()[0]:
+                vshift = -vshift / 2
 
-#         for k, _SHO in enumerate(SHO_):
-#             # converts the data to a numpy array
-#             if isinstance(_SHO, torch.Tensor):
-#                 _SHO = _SHO.detach().numpy()
+            # adds the text to the graphs
+            ax[0].text(ind, voltage[ind] - vshift,
+                       str(i + 1), color="k", fontsize=12)
 
-#             print(_SHO.shape)
-#             _SHO = _SHO.reshape(self.dataset.num_pix,
-#                                 self.dataset.voltage_steps, 4)
+        for k, _SHO in enumerate(SHO_):
+            # converts the data to a numpy array
+            if isinstance(_SHO, torch.Tensor):
+                _SHO = _SHO.detach().numpy()
 
-#             # get the selected measurement cycle
-#             _SHO = self.dataset.get_measurement_cycle(_SHO, axis=1)
+            print(_SHO.shape)
+            _SHO = _SHO.reshape(self.dataset.num_pix,
+                                self.dataset.voltage_steps, 4)
 
-#             names = ["A", "\u03C9", "Q", "\u03C6"]
+            # get the selected measurement cycle
+            _SHO = self.dataset.get_measurement_cycle(_SHO, axis=1)
 
-#             for i, ind in enumerate(inds):
-#                 axis_start = int(
-#                     (i % cols) * 4
-#                     + ((i) // cols) * (comp_number * cols * 4)
-#                     + k * (cols * 4)
-#                     + 1
-#                 )
+            names = ["A", "\u03C9", "Q", "\u03C6"]
 
-#                 # loops around the amp, resonant frequency, and Q, Phase
-#                 for j in range(4):
-#                     imagemap(
-#                         ax[axis_start + j],
-#                         _SHO[:, ind, j],
-#                         colorbars=False,
-#                         cmap="viridis",
-#                     )
+            for i, ind in enumerate(inds):
+                axis_start = int(
+                    (i % cols) * 4
+                    + ((i) // cols) * (comp_number * cols * 4)
+                    + k * (cols * 4)
+                    + 1
+                )
 
-#                     if i // rows == 0 and k == 0:
-#                         labelfigs(
-#                             ax[axis_start + j],
-#                             string_add=names[j],
-#                             loc="cb",
-#                             size=5,
-#                             inset_fraction=(0.2, 0.2),
-#                         )
+                # loops around the amp, resonant frequency, and Q, Phase
+                for j in range(4):
+                    imagemap(
+                        ax[axis_start + j],
+                        _SHO[:, ind, j],
+                        colorbars=False,
+                        cmap="viridis",
+                    )
 
-#                     ax[axis_start + j].images[0].set_clim(clims[j])
+                    if i // rows == 0 and k == 0:
+                        labelfigs(
+                            ax[axis_start + j],
+                            string_add=names[j],
+                            loc="cb",
+                            size=5,
+                            inset_fraction=(0.2, 0.2),
+                        )
 
-#                     if k == 0:
-#                         labelfigs(
-#                             ax[axis_start + j],
-#                             string_add=str(i + 1),
-#                             size=5,
-#                             loc="bl",
-#                             inset_fraction=(0.2, 0.2),
-#                         )
+                    ax[axis_start + j].images[0].set_clim(clims[j])
 
-#                     if (axis_start + j) % (4 * cols) == 1:
-#                         ax[axis_start + j].set_ylabel(labels[k])
+                    if k == 0:
+                        labelfigs(
+                            ax[axis_start + j],
+                            string_add=str(i + 1),
+                            size=5,
+                            loc="bl",
+                            inset_fraction=(0.2, 0.2),
+                        )
 
-#         # if add colorbars
-#         if colorbars:
-#             # builds a list to store the colorbar axis objects
-#             bar_ax = []
+                    if (axis_start + j) % (4 * cols) == 1:
+                        ax[axis_start + j].set_ylabel(labels[k])
 
-#             # gets the voltage axis position in ([xmin, ymin, xmax, ymax]])
-#             voltage_ax_pos = fig_scalar.to_inches(
-#                 np.array(ax[0].get_position()).flatten()
-#             )
+        # if add colorbars
+        if colorbars:
+            # builds a list to store the colorbar axis objects
+            bar_ax = []
 
-#             # loops around the 4 axis
-#             for i in range(4):
-#                 # calculates the height and width of the colorbars
-#                 cbar_h = (voltage_ax_pos[1] -
-#                           inter_gap - 2 * intra_gap - 0.33) / 2
-#                 cbar_w = (cbar_space - inter_gap - 2 * cbar_gap) / 2
+            # gets the voltage axis position in ([xmin, ymin, xmax, ymax]])
+            voltage_ax_pos = fig_scalar.to_inches(
+                np.array(ax[0].get_position()).flatten()
+            )
+            
+            fmt = ScalarFormatter(useMathText=True)
+            fmt.set_powerlimits((0, 0))
+            # loops around the 4 axis
+            for i in range(4):
+                # calculates the height and width of the colorbars
+                cbar_h = (voltage_ax_pos[1] -
+                          inter_gap - 2 * intra_gap - 0.33) / 2
+                cbar_w = (cbar_space - inter_gap - 2 * cbar_gap) / 2
 
-#                 # sets the position of the axis in inches
-#                 pos_inch = [
-#                     voltage_ax_pos[2] - (2 - i % 2) *
-#                     (cbar_gap + cbar_w) + inter_gap,
-#                     voltage_ax_pos[1] - (i // 2) *
-#                     (inter_gap + cbar_h) - 0.33 - cbar_h,
-#                     cbar_w - 0.02,
-#                     cbar_h - 0.1,
-#                 ]
+                # sets the position of the axis in inches
+                pos_inch = [
+                    voltage_ax_pos[2] - (2 - i % 2) *
+                    (cbar_gap + cbar_w) + inter_gap,
+                    voltage_ax_pos[1] - (i // 2) *
+                    (inter_gap + cbar_h) - 0.33 - cbar_h,
+                    cbar_w - 0.02,
+                    cbar_h - 0.1,
+                ]
 
-#                 # adds the plot to the figure
-#                 bar_ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
+                # adds the plot to the figure
+                bar_ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
 
-#                 # adds the colorbars to the plots
-#                 cbar = plt.colorbar(ax[i + 1].images[0],
-#                                     cax=bar_ax[i], format="%.1e")
-#                 cbar.set_label(names[i])  # Add a label to the colorbar
+                # adds the colorbars to the plots 
+                fmt = ScalarFormatter(useMathText=True)
+                fmt.set_powerlimits((0, 0))
+                cbar = plt.colorbar(ax[i + 1].images[0],
+                                    cax=bar_ax[i], format=fmt)
+                cbar.set_label(names[i])  # Add a label to the colorbar
 
-#         # prints the figure
-#         if self.Printer is not None and filename is not None:
-#             self.Printer.savefig(
-#                 fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
-#             )
+        # prints the figure
+        if self.Printer is not None and filename is not None:
+            self.Printer.savefig(
+                fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
+            )
+            
+        return fig
 
 
 #     @static_dataset_decorator
@@ -3440,21 +3642,21 @@ class Viz:
 #             )
 
 
-#     def MSE_compare(self, true_data, predictions, labels):
-#         for pred, label in zip(predictions, labels):
-#             if isinstance(pred, nn.Module):
-#                 pred_data, scaled_param, parm = pred.predict(true_data)
+    def MSE_compare(self, true_data, predictions, labels):
+        for pred, label in zip(predictions, labels):
+            if isinstance(pred, nn.Module):
+                pred_data, scaled_param, parm = pred.predict(true_data)
 
-#             elif isinstance(pred, dict):
-#                 pred_data, _ = self.dataset.get_raw_data_from_LSQF_SHO(pred)
+            elif isinstance(pred, dict):
+                pred_data, _ = self.dataset.get_raw_data_from_LSQF_SHO(pred)
 
-#                 pred_data = torch.from_numpy(pred_data)
+                pred_data = torch.from_numpy(pred_data)
 
-#             # Computes the MSE
-#             out = nn.MSELoss()(true_data, pred_data)
+            # Computes the MSE
+            out = nn.MSELoss()(true_data, pred_data)
 
-#             # prints the MSE
-#             print(f"{label} Mean Squared Error: {out:0.4f}")
+            # prints the MSE
+            print(f"{label} Mean Squared Error: {out:0.4f}")
 
     def get_selected_hysteresis(self,
                                 data,
@@ -3499,6 +3701,7 @@ class Viz:
 
         ax[0].set_xlabel('Voltage (V)')
         ax[0].set_ylabel('Amplitude (Arb. U.)')
+        set_sci_notation_label(ax[0], axis = "y", corner = 'top left')
         ax[0].legend()
 
         # prints the figure
@@ -3506,175 +3709,188 @@ class Viz:
             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
 
 
-#     def hysteresis_maps(
-#         self,
-#         parms_pred,
-#         colorbars=True,
-#         cycle=3,
-#         fig_width=10.5,  # figure width in inches
-#         filename=None,
-#     ):
-#         # # reshape data:
-#         # if data.shape != 3:
+    def hysteresis_maps(
+        self,
+        parms_pred,
+        colorbars=True,
+        cycle=3,
+        fig_width=10.5,  # figure width in inches
+        filename=None,
+    ):
+        # # reshape data:
+        # if data.shape != 3:
 
-#         # calculates the size of the embedding image
-#         embedding_image_size = 60
+        # calculates the size of the embedding image
+        embedding_image_size = 60
 
-#         fig, axs = plt.subplots(
-#             2,
-#             9,
-#             figsize=(fig_width, 4),
-#             gridspec_kw={"height_ratios": [1, 1]},
-#         )
+        fig, axs = plt.subplots(
+            2,
+            9,
+            figsize=(fig_width, 4),
+            gridspec_kw={"height_ratios": [1, 1]},
+        )
 
-#         parms_lsqf = self.dataset.LSQF_hysteresis_params()[:, :, cycle, :].reshape(-1, 9)
-#         parms_pred = parms_pred.reshape(embedding_image_size, embedding_image_size, 4, 9)[:, :, cycle, :].reshape(-1, 9)
+        parms_lsqf = self.dataset.LSQF_hysteresis_params()[:, :, cycle, :].reshape(-1, 9)
+        parms_pred = parms_pred.reshape(embedding_image_size, embedding_image_size, 4, 9)[:, :, cycle, :].reshape(-1, 9)
 
-#         clims = []
+        clims = []
 
-#         colorbar_labels = [
-#             'a0', 'a1', 'a2', 'a3', 'a4', 'b0', 'b1', 'b2', 'b3'
-#         ]
+        colorbar_labels = [
+            'a0', 'a1', 'a2', 'a3', 'a4', 'b0', 'b1', 'b2', 'b3'
+        ]
 
-#         # Titles for each row
-#         row_titles = ['Predicted Parameters', 'LSQF Parameters']
+        # Titles for each row
+        row_titles = ['Predicted Parameters', 'LSQF Parameters']
 
-#         string_add = 'a'
+        string_add = 'a'
 
-#         for i in range(9):
-#             clims.append(
-#                 (
-#                     np.min(
-#                         [
-#                             parms_pred[:, i].min(),
-#                             parms_lsqf[:, i].min(),
-#                         ]
-#                     ),
-#                     np.max(
-#                         [
-#                             parms_pred[:, i].max(),
-#                             parms_lsqf[:, i].max(),
-#                         ]
-#                     ),
-#                 )
-#             )
+        for i in range(9):
+            clims.append(
+                (
+                    np.min(
+                        [
+                            parms_pred[:, i].min(),
+                            parms_lsqf[:, i].min(),
+                        ]
+                    ),
+                    np.max(
+                        [
+                            parms_pred[:, i].max(),
+                            parms_lsqf[:, i].max(),
+                        ]
+                    ),
+                )
+            )
 
-#             axs[0, i].imshow(
-#                 parms_pred[:, i].reshape(
-#                     embedding_image_size, embedding_image_size),
-#                 cmap="viridis",
-#                 vmin=clims[i][0],
-#                 vmax=clims[i][1],
-#             )
-#             axs[0,i].set_xticklabels('')
-#             axs[0,i].set_yticklabels('')
-#             axs[1, i].imshow(
-#                 parms_lsqf[:, i].reshape(
-#                     embedding_image_size, embedding_image_size),
-#                 cmap="viridis",
-#                 vmin=clims[i][0],
-#                 vmax=clims[i][1],
-#             )
-#             axs[1,i].set_xticklabels('')
-#             axs[1,i].set_yticklabels('')
+            axs[0, i].imshow(
+                parms_pred[:, i].reshape(
+                    embedding_image_size, embedding_image_size),
+                cmap="viridis",
+                vmin=clims[i][0],
+                vmax=clims[i][1],
+            )
+            axs[0,i].set_xticklabels('')
+            axs[0,i].set_yticklabels('')
+            axs[1, i].imshow(
+                parms_lsqf[:, i].reshape(
+                    embedding_image_size, embedding_image_size),
+                cmap="viridis",
+                vmin=clims[i][0],
+                vmax=clims[i][1],
+            )
+            axs[1,i].set_xticklabels('')
+            axs[1,i].set_yticklabels('')
 
-#             if colorbars:
-#                 # Create an axis divider for each subplot
-#                 divider = make_axes_locatable(axs[1, i])
-#                 # Append axes to the bottom of the divider with appropriate padding
-#                 cax = divider.append_axes("bottom", size="5%", pad=0.25)
-#                 cbar = plt.colorbar(
-#                     axs[1, i].images[0], cax=cax, format="%.1e", orientation='horizontal')
-#                 # Set the label for each colorbar
-#                 cbar.set_label(colorbar_labels[i])
+            if colorbars:
+                
+                # Create an axis divider for each subplot
+                divider = make_axes_locatable(axs[1, i])
+                # Append axes to the bottom of the divider with appropriate padding
+                cax = divider.append_axes("bottom", size="5%", pad=0.25) 
+                
+                
+                fmt = ScalarFormatter(useMathText=True)
+                fmt.set_powerlimits((0, 0))
+                cbar = plt.colorbar(axs[1,i].images[0],
+                                    cax=cax, format=fmt,orientation = 'horizontal')
+                cbar.set_label(colorbar_labels[i])  # Add a label to the colorbar
 
-#             labelfigs(axs[0,i],
-#                     string_add=colorbar_labels[i],
-#                     loc ='ct',
-#                     size=8,
-#                     inset_fraction=(0.2, 0.2)
-#                     )
-#              # Update the char to the next order
-#             ascii_value = ord(string_add)+1
-#             string_add = chr(ascii_value)
+                
+                
+                # cbar = plt.colorbar(
+                #     axs[1, i].images[0], cax=cax, format="%.1e", orientation='horizontal')
+                # # Set the label for each colorbar
+                # cbar.set_label(colorbar_labels[i])
 
-#         labelfigs(axs[0,0],
-#         string_add='a',
-#         loc ='tl',
-#         size=8,
-#         inset_fraction=(0.2, 0.2)
-#         )
-#         labelfigs(axs[1,0],
-#         string_add='b',
-#         loc ='tl',
-#         size=8,
-#         inset_fraction=(0.2, 0.2)
-#         )
+            labelfigs(axs[0,i],
+                    string_add=colorbar_labels[i],
+                    loc ='ct',
+                    size=8,
+                    inset_fraction=(0.2, 0.2)
+                    )
+             # Update the char to the next order
+            ascii_value = ord(string_add)+1
+            string_add = chr(ascii_value)
 
-#         # Calculate the vertical position for the row titles
-#         title_y_positions = [0.85, 0.5]  # You may need to adjust these values
+        labelfigs(axs[0,0],
+        string_add='a',
+        loc ='tl',
+        size=8,
+        inset_fraction=(0.2, 0.2)
+        )
+        labelfigs(axs[1,0],
+        string_add='b',
+        loc ='tl',
+        size=8,
+        inset_fraction=(0.2, 0.2)
+        )
 
-#         # Set the titles for each row using fig.text
-#         for i, title in enumerate(row_titles):
-#             fig.text(0.5, title_y_positions[i], title, ha='center',
-#                      va='center', fontsize=10, transform=fig.transFigure)
+        # Calculate the vertical position for the row titles
+        title_y_positions = [0.85, 0.5]  # You may need to adjust these values
+
+        # Set the titles for each row using fig.text
+        for i, title in enumerate(row_titles):
+            fig.text(0.5, title_y_positions[i], title, ha='center',
+                     va='center', fontsize=10, transform=fig.transFigure)
 
 
-#         # prints the figure
-#         if self.Printer is not None and filename is not None:
-#             print('use printing function')
-#             self.Printer.savefig(
-#                 fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
-#             )
+        # prints the figure
+        if self.Printer is not None and filename is not None:
+            print('use printing function')
+            self.Printer.savefig(
+                fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
+            )
+        
+        return fig
 
-#     def ranked_mse(self, true, sample_a, other_samples=None):
-#         """
-#         Compute Mean Squared Error (MSE) between two datasets of samples.
+    def ranked_mse(self, true, sample_a, other_samples=None):
+        """
+        Compute Mean Squared Error (MSE) between two datasets of samples.
 
-#         Args:
-#             true (array-like): First dataset of samples.
-#             sample_a (dict): Dictionary with key as sample name and value as dataset of samples.
-#             other_samples (dict, optional): Dictionary with key as sample name and value as dataset of samples. Defaults to None.
+        Args:
+            true (array-like): First dataset of samples.
+            sample_a (dict): Dictionary with key as sample name and value as dataset of samples.
+            other_samples (dict, optional): Dictionary with key as sample name and value as dataset of samples. Defaults to None.
 
-#         Returns:
-#             DataFrame: DataFrame with original index and computed MSE for each sample.
-#         """
+        Returns:
+            DataFrame: DataFrame with original index and computed MSE for each sample.
+        """
 
-#         # Extract the key and value
-#         sample_a_key, sample_a_value = list(sample_a.items())[0]
+        # Extract the key and value
+        sample_a_key, sample_a_value = list(sample_a.items())[0]
 
-#         # Ensure inputs are numpy arrays
-#         true = np.array(true)
-#         sample_a_value = np.array(sample_a_value)
+        # Ensure inputs are numpy arrays
+        true = np.array(true)
+        sample_a_value = np.array(sample_a_value)
 
-#         # Calculate MSE for each sample
-#         mse = np.mean((true - sample_a_value) ** 2, axis=1)
+        # Calculate MSE for each sample
+        mse = np.mean((true - sample_a_value) ** 2, axis=1)
 
-#         # Create a DataFrame with original index and MSE
-#         df = pd.DataFrame({
-#             'Original Index': np.arange(len(mse), dtype=int),
-#             f'MSE_{sample_a_key}': mse
-#         })
+        # Create a DataFrame with original index and MSE
+        df = pd.DataFrame({
+            'Original Index': np.arange(len(mse), dtype=int),
+            f'MSE_{sample_a_key}': mse
+        })
 
-#         if other_samples is not None:
-#             other_sample_key, other_sample_value = list(other_samples.items())[0]
-#             # Calculate MSE for each sample
-#             mse_other_sample = np.mean((true - other_sample_value) ** 2, axis=1)
-#             # Add the new column to the DataFrame
-#             df[f'MSE_{other_sample_key}'] = mse_other_sample
+        if other_samples is not None:
+            other_sample_key, other_sample_value = list(other_samples.items())[0]
+            # Calculate MSE for each sample
+            mse_other_sample = np.mean((true - other_sample_value) ** 2, axis=1)
+            # Add the new column to the DataFrame
+            df[f'MSE_{other_sample_key}'] = mse_other_sample
 
-#         # Sort the DataFrame by MSE to find best, worst, and middle examples
-#         sorted_df = df.sort_values(f'MSE_{sample_a_key}').reset_index(drop=True)
+        # Sort the DataFrame by MSE to find best, worst, and middle examples
+        sorted_df = df.sort_values(f'MSE_{sample_a_key}').reset_index(drop=True)
 
-#         # Identify best, worst, and middle examples and ensure index remains int
-#         best_example = sorted_df.iloc[0]
-#         best_example['Original Index'] = int(best_example['Original Index'])
+        # Identify best, worst, and middle examples and ensure index remains int
+        best_example = sorted_df.iloc[0]
+        best_example['Original Index'] = int(best_example['Original Index'])
 
-#         worst_example = sorted_df.iloc[-1]
-#         worst_example['Original Index'] = int(worst_example['Original Index'])
+        worst_example = sorted_df.iloc[-1]
+        worst_example['Original Index'] = int(worst_example['Original Index'])
 
-#         middle_example = sorted_df.iloc[len(sorted_df) // 2]
-#         middle_example['Original Index'] = int(middle_example['Original Index'])
+        middle_example = sorted_df.iloc[len(sorted_df) // 2]
+        middle_example['Original Index'] = int(middle_example['Original Index'])
 
-#         return best_example, middle_example, worst_example
+        return best_example, middle_example, worst_example
 

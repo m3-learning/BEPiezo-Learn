@@ -23,6 +23,7 @@ def MSE(true, prediction):
     # This operation flattens all other dimensions (channels, timesteps, etc.)
     mse = np.mean((true.reshape(true.shape[0], -1) - prediction.reshape(true.shape[0], -1))**2, axis=1)
 
+
     # If there's only one batch (single sample), return MSE as a scalar
     if mse.shape[0] == 1:
         return mse.item()
@@ -79,12 +80,12 @@ def mse_rankings(true, prediction, curves=False):
     # If curves is True, return ranked true and predicted values
     if curves:
         # true will be in the form [ranked error, channel, timestep]
-        return index, errors[index], true[index], prediction[index]
+        return index, errors[index], true, prediction
 
     # Otherwise, return the indices and ranked errors only
     return index, errors[index]
 
-def get_rankings(raw_data, pred, n=1, curves=True):
+def get_rankings(raw_data, pred, n=1, curves=True,fit_type="SHO"):
     """
     A simple function to get the best, median, and worst reconstructions based on MSE (mean squared error).
     
@@ -124,15 +125,24 @@ def get_rankings(raw_data, pred, n=1, curves=True):
     
     # Combine the reconstruction curves (d1, d2) for the best, median, and worst reconstructions.
     # Use squeeze to remove unnecessary dimensions from the resulting arrays.
-    d1 = np.stack((d1[:n], d1[start_index:end_index], d1[-n:])).squeeze()
-    d2 = np.stack((d2[:n], d2[start_index:end_index], d2[-n:])).squeeze()
+    
+    # d1 = np.stack((d1[:n], d1[start_index:end_index], d1[-n:])).squeeze()
+    # d2 = np.stack((d2[:n], d2[start_index:end_index], d2[-n:])).squeeze()
+    
+    if fit_type == 'SHO':
+        d1 = np.stack((d1[:n], d1[start_index:end_index], d1[-n:])).squeeze()
+        d2 = np.stack((d2[:n], d2[start_index:end_index], d2[-n:])).squeeze()
+    elif fit_type == "hysteresis":
+        
+        d1 = np.stack((d1[:,:n], d1[:,start_index:end_index], d1[:,-n:])).squeeze()
+        d2 = np.stack((d2[:,:n], d2[:,start_index:end_index], d2[:,-n:])).squeeze()
 
     # Return the indices, MSE values, and optionally the reconstruction curves (d1, d2).
-    return ind, mse, d1, d2
+    return index, ind, mse, d1, d2
 
 
 
-def print_mse(model_obj, model_predictor, data, labels):
+def print_mse(model_obj, model_predictor, data, labels,is_SHO=False):
     """
     Prints the Mean Squared Error (MSE) of the model's predictions for each dataset provided.
 
@@ -154,7 +164,7 @@ def print_mse(model_obj, model_predictor, data, labels):
         # If the data is a PyTorch tensor
         if isinstance(data, torch.Tensor):
             # Compute predictions using the model's predict method
-            pred_data, scaled_param, parm = model_predictor.predict(data)
+            pred_data, scaled_param, parm = model_predictor.predict(data,is_SHO=is_SHO)
 
         # If the data is a dictionary, use raw data extraction methods from model_obj
         elif isinstance(data, dict):

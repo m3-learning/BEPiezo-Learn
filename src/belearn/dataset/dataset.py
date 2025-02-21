@@ -205,7 +205,7 @@ class BE_Dataset:
             self.dataset_id = self.datafed_obj.upload_dataset_to_DataFed()
 
             # Upload the file to DataFed
-            self.datafed_obj.upload_file(dc_resp[0].data[0].id, self.file, wait=False)
+            #self.datafed_obj.upload_file(dc_resp[0].data[0].id, self.file, wait=False)
 
 
             # # Set the DataFed ID from the response

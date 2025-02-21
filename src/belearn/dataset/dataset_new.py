@@ -16,10 +16,23 @@ import pyUSID as usid
 import h5py
 
 from dataclasses import dataclass
+from typing import Optional
+from belearn.util.wrappers import static_state_decorator
+
+
+#functions in BE_Dataset class: 
+# get_tree
+# print_be_tree
+# get_original_data
+# num_pix
+# num_bins
+# voltage_steps
+# spectroscopic_length
+# set_raw_data
 
 @dataclass
 class BE_Dataset:
-    file: str
+    file: str =  '/home/jca92/Rapid-Fitting-BEPFM-NN/notebooks/Data/data_raw.h5'
     noise: int = 0
     """
     A class to represent a h5 file.
@@ -136,6 +149,12 @@ class BE_Dataset:
         """Number of frequency bins in the data"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"].attrs["num_bins"]
+        
+    @property
+    def frequency_bin(self):
+        """Frequency bin vector in Hz"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"]["Channel_000"]["Bin_Frequencies"][:]
         
     @property
     def voltage_steps(self):
@@ -481,5 +500,38 @@ class BE_Dataset:
             else:
                 return sho_fitter
 
-                
-    
+
+    #@static_state_decorator
+    def set_raw_data(self):
+        """
+        set_raw_data Function that parses the datafile and extracts the raw data names
+        """
+
+        with h5py.File(self.file, "r+") as h5_f:
+            # initializes the dictionary
+            self.raw_data_reshaped = {}
+
+            # list of datasets to be read
+            datasets = []
+            self.raw_datasets = []
+
+            # Finds all the datasets
+            datasets.extend(
+                usid.hdf_utils.find_dataset(
+                    h5_f["Measurement_000/Channel_000"], "Noisy"
+                )
+            )
+            datasets.extend(
+                usid.hdf_utils.find_dataset(
+                    h5_f["Measurement_000/Channel_000"], "Raw_Data"
+                )
+            )
+
+            # loops around all the datasets and stores them reshaped in a dictionary
+            for dataset in datasets:
+                self.raw_data_reshaped[dataset.name.split("/")[-1]] = dataset[
+                    :
+                ].reshape(self.num_pix, self.voltage_steps, self.num_bins)
+
+                self.raw_datasets.extend([dataset.name.split("/")[-1]])
+

@@ -32,7 +32,7 @@ from belearn.util.wrappers import static_state_decorator
 
 @dataclass
 class BE_Dataset:
-    file: str =  '/home/jca92/Rapid-Fitting-BEPFM-NN/notebooks/Data/data_raw.h5'
+    file: str =  '/home/jca92/Rapid-Fitting-BEPFM-NN/notebooks/Data/data_raw.h5' #TODO: make required
     noise: int = 0
     """
     A class to represent a h5 file.
@@ -41,25 +41,21 @@ class BE_Dataset:
         file (str): The path to the h5 file.
     """
     def __post_init__(self):
+        
         #self.noise = self.noise_state
         self.tree = self.get_tree() 
-        self.set_noise_state(self.noise)  # this might not be the best way to do this
-            
-    def set_noise_state(self, noise):
-        """function that uses the noise state to set the current dataset
-
-        Args:
-            noise (int): noise value in multiples of the standard deviation
-
-        Raises:
-            ValueError: error if the noise value does not exist in the dataset
-        """
+        self.get_dataset(self.noise) 
+    
+        
+    def get_dataset(self, noise):
+        """Property that returns the current dataset based on the noise state."""
 
         if noise == 0:
-            self.dataset = "Raw_Data"
+            return "Raw_Data"
         else:
-            self.dataset = f"Noisy_Data_{noise}"
+            return f"Noisy_Data_{noise}"
     
+    @property
     def get_tree(self):
         """
         get_tree reads the tree from the H5 file
@@ -71,7 +67,7 @@ class BE_Dataset:
         with h5py.File(self.file, "r+") as h5_f:
             return get_tree(h5_f)
         
-    
+    @property
     def print_be_tree(self):
         """Utility file to print the Tree of a BE Dataset
 
@@ -108,7 +104,7 @@ class BE_Dataset:
                 
                 
     @property
-    def get_original_data(self):
+    def Raw_SHO_Data(self):
         """
         Retrieves the original raw Band Excitation (BE) data as a complex number array.
 
@@ -289,7 +285,7 @@ class BE_Dataset:
 
         # Compute the noise standard deviation if it is not provided
         if noise_STD is None:
-            noise_STD = np.std(self.get_original_data)
+            noise_STD = np.std(self.Raw_SHO_Data)
 
         if verbose:
             print(f"The STD of the data is: {noise_STD}")
@@ -320,7 +316,7 @@ class BE_Dataset:
                 noise = noise_real + noise_imag * 1.0j
 
                 # Add the generated noise to the original data
-                data = self.get_original_data + noise
+                data = self.Raw_SHO_Data + noise
 
                 # Find the original dataset in the HDF5 file
                 h5_main = usid.hdf_utils.find_dataset(h5_f, "Raw_Data")[0]

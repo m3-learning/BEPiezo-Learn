@@ -8,8 +8,8 @@ import numpy as np
 
 from m3util.viz.layout import (
     layout_fig,
-    # add_box,
-    # inset_connector,
+    add_box,
+    inset_connector,
     # scalebar,
     # imagemap,
     # FigDimConverter,
@@ -23,6 +23,16 @@ from m3util.viz.arrows import (
     #DrawArrow,
    # draw_extended_arrow_indicator,
 )
+
+from m3util.viz.text import (
+    #add_text_to_figure,
+    set_sci_notation_label,
+    #labelfigs,
+   # obj_offset,
+)
+
+from scipy import fftpack
+
 
 # functions, attributes, and methods in Viz class: 
 # plot_magnitude_spectrum
@@ -117,40 +127,7 @@ class Viz(State):
     # # Replace Any with the expected type if known
     # color_palette: Optional[Any] = None
     
-    ##### Decorators #####
-
-    def static_dataset_decorator(func):
-        """
-        Decorator that preserves the dataset's state before and after a function call.
-
-        This decorator ensures that the state of the dataset remains unchanged after
-        the decorated function is executed. It captures the current state before the
-        function is called and restores it afterward.
-
-        Args:
-            func (method):
-                The method to be decorated. This can be any method that interacts with
-                the dataset and might alter its state.
-
-        Returns:
-            method:
-                The wrapped function that preserves the dataset's state.
-        """
-
-        def wrapper(*args, **kwargs):
-            # Capture the current state of the dataset
-            current_state = args[0].get_state
-
-            # Execute the decorated function and capture its output
-            out = func(*args, **kwargs)
-
-            # Restore the dataset's state to what it was before the function was called
-            args[0].set_attributes(**current_state)
-
-            # Return the output of the function
-            return out
-
-        return wrapper
+    
     
     
     ###### SETTERS ######
@@ -218,7 +195,7 @@ class Viz(State):
     
     ##### Methods #####
     
-    @static_dataset_decorator
+    @State.static_dataset_decorator
     def plot_magnitude_spectrum(
         self,
         ax1,
@@ -241,10 +218,11 @@ class Viz(State):
         # If a pixel is not provided, select a random pixel
         if pixel is None:
             pixel = np.random.randint(0, self.dataset.num_pix)
+            self.pixel = pixel
 
         # Get the voltage step, considering the current state
         voltage_step = self.get_voltage_step(voltage_step)
-
+        self.voltage_step = voltage_step
         # Set dataset state to grab the magnitude spectrum
         self.raw_format = "magnitude spectrum"
 
@@ -371,9 +349,9 @@ class Viz(State):
                 halo=halo,
             )
 
-        return ax1, ax2
+        return ax1, ax2, pixel, voltage_step
     
-    @static_dataset_decorator
+    @State.static_dataset_decorator
     def plot_real_imaginary(
         self,
         ax1,
@@ -498,14 +476,14 @@ class Viz(State):
 
         return ax1, ax2
     
-    @static_dataset_decorator
+    @State.static_dataset_decorator
     def raw_data_comparison(
         self,
         true,
         predict=None,
         filename=None,
-        pixel=None,
-        voltage_step=None,
+        pixel= 330, #None,
+        voltage_step= 87, #None,
         legend=True,
         **kwargs,
     ):
@@ -535,9 +513,17 @@ class Viz(State):
         # Initialize figure and axes for plotting
         fig, axs = layout_fig(2, 2, figsize=(5, 1.25))
 
-        ax_mag, ax_phase = self.plot_magnitude_spectrum(
+        ax_mag, ax_phase, pixel_, voltage_step_ = self.plot_magnitude_spectrum(
             axs[0], true, predict, pixel, voltage_step, fig=fig, **kwargs
         )
+
+        # print("pixel", pixel_)
+        # print("voltage_step", voltage_step_)
+        
+        if pixel is None:
+            pixel = pixel_ 
+        if voltage_step is None:
+            voltage_step = voltage_step_ 
 
         ax_real, ax_imag = self.plot_real_imaginary(
             axs[1], true, predict, pixel, voltage_step, **kwargs
@@ -553,11 +539,11 @@ class Viz(State):
         if self.verbose:
             print("True \n")
             self.set_attributes(**true)
-            self.dataset.extraction_state
+            self.extraction_state
             if predict is not None:
                 print("predicted \n")
                 self.set_attributes(**predict)
-                self.dataset.extraction_state
+                self.extraction_state
 
         # Display the legend if requested
         if legend:
@@ -568,3 +554,256 @@ class Viz(State):
             self.Printer.savefig(
                 fig, filename, label_figs=[ax_phase, ax_imag], style="bw", loc="bl"
             )
+
+    def _scientific_notation_dual(self, ax1, ax2):
+        set_sci_notation_label(
+            ax1,
+            corner="top left",
+            axis="y",
+            stroke_color="w",
+            linewidth=0.5,
+            write_to_axis=ax2,
+        )
+        set_sci_notation_label(
+            ax2, corner="top right", axis="y", stroke_color="w", linewidth=0.5
+        )
+        set_sci_notation_label(
+            ax1, axis="x", stroke_color="w", linewidth=0.5, write_to_axis=ax2
+        )
+        set_sci_notation_label(ax2, axis="x", stroke_color="w", linewidth=0.5)
+
+        ax1.set_box_aspect(1)
+        ax2.set_box_aspect(1)
+        
+    
+    @State.static_dataset_decorator
+    def plot_hysteresis_waveform(self, fig, ax, inset_pos, x_start, x_end, y_inset_min=-2, y_inset_max=20):
+        
+        # Plot the hysteresis waveform and add a zoomed-in inset
+        ax.plot(self.waveform_constructor())
+        ax_new = ax.inset_axes(inset_pos)
+        ax_new.plot(self.waveform_constructor())
+        ax_new.set_xlim(x_start, x_end)
+        ax_new.set_ylim(-2, 20)
+
+        # Draw the inset connector lines
+        inset_connector(
+            fig,
+            ax,
+            ax_new,
+            [(x_start, y_inset_min), (x_end, y_inset_min)],
+            [(x_start, y_inset_min), (x_end, y_inset_min)],
+            color="k",
+            linestyle="--",
+            linewidth=0.5,
+        )
+
+        # Add a box around the inset area on the main plot
+        add_box(
+            ax,
+            (x_start, y_inset_min, x_end, y_inset_max),
+            edgecolor="k",
+            linestyle="--",
+            facecolor="none",
+            linewidth=0.5,
+            zorder=10,
+        )
+
+        ax.set_xlabel("Voltage Steps")
+        ax.set_ylabel("Voltage (V)")
+        
+            
+    @State.static_dataset_decorator
+    def raw_be(
+        self,
+        dataset,
+        x_start=0.8e6,
+        x_end=1e6,
+        figsize=(5 * (5 / 3), 1.3),
+        inset_pos=[0.5, 0.65, 0.48, 0.33],
+        filename="Figure_1_random_cantilever_resonance_results",
+    ):
+        """
+        Plots the raw data and the Band Excitation (BE) waveform for a randomly selected
+        pixel and voltage step from the provided dataset.
+
+        This function performs the following steps:
+        1. Selects a random pixel and voltage step from the dataset.
+        2. Constructs and plots the BE waveform.
+        3. Plots the resonance graph using the Fourier transform of the BE waveform.
+        4. Plots the hysteresis waveform with a zoomed-in inset.
+        5. Changes the dataset state to get the magnitude spectrum and plots it.
+        6. Retrieves the raw spectra in both magnitude and complex format and plots the
+        real and imaginary components.
+        7. Saves the figure if a printer object is available.
+
+        Args:
+            dataset (BE.dataset): BE dataset containing the data to be plotted.
+            x_start (float, optional): Start of the x-axis range for the zoomed-in inset. Defaults to 0.8e6.
+            x_end (float, optional): End of the x-axis range for the zoomed-in inset. Defaults to 1e6.
+            figsize (tuple, optional): Size of the figure to be plotted. Defaults to (5 * (5 / 3), 1.3).
+            inset_pos (list, optional): Position of the inset axes in the plot. Defaults to [0.5, 0.65, 0.48, 0.33].
+            filename (str, optional): Name to save the file. Defaults to "Figure_1_random_cantilever_resonance_results".
+        """
+
+        # Select a random pixel and voltage step from the dataset to plot
+        pixel = np.random.randint(0, dataset.num_pix)
+        voltagestep = np.random.randint(0, dataset.voltage_steps)
+
+        # Initialize the figure and axes for plotting
+        fig, ax = layout_fig(5, 5, figsize=figsize)
+
+        # Calculate the number of voltage steps in one BE waveform cycle
+        be_voltagesteps = len(dataset.be_waveform) / dataset.be_repeats
+
+        # Plot the BE waveform
+        ax[0].plot(dataset.be_waveform[: int(be_voltagesteps)])
+        ax[0].set(xlabel="Time (sec)", ylabel="Voltage (V)")
+
+        # Perform Fourier Transform on the BE waveform to get the resonance graph
+        resonance_graph = np.fft.fft(dataset.be_waveform[: int(be_voltagesteps)])
+        fftfreq = fftpack.fftfreq(int(be_voltagesteps)) * dataset.sampling_rate
+
+        # Plot the resonance graph
+        ax[1].plot(
+            fftfreq[: int(be_voltagesteps) // 2],
+            np.abs(resonance_graph[: int(be_voltagesteps) // 2]),
+        )
+        ax[1].axvline(
+            x=dataset.be_center_frequency,
+            ymax=np.max(resonance_graph[: int(be_voltagesteps) // 2]),
+            linestyle="--",
+            color="r",
+        )
+        ax[1].set(xlabel="Frequency (Hz)", ylabel="Amplitude (Arb. U.)")
+
+        # Set the x-axis limits based on the BE center frequency and bandwidth
+        ax[1].set_xlim(
+            dataset.be_center_frequency
+            - dataset.be_bandwidth
+            - dataset.be_bandwidth * 0.25,
+            dataset.be_center_frequency
+            + dataset.be_bandwidth
+            + dataset.be_bandwidth * 0.25,
+        )
+
+        self.plot_hysteresis_waveform(fig, ax[2], inset_pos, x_start, x_end)
+
+        # Set the dataset state to retrieve the magnitude spectrum
+        dataset.scaled = False
+        dataset.raw_format = "magnitude spectrum"
+        dataset.measurement_state = "all"
+        dataset.resampled = False
+
+        # Get the magnitude spectrum for the selected pixel and voltage step
+        data_ = self.raw_spectra(pixel, voltagestep)
+
+        # Plot the magnitude spectrum
+        ax[3].plot(
+            dataset.frequency_bin,
+            data_[0].flatten(),
+        )
+        ax[3].set(
+            xlabel="Frequency (Hz)", ylabel="Amplitude (Arb. U.)", facecolor="none"
+        )
+
+        # Plot the phase spectrum on the same plot with a secondary y-axis
+        ax2 = ax[3].twinx()
+        ax2.plot(
+            dataset.frequency_bin,
+            data_[1].flatten(),
+            "r",
+        )
+        ax2.set(xlabel="Frequency (Hz)", ylabel="Phase (rad)")
+        ax[3].set_zorder(ax2.get_zorder() + 1)
+
+        # Switch the dataset back to complex format
+        dataset.raw_format = "complex"
+        data_ = self.raw_spectra(pixel, voltagestep)
+
+        # Plot the real and imaginary components of the spectra
+        ax[4].plot(dataset.frequency_bin, data_[0].flatten(), label="Real")
+        ax[4].set(xlabel="Frequency (Hz)", ylabel="Real (Arb. U.)")
+        ax3 = ax[4].twinx()
+        ax3.plot(dataset.frequency_bin, data_[1].flatten(), "r", label="Imaginary")
+        ax3.set(xlabel="Frequency (Hz)", ylabel="Imag (Arb. U.)", facecolor="none")
+        
+        set_sci_notation_label(ax[1],axis="x",corner = "bottom right")
+        set_sci_notation_label(ax[2],axis="x",corner = "bottom right")
+        set_sci_notation_label(ax[3],axis="x",corner = "bottom right")
+        set_sci_notation_label(ax[4],axis="x",corner = "bottom right")
+
+
+        # Save the figure if a Printer object is available
+        if self.Printer is not None:
+            self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+            
+        
+    @State.static_scale_decorator
+    def SHO_hist(self, SHO_data, filename=None, scaled=False):
+        
+
+
+        """Plots the SHO hysteresis parameters
+
+        Args:
+            SHO_data (numpy): SHO fit results
+            filename (str, optional): filename where to save the results. Defaults to "".
+        """
+
+        # from matplotlib.ticker import ScalarFormatter
+
+        # xfmt = ScalarFormatter()
+        # xfmt.set_powerlimits()  # Or whatever your limits are . . .
+
+
+
+        # if the scale is False will not use the scale in the viz
+        if self.dataset.scaled or scaled:
+            print("dataset is scaled")
+            self.SHO_ranges = None
+
+        # if the SHO data is not a list it will make it a list
+        if type(SHO_data) is not list:
+            SHO_data = [SHO_data]
+
+        # check distributions of each parameter before and after scaling
+        fig, axs = layout_fig(
+            4 * len(SHO_data), 4, figsize=(15, 1.25 * len(SHO_data)) # figsize=(5.25, 1.25 * len(SHO_data))
+        )
+
+        for k, SHO_data_ in enumerate(SHO_data):
+            axs_ = axs[k * 4 : (k + 1) * 4]
+
+            SHO_data_ = SHO_data_.reshape(-1, 4)
+
+            for i, (ax, label) in enumerate(zip(axs_.flat, self.SHO_labels)):
+                ax.hist(
+                    SHO_data_[:, i].flatten(),
+                    100,
+                    range=self.SHO_ranges[i] if self.SHO_ranges else None,
+                )
+
+                if i == 0:
+                    ax.set(ylabel="counts")
+                ax.set(xlabel=label["y_label"])
+                # ax.ticklabel_format(axis="x", style="sci", scilimits=(0, 0),useMathText=True)
+                # ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0),useMathText=True)
+                
+                set_sci_notation_label(ax,axis="x",corner="bottom right")
+                set_sci_notation_label(ax,axis="y",corner="top left")
+
+                
+                ax.xaxis.labelpad = 0 #10
+
+                ax.set_box_aspect(1)
+
+            if self.verbose:
+                self.dataset.extraction_state
+
+        # prints the figure
+        if self.Printer is not None and filename is not None:
+            self.Printer.savefig(fig, filename, label_figs=axs, style="b")
+
+
+    

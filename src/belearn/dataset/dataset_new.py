@@ -32,7 +32,7 @@ from belearn.util.wrappers import static_state_decorator
 
 @dataclass
 class BE_Dataset:
-    file: str =  '/home/jca92/Rapid-Fitting-BEPFM-NN/notebooks/Data/data_raw.h5' #TODO: make required
+    file: str =  '/home/julian/Alibek_BEPFM/Rapid-Fitting-BEPFM-NN/notebooks/Data/data_raw.h5' #TODO: make required
     noise: int = 0
     """
     A class to represent a h5 file.
@@ -42,20 +42,21 @@ class BE_Dataset:
     """
     def __post_init__(self):
         
-        #self.noise = self.noise_state
+        self.get_dataset(self.noise)
+
         self.tree = self.get_tree() 
-        self.get_dataset(self.noise) 
-    
         
+    
+   
     def get_dataset(self, noise):
         """Property that returns the current dataset based on the noise state."""
 
         if noise == 0:
-            return "Raw_Data"
+            self.dataset_name =  "Raw_Data"
         else:
-            return f"Noisy_Data_{noise}"
+            self.dataset_name = f"Noisy_Data_{noise}"
     
-    @property
+    #@property
     def get_tree(self):
         """
         get_tree reads the tree from the H5 file
@@ -67,7 +68,7 @@ class BE_Dataset:
         with h5py.File(self.file, "r+") as h5_f:
             return get_tree(h5_f)
         
-    @property
+    #@property
     def print_be_tree(self):
         """Utility file to print the Tree of a BE Dataset
 
@@ -153,6 +154,30 @@ class BE_Dataset:
             return h5_f["Measurement_000"]["Channel_000"]["Bin_Frequencies"][:]
         
     @property
+    def be_center_frequency(self):
+        """BE center frequency in Hz"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"].attrs["BE_center_frequency_[Hz]"]
+        
+    @property
+    def be_bandwidth(self):
+        """BE bandwidth in Hz"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"].attrs["BE_band_width_[Hz]"]
+        
+    @property
+    def be_waveform(self):
+        """BE excitation waveform"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"]["Channel_000"]["Excitation_Waveform"][:]
+        
+    @property
+    def be_repeats(self):
+        """Number of BE repeats"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"].attrs["BE_repeats"]
+        
+    @property
     def voltage_steps(self):
         """Number of DC voltage steps"""
         with h5py.File(self.file, "r+") as h5_f:
@@ -175,6 +200,31 @@ class BE_Dataset:
     def spectroscopic_length(self):
         """Gets the length of the spectroscopic vector"""
         return self.num_bins * self.voltage_steps    
+    
+    @property
+    def sampling_rate(self):
+        """Sampling rate in Hz"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"].attrs["IO_rate_[Hz]"]
+        
+    @property
+    def spectroscopic_values(self):
+        """Spectroscopic values"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f["Measurement_000"]["Channel_000"]["Spectroscopic_Values"][:]
+        
+    @property
+    def hysteresis_waveform(self, loop_number=2):
+        """Gets the hysteresis waveform"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return (
+                self.spectroscopic_values[1, :: len(self.frequency_bin)][
+                    int(self.voltage_steps / loop_number) :
+                ]
+                * self.spectroscopic_values[2, :: len(self.frequency_bin)][
+                    int(self.voltage_steps / loop_number) :
+                ]
+            )
     
     @property
     def get_pos_dims(self):
@@ -530,4 +580,32 @@ class BE_Dataset:
                 ].reshape(self.num_pix, self.voltage_steps, self.num_bins)
 
                 self.raw_datasets.extend([dataset.name.split("/")[-1]])
+                
+                
+    # From JGoddy: I don't think we actually use this data_writer function since
+    # I never uncommented it but I'm putting it here for now (still uncommented) 
+    
+    # def data_writer(self, base, name, data):
+    #     """
+    #     data_writer function to write data to an USID dataset
 
+    #     Args:
+    #         base (str): basepath where to save the data
+    #         name (str): name of the dataset to save
+    #         data (np.array): data to save
+    #     """
+
+    #     with h5py.File(self.file, "r+") as h5_f:
+
+    #         try:
+    #             # if the dataset does not exist can write
+    #             make_dataset(h5_f[base],
+    #                          name,
+    #                          data)
+
+    #         except:
+    #             # if the dataset exists deletes the dataset and then writes
+    #             self.delete(f"{base}/{name}")
+    #             make_dataset(h5_f[base],
+    #                          name,
+    #                          data)

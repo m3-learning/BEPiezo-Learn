@@ -6,9 +6,11 @@ import numpy as np
 import torch
 from belearn.functions.sho import SHO_nn
 from belearn.dataset.dataset_new import BE_Dataset
+from belearn.dataset.preprocessing import Preprocessing
+
 from scipy.signal import resample
 
-class State(BE_Dataset):
+class State(Preprocessing):
     # None of these are actually used in the class, but they are here to be (hopefully)used in the future
     
     
@@ -119,10 +121,10 @@ class State(BE_Dataset):
         if voltage_step is not None:
             # Adjust the voltage step index for the 'on' state by selecting odd-indexed steps
             if self.measurement_state == "on":
-                voltage_step = np.arange(0, BE_Dataset.voltage_steps)[1::2][voltage_step]
+                voltage_step = np.arange(0, self.voltage_steps)[1::2][voltage_step]
             # Adjust the voltage step index for the 'off' state by selecting even-indexed steps
             elif self.measurement_state == "off":
-                voltage_step = np.arange(0, BE_Dataset.voltage_steps)[::2][voltage_step]
+                voltage_step = np.arange(0, self.voltage_steps)[::2][voltage_step]
 
         # Return the adjusted voltage step index
         return voltage_step
@@ -259,7 +261,6 @@ class State(BE_Dataset):
 
         # JGoddy commented out the h5py file opening because
         # h5_f was not being used in the code
-        #with h5py.File(self.file, "r+") as h5_f:
         
         # Open the HDF5 file in read+write mode
         #with h5py.File(self.file, "r+") as h5_f:
@@ -267,12 +268,12 @@ class State(BE_Dataset):
         # Extract data based on provided pixel and voltage_step indices
         if pixel is not None and voltage_step is not None:
             # Specific pixel and voltage_step provided
-            return self.raw_data_reshaped[self.dataset][[pixel], :, :][
+            return self.raw_data_reshaped[self.dataset_name][[pixel], :, :][
                 :, [voltage_step], :
             ]
         else:
             # Return the entire dataset if pixel or voltage_step is not specified
-            return self.raw_data_reshaped[self.dataset][:]
+            return self.raw_data_reshaped[self.dataset_name][:]
 
     
     def raw_data_resampled(self, pixel=None, voltage_step=None):
@@ -288,15 +289,37 @@ class State(BE_Dataset):
         """
 
         if pixel is not None and voltage_step is not None:
-            return self.resampled_data[self.dataset][[pixel], :, :][
+            return self.resampled_data[self.dataset_name][[pixel], :, :][
                 :, [voltage_step], :
             ]
         else:
             # JGoddy commented out the h5py file opening because
             # h5_f was not being used in the code
             #with h5py.File(self.file, "r+") as h5_f:
-            return self.resampled_data[self.dataset][:]
+            return self.resampled_data[self.dataset_name][:]
 
+   
+    def get_data_w_voltage_state(self, data):
+        """
+        get_data_w_voltage_state function to extract data given a voltage state either the on or off state
+
+        Args:
+            data (np.array): BE data
+
+        Returns:
+            np.array: BE data considering the voltage state
+        """
+
+        # only does this if getting the full dataset, will reduce to off and on state
+        if self.measurement_state == "all":
+            data = data
+        elif self.measurement_state == "on":
+            data = data[:, 1::2, :]
+        elif self.measurement_state == "off":
+            data = data[:, ::2, :]
+
+        return data
+   
     
     @static_state_decorator
     def raw_spectra(
@@ -389,7 +412,7 @@ class State(BE_Dataset):
             data = SHO_nn(params, frequency_bins)
 
             # Check if the full dataset was used and determine if reshaping is needed
-            if bins * BE_Dataset.num_pix * BE_Dataset.voltage_steps * 2 == len(data.flatten()):
+            if bins * self.num_pix * self.voltage_steps * 2 == len(data.flatten()):
                 pass
             else:
                 shaper_ = False
@@ -433,3 +456,287 @@ class State(BE_Dataset):
             return data, frequency_bins
         else:
             return data            
+
+
+    @property
+    def extraction_state(self):
+        """
+        Prints the current extraction state of the dataset.
+
+        This property method outputs a summary of the current settings and parameters
+        related to the extraction state of the dataset. It includes information such
+        as whether the data is resampled, the format of the raw data, the fitting method
+        used, and various other state-related attributes.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+
+        if self.verbose:
+            # Print a formatted string that summarizes the current extraction state of the dataset
+            print(
+                f"""
+            Dataset = {self.dataset}
+            Resample = {self.resampled}
+            Raw Format = {self.raw_format}
+            Fitter = {self.fitter}
+            Scaled = {self.scaled}
+            Output Shape = {self.output_shape}
+            Measurement State = {self.measurement_state}
+            Resample Resampled = {self.resampled}
+            Resample Bins = {self.resampled_bins}
+            LSQF Phase Shift = {self.LSQF_phase_shift}
+            NN Phase Shift = {self.NN_phase_shift}
+            Noise Level = {self.noise}
+            Loop Interpolated = {self.loop_interpolated}
+            """
+            )
+            
+    def waveform_constructor(self):
+        """
+        Constructs a combined waveform by adding elements from a hysteresis waveform and
+        a band excitation (BE) waveform.
+
+        This method creates a new waveform by repeating and tiling the elements of the
+        `hysteresis_waveform` and `be_waveform` arrays, respectively. Each element of
+        the hysteresis waveform is combined with all elements of the BE waveform.
+
+        Returns:
+            np.array:
+                The resulting combined waveform array.
+        """
+
+        # Repeat each element of 'hysteresis_waveform' for the length of 'be_waveform'
+        hysteresis_waveform_repeated = np.repeat(
+            self.hysteresis_waveform, len(self.be_waveform)
+        )
+
+        # Tile 'be_waveform' so that it repeats for each element in 'hysteresis_waveform'
+        be_waveform_tiled = np.tile(self.be_waveform, len(self.hysteresis_waveform))
+
+        # Combine the repeated and tiled arrays by adding them element-wise
+        result = hysteresis_waveform_repeated + be_waveform_tiled
+
+        # Return the resulting combined waveform
+        return result
+    
+    
+    @static_state_decorator
+    def SHO_fit_results(self, state=None, model=None, phase_shift=None, X_data=None):
+        """
+        Retrieves the SHO (Simple Harmonic Oscillator) fit results from the dataset, either
+        by using a specified neural network model or a least squares fitting method.
+
+        Args:
+            state (dict, optional): A dictionary representing a specific measurement state.
+                                    If provided, the dataset will be adjusted to this state before fitting.
+                                    Defaults to None.
+            model (nn.Module, optional): A neural network model to predict the SHO fit results.
+                                        If not provided, a least squares fitting method is used.
+                                        Defaults to None.
+            phase_shift (float, optional): A value to shift the phase of the resulting data.
+                                        If None, the default phase shift from the dataset's configuration is used.
+                                        Defaults to None.
+            X_data (np.array, optional): The frequency bins used for model prediction.
+                                        If None and a model is provided, it will be generated from the dataset.
+                                        Defaults to None.
+
+        Returns:
+            np.array: The SHO fit parameters, either in the shape of (index, SHO_params) or
+                    (num_pix, num_voltage_steps, SHO_params), depending on the dataset configuration.
+        """
+
+        # Note: Removed pixel and voltage step indexing here
+
+        # If a neural network model is not provided, use the Least Squares Fitting (LSQF) method
+        if model is None:
+            # Open the HDF5 file for reading the SHO fitting data
+            
+            # JGoddy commented out the h5py file opening because
+            # h5_f was not being used in the code
+            #with h5py.File(self.file, "r+") as h5_f:
+                # If a state is provided, set the dataset attributes accordingly
+            if state is not None:
+                self.set_attributes(**state)
+
+            # Evaluate and retrieve the fitting data using the specified fitter (e.g., LSQF)
+            data = eval(f"self.SHO_{self.fitter}()")
+
+            # Store the original shape of the data for reshaping later
+            data_shape = data.shape
+
+            # Reshape the data to a 2D array with 4 columns (assumed to be the SHO parameters)
+            data = data.reshape(-1, 4)
+
+            # If a phase shift is specified in the dataset's fitter configuration and no
+            # external phase shift is provided, apply the default phase shift
+            if (
+                eval(f"self.{self.fitter}_phase_shift") is not None
+                and phase_shift is None
+            ):
+                data[:, 3] = eval(
+                    f"self.shift_phase(data[:, 3], self.{self.fitter}_phase_shift)"
+                )
+
+            # Reshape the data back to its original shape
+            data = data.reshape(data_shape)
+
+            # If the dataset is scaled, apply the scaling transformation to the data
+            if self.scaled:
+                data = self.SHO_scaler.transform(data.reshape(-1, 4)).reshape(
+                    data_shape
+                )
+
+        else:
+            # If a model is provided, use it to predict the SHO parameters
+
+            # If X_data is not provided, generate the necessary input data (X_data, Y_data) from the dataset
+            if X_data is None:
+                X_data, Y_data = self.NN_data()
+
+            # Predict the SHO parameters using the model
+            pred_data, scaled_param, data = model.predict(X_data)
+
+            # If the dataset is scaled, use the scaled parameters as the final data
+            if self.scaled:
+                data = scaled_param
+
+        # Apply an external phase shift if provided
+        if phase_shift is not None:
+            data[:, 3] = self.shift_phase(data[:, 3], phase_shift)
+
+        # Return the data reshaped according to the output configuration
+        if self.output_shape == "index":
+            # Return data as a 2D array (index, SHO_params)
+            return data.reshape(-1, 4)
+        else:
+            # Return data as a 3D array (num_pix, num_voltage_steps, SHO_params)
+            return data.reshape(self.num_pix, self.state_num_voltage_steps(), 4)
+    
+    def SHO_LSQF(self, pixel=None, voltage_step=None):
+        """
+        Retrieves the Simple Harmonic Oscillator (SHO) fit results using the Least Squares Fitting (LSQF) method.
+
+        This function extracts the SHO fit results from the dataset stored in an HDF5 file. The results can be
+        retrieved for a specific pixel and voltage step, or for the entire dataset, depending on the provided arguments.
+
+        Args:
+            pixel (int, optional): The index of the pixel for which the SHO fit results are to be extracted.
+                                If None, results for all pixels will be returned. Defaults to None.
+            voltage_step (int, optional): The index of the voltage step for which the SHO fit results are to be extracted.
+                                        If None, results for all voltage steps will be returned. Defaults to None.
+
+        Returns:
+            np.array: The extracted SHO LSQF results. The shape of the returned array depends on the
+                    combination of the pixel and voltage_step parameters.
+        """
+
+        # Open the HDF5 file containing the SHO LSQF data
+        with h5py.File(self.file, "r+") as h5_f:
+            # Copy the SHO LSQF data for the specific dataset
+            dataset_ = self.SHO_LSQF_data[f"{self.dataset}-SHO_Fit_000"].copy()
+
+            # If both pixel and voltage_step are provided, return the data for the specific pixel and voltage step
+            if pixel is not None and voltage_step is not None:
+                return self.get_data_w_voltage_state(dataset_[[pixel], :, :])[
+                    :, [voltage_step], :
+                ]
+
+            # If only pixel is provided, return the data for the specific pixel across all voltage steps
+            elif pixel is not None:
+                return self.get_data_w_voltage_state(dataset_[[pixel], :, :])
+
+            # If neither pixel nor voltage_step are provided, return the entire dataset
+            else:
+                return self.get_data_w_voltage_state(dataset_[:])
+    
+    ##### Decorators #####
+
+    def static_dataset_decorator(func):
+        """
+        Decorator that preserves the dataset's state before and after a function call.
+
+        This decorator ensures that the state of the dataset remains unchanged after
+        the decorated function is executed. It captures the current state before the
+        function is called and restores it afterward.
+
+        Args:
+            func (method):
+                The method to be decorated. This can be any method that interacts with
+                the dataset and might alter its state.
+
+        Returns:
+            method:
+                The wrapped function that preserves the dataset's state.
+        """
+
+        def wrapper(*args, **kwargs):
+            # Capture the current state of the dataset
+            current_state = args[0].get_state
+
+            # Execute the decorated function and capture its output
+            out = func(*args, **kwargs)
+
+            # Restore the dataset's state to what it was before the function was called
+            args[0].set_attributes(**current_state)
+
+            # Return the output of the function
+            return out
+
+        return wrapper
+    
+    def static_scale_decorator(func):
+            """
+            Decorator that preserves the state of the `SHO_ranges` and the dataset attributes
+            before the decorated function is called and restores them afterward. This ensures
+            that the function does not alter the state of the object it operates on.
+
+            Args:
+                func (method): The method to be decorated.
+
+            Returns:
+                method: The wrapped method with state-preservation functionality.
+            """
+
+            def wrapper(self, SHO_data, *args, **kwargs):
+                """
+                Wrapper function that preserves the current `SHO_ranges` and dataset state,
+                calls the original function, and then restores the preserved state.
+
+                Args:
+                    self: Instance of the class containing the method.
+                    SHO_data: Data to be processed by the wrapped function.
+                    *args: Additional positional arguments passed to the wrapped function.
+                    **kwargs: Additional keyword arguments passed to the wrapped function.
+
+                Returns:
+                    Any: The output of the wrapped function.
+                """
+
+                # Preserve the current SHO_ranges
+                current_SHO_ranges = self.SHO_ranges
+
+                # Preserve the current state of the dataset (assuming get_state returns a dictionary)
+                current_dataset_state = (
+                    self.get_state
+                )  # Assume this returns a dict of the dataset state
+
+                # Debugging output to verify the preserved state
+                print("current_SHO_ranges:", current_SHO_ranges)
+                print("current_dataset_state:", current_dataset_state)
+
+                # Call the original function with the given arguments
+                out = func(self, SHO_data, *args, **kwargs)
+
+                # Restore the preserved SHO_ranges
+                self.SHO_ranges = current_SHO_ranges
+
+                # Restore the preserved dataset state by setting the attributes back to their original values
+                self.set_attributes(**current_dataset_state)
+
+                return out
+
+            return wrapper

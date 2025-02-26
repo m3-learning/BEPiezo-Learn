@@ -102,7 +102,7 @@ class BE_Dataset:
 
         # Preprocessing and raw data
         self.set_preprocessing()
-        self.set_raw_data()
+       # self.set_raw_data()
         self.SHO_preprocessing()
 
     def set_preprocessing(self):
@@ -1745,7 +1745,7 @@ class BE_Dataset:
 
         Returns:
             None
-        """
+            """
 
         # Open the HDF5 file for reading and writing
         with h5py.File(self.file, "r+") as h5_f:

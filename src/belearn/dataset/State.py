@@ -48,7 +48,7 @@ class State(Preprocessing):
         # self.resampled_bins = resampled_bins
         # self.resampled_data = resampled_data
         
-        #self.set_raw_data()
+        self.set_raw_data()
     
     
     

@@ -164,7 +164,7 @@ class Preprocessing(BE_Dataset):
 
         # extract the raw data and reshapes is
         # in dataset_new.py for now because it reads the data from the h5 file
-        self.set_raw_data() 
+       # self.set_raw_data() 
 
         # # resamples the data if necessary
         self.set_raw_data_resampler()

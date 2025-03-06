@@ -34,11 +34,15 @@ from belearn.util.wrappers import static_state_decorator
 class BE_Dataset:
     file: str =  '/home/julian/Alibek_BEPFM/Rapid-Fitting-BEPFM-NN/notebooks/Data/data_raw.h5' #TODO: make required
     noise: int = 0
+    resampled_bins: int = None
+    resampled_data: dict = None
     """
     A class to represent a h5 file.
 
     Attributes:
         file (str): The path to the h5 file.
+        resampled_bins (int): The number of bins to resample the data to.
+        resampled_data (dict): The data to resample.
     """
     def __post_init__(self):
         
@@ -47,6 +51,15 @@ class BE_Dataset:
         self.tree = self.get_tree() 
         
     
+        # self.resampled_bins = self.resampled_bins
+        # self.resampled_data = self.resampled_data
+        
+        
+        # # Initialize resampled_bins if it's None
+        # if self.resampled_bins is None:
+        #     self.resampled_bins = self.num_bins
+
+
    
     def get_dataset(self, noise):
         """Property that returns the current dataset based on the noise state."""
@@ -124,7 +137,7 @@ class BE_Dataset:
         # Open the HDF5 file in read+write mode
         with h5py.File(self.file, "r+") as h5_f:
             # Check if the dataset is 'Raw_Data'
-            if self.dataset == "Raw_Data":
+            if self.dataset_name == "Raw_Data":
                 # Directly return the 'Raw_Data' from the HDF5 file
                 return h5_f["Measurement_000"]["Channel_000"]["Raw_Data"][:]
             else:
@@ -176,6 +189,16 @@ class BE_Dataset:
         """Number of BE repeats"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"].attrs["BE_repeats"]
+        
+        
+    @property
+    def dc_voltage(self):
+        """Gets the DC voltage vector"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f[f"Raw_Data_SHO_Fit/Raw_Data-SHO_Fit_000/Spectroscopic_Values"][
+                0, 1::2
+            ]
+
         
     @property
     def voltage_steps(self):

@@ -1,3 +1,5 @@
+import os
+
 from typing import Optional, Dict, Any
 from dataclasses import field
 from belearn.util.wrappers import static_state_decorator
@@ -26,10 +28,12 @@ class State(Preprocessing):
                 NN_phase_shift: Optional[float] = None,
                 verbose: bool = False,
                 resampled: bool = False,
-                resampled_bins: Optional[int] = field(default=None, init=False),
-                resampled_data: Dict[str, Any] = field(default_factory=dict, init=False)
+                resampled_bins =  None, #Optional[int] = field(default=None, init=False),
+                resampled_data = None #Dict[str, Any] = field(default_factory=dict, init=False)
             ):
-        super().__init__(noise=noise)
+        #super().__init__()
+        super().__init__(resampled_bins=resampled_bins, resampled_data=resampled_data)
+
         self.noise = noise
         self.raw_format = raw_format
         self.fitter = fitter
@@ -41,10 +45,10 @@ class State(Preprocessing):
         self.NN_phase_shift = NN_phase_shift
         self.verbose = verbose
         self.resampled = resampled
-        self.resampled_bins = resampled_bins
-        self.resampled_data = resampled_data
+        # self.resampled_bins = resampled_bins
+        # self.resampled_data = resampled_data
         
-        self.set_raw_data()
+        #self.set_raw_data()
     
     
     
@@ -524,6 +528,84 @@ class State(Preprocessing):
         return result
     
     
+    @staticmethod
+    def shift_phase(phase, shift_=None):
+        """
+        Shifts the phase of the dataset by a specified amount. This function adjusts the phase
+        values to account for any phase shift, ensuring the phase values are wrapped correctly
+        within the range of -π to π or π to 3π depending on the shift direction.
+
+        Args:
+            phase (np.array): Array of phase data to be shifted.
+            shift_ (float, optional): The phase shift to apply, in radians. If None or 0,
+                                    no shift is applied. Defaults to None.
+
+        Returns:
+            np.array: The phase-shifted data, with phase values adjusted according to the specified shift.
+        """
+
+        # If no shift is specified or the shift is 0, return the original phase data unchanged
+        if shift_ is None or shift_ == 0:
+            return phase
+        else:
+            shift = shift_
+
+        # If the shift is positive, adjust the phase values
+        if shift > 0:
+            # Increment phase by π to handle phase wrapping
+            phase_ = phase
+            phase_ += np.pi
+
+            # Adjust phase values greater than π by adding 2π
+            phase_[phase_ <= shift] += 2 * np.pi
+
+            # Subtract the shift and adjust by -π to wrap the phase back within the appropriate range
+            phase__ = phase_ - shift - np.pi
+
+        # If the shift is negative, adjust the phase values accordingly
+        else:
+            # Decrement phase by π to handle phase wrapping
+            phase_ = phase
+            phase_ -= np.pi
+
+            # Adjust phase values less than -π by subtracting 2π
+            phase_[phase_ >= shift] -= 2 * np.pi
+
+            # Subtract the shift and adjust by +π to wrap the phase back within the appropriate range
+            phase__ = phase_ - shift + np.pi
+
+        return phase__
+    
+    
+    def state_num_voltage_steps(self):
+        """
+        Retrieves the number of voltage steps based on the current measurement state.
+
+        This function determines the number of voltage steps to use depending on whether
+        the current measurement state is set to 'all' or a subset. If the measurement state
+        is 'all', it returns the total number of voltage steps; otherwise, it returns half
+        the total number.
+
+        Returns:
+            int: The number of voltage steps corresponding to the current measurement state.
+        """
+
+        # JGODDY commented out the if statement and replaced with voltage_step = self.voltage_steps
+
+        # Check if the current measurement state is set to 'all'
+        if self.measurement_state == "all":
+            # If 'all', return the full number of voltage steps
+            voltage_step = self.voltage_steps
+        else:
+            # If not 'all', return half the number of voltage steps
+            voltage_step = int(self.voltage_steps / 2)
+        
+        
+        #voltage_step = self.voltage_steps
+
+        # Return the computed number of voltage steps
+        return voltage_step
+    
     @static_state_decorator
     def SHO_fit_results(self, state=None, model=None, phase_shift=None, X_data=None):
         """
@@ -637,7 +719,7 @@ class State(Preprocessing):
         # Open the HDF5 file containing the SHO LSQF data
         with h5py.File(self.file, "r+") as h5_f:
             # Copy the SHO LSQF data for the specific dataset
-            dataset_ = self.SHO_LSQF_data[f"{self.dataset}-SHO_Fit_000"].copy()
+            dataset_ = self.SHO_LSQF_data[f"{self.dataset_name}-SHO_Fit_000"].copy()
 
             # If both pixel and voltage_step are provided, return the data for the specific pixel and voltage step
             if pixel is not None and voltage_step is not None:
@@ -740,3 +822,101 @@ class State(Preprocessing):
                 return out
 
             return wrapper
+        
+        
+        
+    def get_lowest_loss_for_noise_level(path, desired_noise_level):
+        """
+        Retrieves the filename of the checkpoint file with the lowest training loss for a specified noise level.
+
+        This function searches through checkpoint files in the specified directory, extracts the noise level and loss value
+        from the filenames, and returns the filename with the lowest loss for the given noise level.
+
+        Args:
+            path (str): The directory path where the checkpoint files (.pth) are located.
+            desired_noise_level (int or str): The noise level to search for. Can be provided as an integer or string.
+
+        Returns:
+            str: The filename with the lowest loss for the desired noise level.
+                Returns None if no files match the desired noise level.
+        """
+
+        # Checks if the desired noise level is provided as an integer
+        if isinstance(desired_noise_level, int):
+            # Converts the integer noise level to a string to match the filename format
+            desired_noise_level = str(desired_noise_level)
+
+        # Initialize a dictionary to store the lowest loss and corresponding filename for each noise level
+        lowest_losses = {}
+
+        # Iterate over all files in the directory
+        for root, dirs, files in os.walk(path):
+            # Loop through each file found in the directory
+            for file in files:
+                # Process only checkpoint files with the ".pth" extension
+                if file.endswith(".pth"):
+                    # Extract the noise value from the filename
+                    noise_value = file.split("_noise_")[1].split("_")[0]
+
+                    # Extract the loss value from the filename and convert it to a float
+                    loss = file.split("train_loss_")[1].split("_")[0]
+                    loss = float(loss.split(".pth")[0])
+
+                    # Update the dictionary with the lowest loss for the current noise value
+                    if noise_value == desired_noise_level:
+                        if (
+                            noise_value not in lowest_losses
+                            or loss < lowest_losses[noise_value][0]
+                        ):
+                            lowest_losses[noise_value] = (loss, file)
+
+        # Check if the desired noise level was found and return the corresponding filename
+        if desired_noise_level in lowest_losses:
+            # Retrieve the lowest loss and associated filename for the desired noise level
+            loss, file_name = lowest_losses[desired_noise_level]
+
+            return file_name
+
+        else:
+            # Return None if no files match the desired noise level
+            return None
+        
+        
+        
+    def get_SHO_data(self, noise, model, phase_shift=None):
+        """
+        Retrieves Simple Harmonic Oscillator (SHO) fit results for both "on" and "off" states.
+
+        This function sets the noise level and measurement state of the dataset, then extracts
+        the SHO fit results for both the "on" and "off" states using the specified model and
+        phase shift.
+
+        Args:
+            noise (int): The noise level to apply to the dataset.
+            model (object): The model used for generating the SHO fit results.
+            phase_shift (float, optional): An optional phase shift to apply during the fit. Defaults to None.
+
+        Returns:
+            tuple: A tuple containing two numpy arrays:
+                - `on_data`: SHO fit results for the "on" state.
+                - `off_data`: SHO fit results for the "off" state.
+        """
+
+        # Set the noise level for the dataset
+        self.dataset.noise = noise
+
+        # Set the measurement state to "on" to get the data for the "on" state
+        self.measurement_state = "on"
+
+        # Retrieve the SHO fit results for the "on" state
+        on_data = self.SHO_fit_results(model=model, phase_shift=phase_shift)
+
+        # Set the measurement state to "off" to get the data for the "off" state
+        self.measurement_state = "off"
+
+        # Retrieve the SHO fit results for the "off" state
+        off_data = self.SHO_fit_results(model=model, phase_shift=phase_shift)
+
+        # Return the fit results for both states as a tuple
+        return on_data, off_data
+

@@ -13,8 +13,8 @@ class Preprocessing(BE_Dataset):
 
     
     def __init__(self,
-            resampled_bins: Optional[int] = None,
-            resampled_data: Dict[str, Any] = None
+           resampled_bins: None,
+           resampled_data: None
         ):
         
         super().__init__()
@@ -243,9 +243,12 @@ class Preprocessing(BE_Dataset):
             # Extract data based on provided pixel and voltage_step indices
         if pixel is not None and voltage_step is not None:
             # Specific pixel and voltage_step provided
-            return self.raw_data_reshaped[self.dataset][[pixel], :, :][
+            return self.raw_data_reshaped[self.dataset_name][[pixel], :, :][
                 :, [voltage_step], :
             ]
         else:
             # Return the entire dataset if pixel or voltage_step is not specified
-            return self.raw_data_reshaped[self.dataset][:]
+            return self.raw_data_reshaped[self.dataset_name][:]
+        
+        
+    

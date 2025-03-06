@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Type
 
@@ -5,14 +6,19 @@ from belearn.dataset.dataset_new import BE_Dataset
 from belearn.dataset.State import State
 
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
+
+from scipy import fftpack
+
 
 from m3util.viz.layout import (
     layout_fig,
     add_box,
     inset_connector,
-    # scalebar,
-    # imagemap,
-    # FigDimConverter,
+    scalebar,
+    imagemap,
+    FigDimConverter,
     # subfigures,
     # get_axis_pos_inches,
     # draw_line_with_text,
@@ -25,14 +31,17 @@ from m3util.viz.arrows import (
 )
 
 from m3util.viz.text import (
-    #add_text_to_figure,
+    add_text_to_figure,
     set_sci_notation_label,
-    #labelfigs,
+    labelfigs,
    # obj_offset,
 )
 
-from scipy import fftpack
 
+
+
+from m3util.util.IO import make_folder
+from m3util.viz.movies import make_movie
 
 # functions, attributes, and methods in Viz class: 
 # plot_magnitude_spectrum
@@ -85,14 +94,7 @@ class Viz(State):
                  image_scalebar: Optional[Any] = None,
                  color_palette: Optional[Any] = None,
                  SHO_ranges: Optional[Any] = None,
-                 SHO_labels: Optional[List[Dict[str, str]]]= field(
-                                    default_factory=lambda: [
-                                        {"title": "Amplitude", "y_label": "Amplitude \n (Arb. U.)"},
-                                        {"title": "Resonance Frequency", "y_label": "Resonance Frequency \n (Hz)"},
-                                        {"title": "Dampening", "y_label": "Quality Factor \n (Arb. U.)"},
-                                        {"title": "Phase", "y_label": "Phase \n (rad)"},
-                                    ]
-                                )
+                 SHO_labels: Optional[List[Dict[str, str]]] = None
                  ):
         super().__init__()
         self.dataset = dataset
@@ -102,8 +104,12 @@ class Viz(State):
         self.image_scalebar = image_scalebar
         self.color_palette = color_palette
         self.SHO_ranges = SHO_ranges
-        if SHO_labels is not None:
-            self.SHO_labels = SHO_labels
+        self.SHO_labels = SHO_labels if SHO_labels is not None else [
+            {"title": "Amplitude", "y_label": "Amplitude \n (Arb. U.)"},
+            {"title": "Resonance Frequency", "y_label": "Resonant \n Frequency \n (Hz)"},
+            {"title": "Dampening", "y_label": "Quality Factor \n (Arb. U.)"},
+            {"title": "Phase", "y_label": "Phase \n (rad)"},
+        ]
     
     # dataset: Any  # Specify the type based on what you expect
     # # You can also define the type of Printer if you know it
@@ -759,7 +765,7 @@ class Viz(State):
 
 
         # if the scale is False will not use the scale in the viz
-        if self.dataset.scaled or scaled:
+        if self.scaled or scaled:
             print("dataset is scaled")
             self.SHO_ranges = None
 
@@ -804,6 +810,412 @@ class Viz(State):
         # prints the figure
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename, label_figs=axs, style="b")
+            
+            
+            
 
+    def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
+        """
+        Plots the SHO loop fit results for a randomly selected pixel or provided data.
+
+        Args:
+            data (np.array, optional): The dataset to use for plotting the SHO loop fits.
+                                    If not provided, data from a randomly selected pixel is used. Defaults to None.
+            filename (str, optional): The filename for saving the plotted figure.
+                                    Defaults to "Figure_2_random_SHO_fit_results".
+
+        This function selects a pixel either randomly or based on the provided data and
+        plots the SHO (Simple Harmonic Oscillator) loop fit results across various
+        parameters (defined in self.SHO_labels). The resulting plot is saved using
+        the specified filename if a Printer object is available.
+        """
+
+        if data is None:
+            # If no data is provided, select a random pixel from the dataset
+            pixel = np.random.randint(0, self.dataset.num_pix)
+            data = self.SHO_fit_results()[[pixel], :, :]
+
+        # Initialize the figure and axes with a 4x4 grid layout
+        fig, axs = layout_fig(4, 4, figsize=(5.5, 1.1))
+
+        # Loop over each axis and corresponding SHO label to plot the fit results
+        for i, (ax, label) in enumerate(zip(axs, self.SHO_labels)):
+            ax.plot(self.dataset.dc_voltage, data[0, :, i])
+            ax.set_ylabel(label["y_label"])
+            
+            
+            if abs(int('{:.1e}'.format(np.min(data[0, :, i])).split('e')[1])) > 2:
+                set_sci_notation_label(ax,axis="y",corner="top left")
+                
+                
+            if i == 3:
+                ax.set_yticks([3,0,-3])
+                
+            ax.set_xticks([-15,0,15])
+            
+
+        # If verbose mode is enabled, log the current extraction state (for debugging or tracking)
+        if self.verbose:
+            self.extraction_state
+
+        # If a Printer object is defined, save the figure with the specified filename and style
+        if self.Printer is not None:
+            self.Printer.savefig(fig, filename, label_figs=axs, style="b")
 
     
+    
+###### MOVIES #####
+
+    @State.static_dataset_decorator
+    def SHO_fit_movie_images(
+        self,
+        noise=0,
+        model_path=None,
+        models=[None],
+        fig_width=6.5,
+        voltage_plot_height=1.25,  # height of the voltage plot
+        intra_gap=0.02,  # gap between the graphs
+        inter_gap=0.2,  # gap between the graphs
+        cbar_gap=0.6,  # gap between the graphs of colorbars
+        cbar_space=1.3,  # space on the right where the colorbar is not
+        colorbars=True,
+        scalebar_=True,
+        filename=None,
+        basepath=None,
+        labels=None,
+        phase_shift=None,
+    ):
+        """
+        Generates a sequence of images depicting SHO (Simple Harmonic Oscillator) fit results
+        for various voltage steps, and optionally compiles them into a movie.
+
+        This function creates images showing the fit results of the SHO model for both the
+        "on" and "off" states at different voltage steps. The images can include multiple
+        models for comparison, and optional features like colorbars, scalebars, and labels.
+        The images are saved to the specified directory, and a movie can be created from them.
+
+        Args:
+            noise (int, optional): The noise level used for generating the SHO fits. Defaults to 0.
+            model_path (str, optional): Path to the directory containing the model checkpoints. Defaults to None.
+            models (list, optional): List of models to compare. Defaults to [None].
+            fig_width (float, optional): Width of the figure. Defaults to 6.5.
+            voltage_plot_height (float, optional): Height of the voltage plot. Defaults to 1.25.
+            intra_gap (float, optional): Gap between the graphs of the same dataset. Defaults to 0.02.
+            inter_gap (float, optional): Gap between the graphs of different datasets. Defaults to 0.2.
+            cbar_gap (float, optional): Gap between the graphs and colorbars. Defaults to 0.6.
+            cbar_space (float, optional): Space reserved for the colorbars on the right. Defaults to 1.3.
+            colorbars (bool, optional): Whether to include colorbars in the images. Defaults to True.
+            scalebar_ (bool, optional): Whether to include a scalebar in the images. Defaults to True.
+            filename (str, optional): Base filename for saving images. Defaults to None.
+            basepath (str, optional): Base path for saving images. Defaults to None.
+            labels (list, optional): Labels for the different models in the comparison. Defaults to None.
+            phase_shift (list, optional): Phase shifts to apply to the models. Defaults to None.
+
+        Returns:
+            None: The function saves the generated images and optionally creates a movie from them.
+        """
+
+        # Sets the output state to ensure the dataset outputs pixel data
+        output_state = {"output_shape": "pixels", "scaled": False}
+        self.set_attributes(**output_state)
+
+        # Constructs the basepath for saving images if provided
+        if basepath is not None:
+            # If a model path is provided, name the directory based on the model with the lowest loss
+            if model_path is not None:
+                model_filename = (
+                    model_path
+                    + "/"
+                    + self.get_lowest_loss_for_noise_level(model_path, noise)
+                )
+                basepath += f"/{model_filename.split('/')[-1].split('.')[0]}"
+            else:
+                # If no model is provided, name the directory based on the noise level
+                basepath += f"Noise_{noise}"
+
+            # Creates the directory for saving images
+            basepath = make_folder(basepath)
+
+        # If models are provided for comparison
+        if models is not None:
+            on_data = []
+            off_data = []
+            noise_labels = []
+
+            # Loop through the models and get the SHO data for each
+            for model_, phase_shift_ in zip(models, phase_shift):
+                on_models, off_models = self.get_SHO_data(
+                    noise, model_, phase_shift=phase_shift_
+                )
+                on_data.append(on_models)
+                off_data.append(off_models)
+                noise_labels.append(noise)
+        else:
+            # If no models are provided, get the default model and its SHO data
+            model = self.get_model(model_path, noise)
+            on_data, off_data = self.get_SHO_data(noise, model)
+
+        # Labels for the different SHO parameters (e.g., Amplitude, Frequency, Quality Factor, Phase)
+        names = ["A", "\u03c9", "Q", "\u03c6"]
+
+        # Retrieves the DC voltage data (only for the "on" state)
+        voltage = self.dataset.dc_voltage
+
+        # Loop through each voltage step to generate images
+        for z, voltage in enumerate(voltage):
+            # Build the figure and axes layout for the movie images
+            fig, ax, fig_scalar = self.build_figure_for_movie(
+                models,  # dataset to compare to
+                fig_width,  # width of the figure
+                inter_gap,  # gap between the graphs of different datasets
+                intra_gap,  # gap between the graphs of the same datasets
+                cbar_space,  # gap between the graphs and the colorbar
+                colorbars,  # include colorbars or not
+                voltage_plot_height,  # height of the voltage plot
+                labels,  # labels for the models
+            )
+
+            # Plot the DC voltage trace for the current step
+            ax[0].plot(self.dataset.dc_voltage, "k")
+            ax[0].plot(z, voltage, "o", color="k", markersize=10)
+            ax[0].set_ylabel("Voltage (V)")
+            ax[0].set_xlabel("Step")
+
+            # Loop over the models and SHO parameters to plot the images
+            for compare_num in range(len(models)):
+                for j in range(4):
+                    # Plot each SHO parameter for the "on" state
+                    imagemap(
+                        ax[j + 1 + compare_num * 8],
+                        on_data[compare_num][:, z, j],
+                        colorbars=False,
+                        clim=self.SHO_ranges[j],
+                    )
+                    # Plot each SHO parameter for the "off" state
+                    imagemap(
+                        ax[j + 5 + compare_num * 8],
+                        off_data[compare_num][:, z, j],
+                        colorbars=False,
+                        clim=self.SHO_ranges[j],
+                    )
+                    labelfigs(ax[j + 1], string_add=f"On {names[j]}", loc="ct")
+                    labelfigs(ax[j + 5], string_add=f"Off {names[j]}", loc="ct")
+
+                # Add labels to the figures if provided
+                if labels is not None:
+                    # Get the position of the axis
+                    bbox = ax[5 + compare_num * 8].get_position()
+
+                    # Calculate the position for the label text
+                    top_in_norm_units = bbox.bounds[1] + bbox.bounds[3]
+                    right_in_norm_units = bbox.bounds[0] + bbox.bounds[2]
+
+                    # Convert to inches
+                    fig_size_inches = fig.get_size_inches()
+                    fig_height_inches = fig_size_inches[1]
+                    fig_width_inches = fig_size_inches[0]
+
+                    top_in_inches = top_in_norm_units * fig_height_inches
+                    right_in_inches = right_in_norm_units * fig_width_inches + inter_gap
+
+                    # Add the label text to the figure
+                    add_text_to_figure(
+                        fig,
+                        f"{labels[compare_num]} Noise {noise_labels[compare_num]}",
+                        [right_in_inches / 2, top_in_inches + 0.33 / 2],
+                    )
+
+                # Add colorbars if specified
+                if colorbars:
+                    bar_ax = []
+
+                    # Get the voltage axis position in inches
+                    voltage_ax_pos = fig_scalar.to_inches(
+                        np.array(ax[0].get_position()).flatten()
+                    )
+
+                    # Loop through the 4 SHO parameters to add colorbars
+                    for i in range(4):
+                        # Calculate the position and size of the colorbars
+                        cbar_h = (voltage_ax_pos[1] - inter_gap * 2 - 0.33) / 2
+                        cbar_w = (cbar_space - inter_gap - cbar_gap) / 2
+
+                        pos_inch = [
+                            voltage_ax_pos[2]
+                            - (2 - i % 2) * (cbar_gap + cbar_w)
+                            + inter_gap
+                            + cbar_w,
+                            voltage_ax_pos[1]
+                            - (i // 2) * (inter_gap + cbar_h)
+                            - 0.33
+                            - cbar_h,
+                            cbar_w,
+                            cbar_h,
+                        ]
+
+                        # Add the colorbar axis to the figure
+                        bar_ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
+
+                        # Add the colorbar to the axis
+                        fmt = ScalarFormatter(useMathText=True)
+                        fmt.set_powerlimits((0, 0))
+                        cbar = plt.colorbar(
+                            ax[i + 1].images[0],
+                            cax=bar_ax[i],
+                            format=fmt,
+                            ticks=np.linspace(
+                                self.SHO_ranges[i][0], self.SHO_ranges[i][1], 5
+                            ),
+                        )
+
+                        cbar.set_label(names[i])  # Label the colorbar
+
+            # Add a scalebar to the last axis if specified
+            if self.image_scalebar is not None:
+                scalebar(ax[-1], *self.image_scalebar)
+
+            # Save the figure if a Printer object and filename are provided
+            if self.Printer is not None and filename is not None:
+                self.Printer.savefig(
+                    fig,
+                    f"{filename}_noise_{noise}_{z:04d}",
+                    basepath=basepath + "/",
+                    fileformats=["png"],
+                )
+
+            plt.close(fig)  # Close the figure to free memory
+
+        # Create a movie from the saved images
+        make_movie(
+            f"{filename}_noise_{noise}", basepath, basepath, file_format="png", fps=5
+        )
+        
+        
+        
+    def build_figure_for_movie(
+        self,
+        comparison,
+        fig_width,
+        inter_gap,
+        intra_gap,
+        cbar_space,
+        colorbars,
+        voltage_plot_height,
+        labels=None,
+    ):
+        """
+        Builds a figure layout for generating movie frames with multiple comparison plots.
+
+        This function creates a figure layout that includes multiple rows and columns of
+        subplots, which are used to display comparison data (e.g., SHO fit results) alongside
+        a voltage plot. It is designed to accommodate various configurations, including optional
+        colorbars, labels, and gaps between plots.
+
+        Args:
+            comparison (any): Dataset(s) to compare, which determine the number of rows in the figure.
+            fig_width (float): Width of the figure in inches.
+            inter_gap (float): Gap between different datasets in inches.
+            intra_gap (float): Gap between similar datasets in inches.
+            cbar_space (float): Space allocated for the colorbar in inches.
+            colorbars (bool): Whether to include colorbars in the figure.
+            voltage_plot_height (float): Height of the voltage plot in inches.
+            labels (list, optional): List of labels for the plots. Defaults to None.
+
+        Returns:
+            matplotlib.figure.Figure: The figure object containing the plots.
+            list: A list of matplotlib.axes.Axes objects for each subplot.
+            FigDimConverter: An object used to convert figure dimensions from inches to relative coordinates.
+        """
+
+        # Initialize the list of axes for the figure
+        ax = []
+
+        # Calculate the number of rows needed, based on the comparison datasets
+        rows = len(comparison) * 2
+
+        # Determine the number of inter-gaps based on whether labels are provided
+        if labels is not None:
+            inter_gap_count = len(comparison) + 1
+        else:
+            inter_gap_count = 1
+
+        # Calculate the size of each embedding image in the figure
+        embedding_image_size = (
+            fig_width
+            - inter_gap * inter_gap_count
+            - intra_gap * 2
+            - cbar_space * colorbars
+        ) / 4  # Divide by 4 because there are 4 plots per row
+
+        # Calculate the total figure height based on the image sizes and gaps
+        fig_height = (
+            rows * (embedding_image_size + inter_gap / 2 + intra_gap / 2)
+            + voltage_plot_height
+            + 0.33 * inter_gap_count
+        )
+
+        # Create a scalar to convert inches to relative coordinates for positioning
+        fig_scalar = FigDimConverter((fig_width, fig_height))
+
+        # Create the figure with the calculated width and height
+        fig = plt.figure(figsize=(fig_width, fig_height))
+
+        # Define the position for the voltage plot (left, bottom, width, height in inches)
+        pos_inch = [
+            0.33,  # Left position
+            fig_height - voltage_plot_height,  # Bottom position (top-aligned)
+            6.5 - 0.33,  # Width of the voltage plot
+            voltage_plot_height,  # Height of the voltage plot
+        ]
+
+        # Add the voltage plot to the figure
+        ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
+
+        # Reset the x position for embedding plots and adjust the y position
+        pos_inch[0] = 0  # Reset left position
+        pos_inch[1] -= (
+            embedding_image_size + 0.33 * inter_gap_count
+        )  # Adjust bottom position
+
+        # Set the size for embedding images
+        pos_inch[2] = embedding_image_size  # Width of embedding image
+        pos_inch[3] = embedding_image_size  # Height of embedding image
+
+        # Loop through the rows to add the subplots for the embedding images
+        for j in range(rows):
+            # Add 4 graphs per row
+            for i in range(4):
+                ax.append(
+                    fig.add_axes(fig_scalar.to_relative(pos_inch))
+                )  # Add subplot to figure
+
+                # Adjust the gap between plots within the same row
+                if i == 1:
+                    gap = inter_gap
+                else:
+                    gap = intra_gap
+
+                # Move the position to the right for the next subplot
+                pos_inch[0] += embedding_image_size + gap
+
+            # Reset the x position to the start of the next row
+            pos_inch[0] = 0
+
+            # Adjust the y position for the next row based on the row index
+            if (j + 1) % 2 == 0:
+                pos_inch[1] -= embedding_image_size + inter_gap * inter_gap_count
+            else:
+                pos_inch[1] -= embedding_image_size + intra_gap
+
+        # Create a reordered list of axes for easier access
+        ax_ = [ax[0]]  # Start with the voltage plot
+
+        z = len(comparison) - 1
+
+        # Reorder the axes to make them easier to work with, going left to right, top to bottom
+        for j in range(1 + z):
+            for i in range(2):
+                ax_.extend(ax[1 + 2 * i + 8 * j : 3 + 2 * i + 8 * j])
+                ax_.extend(ax[5 + 2 * i + 8 * j : 7 + 2 * i + 8 * j])
+
+        return fig, ax_, fig_scalar

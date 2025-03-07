@@ -11,6 +11,7 @@ from matplotlib.ticker import ScalarFormatter
 
 from scipy import fftpack
 
+from contextlib import contextmanager
 
 from m3util.viz.layout import (
     layout_fig,
@@ -157,7 +158,7 @@ class Viz(State):
 
         # Iterate over the key-value pairs in kwargs and set the corresponding attributes on the dataset
         for key, value in kwargs.items():
-            setattr(self.dataset, key, value)
+            setattr(self, key, value)
 
         # Ensure that the setter for 'noise' is called if the 'noise' attribute is provided in kwargs
         if kwargs.get("noise"):
@@ -167,7 +168,112 @@ class Viz(State):
     
     ##### Methods #####
     
+    #@State.static_dataset_decorator
+    def plot_twin_axis(
+        self,
+        ax1,
+        true,
+        predict=None,
+        pixel=None,
+        voltage_step=None,
+        add_arrows=None,
+        **kwargs
+    ):
+        # Set the attributes for the true dataset
+        self.set_attributes(**true)
+        
+            
+        # If a pixel is not provided, select a random pixel
+        if pixel is None:
+            pixel = np.random.randint(0, self.num_pix)
+            self.pixel = pixel # JGoddy: is this necessary? 
+            
+        if voltage_step is None: 
+            # Get the voltage step, considering the current state
+            voltage_step = self.get_voltage_step(voltage_step)
+            self.voltage_step = voltage_step # JGoddy: is this necessary 
+
+        if "raw_format" in kwargs.keys():
+            self.raw_format = kwargs['raw_format']
+            
+        # Get the raw spectral data for the selected pixel and voltage step
+        data, x = self.raw_spectra(pixel, voltage_step, frequency=True)
+        
+        ax1.plot(
+            x,
+            data[0].flatten()
+            **kwargs
+        )
+        
+        ax2 = ax1.twinx()
+        ax2.plot(
+            x,
+            data[1].flatten()
+            **kwargs
+            # FIX THIS TO INCLUDE THE LABEL 
+        )
+        
+       
+        
+         # Ensure ax2 is drawn on top of ax1 by setting a higher zorder
+        ax1.set_zorder(ax2.get_zorder() + 1)
+
+        # Remove the axes background (set to transparent)
+        ax1.set_facecolor("none")
+ 
+        # If a predicted dataset is provided, plot its:
+        # (amplitude and phase) or (real and imaginary components) etc. 
+        if predict is not None:
+            self.set_attributes(**predict)
+            data, x = self.raw_spectra(
+                pixel, voltage_step, frequency=True, **kwargs
+            )
+            ax1.plot(
+                x, data[0].flatten(), "bo", label=self.label + " Amplitude"
+            )
+            ax2.plot(x, data[1].flatten(), "ro", label=self.label + " Phase")
+            self.set_attributes(**true)
+
+        ax1.set_xlabel(kwargs.get("x_label"))
+        ax1.set_ylabel(kwargs.get("y1_label"))
+        ax2.set_ylabel(kwargs.get("y2_label"))
+        
+        self._scientific_notation_dual(ax1, ax2)
+        
+        draw_ellipse_with_arrow(
+                ax1,
+                x,
+                data[0].flatten(),
+                add_arrows["mag_value"],
+                add_arrows["width"],
+                add_arrows["height"],
+                axis=add_arrows.get("axis", "x"),
+                line_direction=add_arrows.get("line_direction", "horizontal"),
+                arrow_position=add_arrows.get("arrow_position", "top"),
+                arrow_length_frac=add_arrows.get("arrow_length_frac", 0.2),
+                color=add_arrows.get("color", color_palette["mag"]),
+                linewidth=add_arrows.get("linewidth", 1),
+                arrow_props=add_arrows.get(
+                    "arrow_props",
+                    {
+                        "facecolor": color_palette["mag"],
+                        "width": 2,
+                        "headwidth": 8,  # Arrowhead width in points
+                        "headlength": 10,  # Arrowhead length in points
+                        "linewidth": 0,
+                    },
+                ),
+                ellipse_props=add_arrows.get("ellipse_props", None),
+                arrow_direction="negative",
+            )
+
+
+       
+        return ax1, ax2
+        
+    
     @State.static_dataset_decorator
+    #@contextmanager
     def plot_magnitude_spectrum(
         self,
         ax1,
@@ -189,7 +295,7 @@ class Viz(State):
 
         # If a pixel is not provided, select a random pixel
         if pixel is None:
-            pixel = np.random.randint(0, self.dataset.num_pix)
+            pixel = np.random.randint(0, self.num_pix)
             self.pixel = pixel
 
         # Get the voltage step, considering the current state
@@ -207,7 +313,7 @@ class Viz(State):
             data[0].flatten(),
             color=color_palette["mag"],
             marker="s",
-            label=self.dataset.label + " Amplitude",
+            label=self.label + " Amplitude",
         )
         ax2 = ax1.twinx()
         ax2.plot(
@@ -215,7 +321,7 @@ class Viz(State):
             data[1].flatten(),
             color=color_palette["phase"],
             marker="s",
-            label=self.dataset.label + " Phase",
+            label=self.label + " Phase",
         )
 
         # Ensure ax2 is drawn on top of ax1 by setting a higher zorder
@@ -231,9 +337,9 @@ class Viz(State):
                 pixel, voltage_step, frequency=True, **kwargs
             )
             ax1.plot(
-                x, data[0].flatten(), "bo", label=self.dataset.label + " Amplitude"
+                x, data[0].flatten(), "bo", label=self.label + " Amplitude"
             )
-            ax2.plot(x, data[1].flatten(), "ro", label=self.dataset.label + " Phase")
+            ax2.plot(x, data[1].flatten(), "ro", label=self.label + " Phase")
             self.set_attributes(**true)
 
         # Label the axes for the first subplot
@@ -255,15 +361,15 @@ class Viz(State):
                 )
 
             draw_ellipse_with_arrow(
-                ax1,
-                x,
-                data[0].flatten(),
-                add_arrows["mag_value"],
-                add_arrows["width"],
-                add_arrows["height"],
-                axis=add_arrows.get("axis", "x"),
-                line_direction=add_arrows.get("line_direction", "horizontal"),
-                arrow_position=add_arrows.get("arrow_position", "top"),
+                ax1, # ax
+                x, # x_data
+                data[0].flatten(), # y_data
+                add_arrows["mag_value"], # value
+                add_arrows["width"], # width
+                add_arrows["height"], # height
+                axis=add_arrows.get("axis", "x"), # axis
+                line_direction=add_arrows.get("line_direction", "horizontal"), # line_direction
+                arrow_position=add_arrows.get("arrow_position", "top"), # arrow_position
                 arrow_length_frac=add_arrows.get("arrow_length_frac", 0.2),
                 color=add_arrows.get("color", color_palette["mag"]),
                 linewidth=add_arrows.get("linewidth", 1),
@@ -321,14 +427,14 @@ class Viz(State):
                 halo=halo,
             )
 
-        return ax1, ax2, pixel, voltage_step
+        return ax1, ax2
     
     @State.static_dataset_decorator
     def plot_real_imaginary(
         self,
-        ax1,
-        true,
-        predict=None,
+        ax1, 
+        true, 
+        predict=None, 
         pixel=None,
         voltage_step=None,
         add_arrows=None,
@@ -338,7 +444,7 @@ class Viz(State):
         self.set_attributes(**true)
 
         # Reset dataset state to complex format
-        self.dataset.raw_format = "complex"
+        self.raw_format = "complex"
 
         # Get the complex raw spectral data for the selected pixel and voltage step
         data, x = self.raw_spectra(pixel, voltage_step, frequency=True)
@@ -352,7 +458,7 @@ class Viz(State):
             markeredgecolor="k",
             markeredgewidth=0.02,
             markersize=1,
-            label=self.dataset.label + " Real",
+            label=self.label + " Real",
         )
         ax1.set_xlabel("Frequency (Hz)")
         ax1.set_ylabel("Real (Arb. U.)")
@@ -366,7 +472,7 @@ class Viz(State):
             markeredgecolor="k",
             markeredgewidth=0.02,
             markersize=1,
-            label=self.dataset.label + " Imag",
+            label=self.label + " Imag",
         )
 
         # If a predicted dataset is provided, plot its real and imaginary components
@@ -375,76 +481,76 @@ class Viz(State):
             data, x = self.raw_spectra(
                 pixel, voltage_step, frequency=True, **kwargs
             )
-            ax1.plot(x, data[0].flatten(), "ko", label=self.dataset.label + " Real")
-            ax2.plot(x, data[1].flatten(), "gs", label=self.dataset.label + " Imag")
+            ax1.plot(x, data[0].flatten(), "ko", label=self.label + " Real")
+            ax2.plot(x, data[1].flatten(), "gs", label=self.label + " Imag")
             self.set_attributes(**true)
 
         self._scientific_notation_dual(ax1, ax2)
 
-        if add_arrows is not None:
-            # Mandatory keys that must be present
-            required_keys = ["imag_value", "real_value", "width", "height"]
+        # if add_arrows is not None:
+        #     # Mandatory keys that must be present
+        #     required_keys = ["imag_value", "real_value", "width", "height"]
 
-            # Check if required keys are present
-            missing_keys = [key for key in required_keys if key not in add_arrows]
-            if missing_keys:
-                raise ValueError(
-                    f"Missing required parameters in add_arrows: {', '.join(missing_keys)}"
-                )
+        #     # Check if required keys are present
+        #     missing_keys = [key for key in required_keys if key not in add_arrows]
+        #     if missing_keys:
+        #         raise ValueError(
+        #             f"Missing required parameters in add_arrows: {', '.join(missing_keys)}"
+        #         )
 
-            draw_ellipse_with_arrow(
-                ax1,
-                x,
-                data[0].flatten(),
-                add_arrows["real_value"],
-                add_arrows["width"],
-                add_arrows["height"],
-                axis=add_arrows.get("axis", "x"),
-                line_direction=add_arrows.get("line_direction", "horizontal"),
-                arrow_position=add_arrows.get("arrow_position", "top"),
-                arrow_length_frac=add_arrows.get("arrow_length_frac", 0.2),
-                color=add_arrows.get("color", color_palette["real"]),
-                linewidth=add_arrows.get("linewidth", 1),
-                arrow_props=add_arrows.get(
-                    "arrow_props",
-                    {
-                        "facecolor": color_palette["real"],
-                        "width": 2,
-                        "headwidth": 8,  # Arrowhead width in points
-                        "headlength": 10,  # Arrowhead length in points
-                        "linewidth": 0,
-                    },
-                ),
-                ellipse_props=add_arrows.get("ellipse_props", None),
-                arrow_direction="negative",
-            )
+        #     draw_ellipse_with_arrow(
+        #         ax1,
+        #         x,
+        #         data[0].flatten(),
+        #         add_arrows["real_value"],
+        #         add_arrows["width"],
+        #         add_arrows["height"],
+        #         axis=add_arrows.get("axis", "x"),
+        #         line_direction=add_arrows.get("line_direction", "horizontal"),
+        #         arrow_position=add_arrows.get("arrow_position", "top"),
+        #         arrow_length_frac=add_arrows.get("arrow_length_frac", 0.2),
+        #         color=add_arrows.get("color", color_palette["real"]),
+        #         linewidth=add_arrows.get("linewidth", 1),
+        #         arrow_props=add_arrows.get(
+        #             "arrow_props",
+        #             {
+        #                 "facecolor": color_palette["real"],
+        #                 "width": 2,
+        #                 "headwidth": 8,  # Arrowhead width in points
+        #                 "headlength": 10,  # Arrowhead length in points
+        #                 "linewidth": 0,
+        #             },
+        #         ),
+        #         ellipse_props=add_arrows.get("ellipse_props", None),
+        #         arrow_direction="negative",
+        #     )
 
-            draw_ellipse_with_arrow(
-                ax2,
-                x,
-                data[1].flatten(),
-                add_arrows["imag_value"],
-                add_arrows["width"],
-                add_arrows["height"],
-                axis=add_arrows.get("axis", "x"),
-                line_direction=add_arrows.get("line_direction", "horizontal"),
-                arrow_position=add_arrows.get("arrow_position", "bottom"),
-                arrow_length_frac=add_arrows.get("arrow_length_frac", 0.2),
-                color=add_arrows.get("color", color_palette["imag"]),
-                linewidth=add_arrows.get("linewidth", 1),
-                arrow_props=add_arrows.get(
-                    "arrow_props",
-                    {
-                        "facecolor": color_palette["imag"],
-                        "width": 2,
-                        "headwidth": 8,  # Arrowhead width in points
-                        "headlength": 10,  # Arrowhead length in points
-                        "linewidth": 0,
-                    },
-                ),
-                ellipse_props=add_arrows.get("ellipse_props", None),
-                arrow_direction="positive",
-            )
+        #     draw_ellipse_with_arrow(
+        #         ax2,
+        #         x,
+        #         data[1].flatten(),
+        #         add_arrows["imag_value"],
+        #         add_arrows["width"],
+        #         add_arrows["height"],
+        #         axis=add_arrows.get("axis", "x"),
+        #         line_direction=add_arrows.get("line_direction", "horizontal"),
+        #         arrow_position=add_arrows.get("arrow_position", "bottom"),
+        #         arrow_length_frac=add_arrows.get("arrow_length_frac", 0.2),
+        #         color=add_arrows.get("color", color_palette["imag"]),
+        #         linewidth=add_arrows.get("linewidth", 1),
+        #         arrow_props=add_arrows.get(
+        #             "arrow_props",
+        #             {
+        #                 "facecolor": color_palette["imag"],
+        #                 "width": 2,
+        #                 "headwidth": 8,  # Arrowhead width in points
+        #                 "headlength": 10,  # Arrowhead length in points
+        #                 "linewidth": 0,
+        #             },
+        #         ),
+        #         ellipse_props=add_arrows.get("ellipse_props", None),
+        #         arrow_direction="positive",
+        #     )
 
         return ax1, ax2
     
@@ -454,8 +560,8 @@ class Viz(State):
         true,
         predict=None,
         filename=None,
-        pixel= 330, #None,
-        voltage_step= 87, #None,
+        pixel= None,
+        voltage_step = None,
         legend=True,
         **kwargs,
     ):
@@ -485,17 +591,10 @@ class Viz(State):
         # Initialize figure and axes for plotting
         fig, axs = layout_fig(2, 2, figsize=(5, 1.25))
 
-        ax_mag, ax_phase, pixel_, voltage_step_ = self.plot_magnitude_spectrum(
+        ax_mag, ax_phase = self.plot_magnitude_spectrum(
             axs[0], true, predict, pixel, voltage_step, fig=fig, **kwargs
         )
 
-        # print("pixel", pixel_)
-        # print("voltage_step", voltage_step_)
-        
-        if pixel is None:
-            pixel = pixel_ 
-        if voltage_step is None:
-            voltage_step = voltage_step_ 
 
         ax_real, ax_imag = self.plot_real_imaginary(
             axs[1], true, predict, pixel, voltage_step, **kwargs
@@ -619,22 +718,22 @@ class Viz(State):
         """
 
         # Select a random pixel and voltage step from the dataset to plot
-        pixel = np.random.randint(0, dataset.num_pix)
-        voltagestep = np.random.randint(0, dataset.voltage_steps)
+        pixel = np.random.randint(0, self.num_pix)
+        voltagestep = np.random.randint(0, self.voltage_steps)
 
         # Initialize the figure and axes for plotting
         fig, ax = layout_fig(5, 5, figsize=figsize)
 
         # Calculate the number of voltage steps in one BE waveform cycle
-        be_voltagesteps = len(dataset.be_waveform) / dataset.be_repeats
+        be_voltagesteps = len(self.be_waveform) / self.be_repeats
 
         # Plot the BE waveform
-        ax[0].plot(dataset.be_waveform[: int(be_voltagesteps)])
+        ax[0].plot(self.be_waveform[: int(be_voltagesteps)])
         ax[0].set(xlabel="Time (sec)", ylabel="Voltage (V)")
 
         # Perform Fourier Transform on the BE waveform to get the resonance graph
-        resonance_graph = np.fft.fft(dataset.be_waveform[: int(be_voltagesteps)])
-        fftfreq = fftpack.fftfreq(int(be_voltagesteps)) * dataset.sampling_rate
+        resonance_graph = np.fft.fft(self.be_waveform[: int(be_voltagesteps)])
+        fftfreq = fftpack.fftfreq(int(be_voltagesteps)) * self.sampling_rate
 
         # Plot the resonance graph
         ax[1].plot(
@@ -642,7 +741,7 @@ class Viz(State):
             np.abs(resonance_graph[: int(be_voltagesteps) // 2]),
         )
         ax[1].axvline(
-            x=dataset.be_center_frequency,
+            x=self.be_center_frequency,
             ymax=np.max(resonance_graph[: int(be_voltagesteps) // 2]),
             linestyle="--",
             color="r",
@@ -651,28 +750,28 @@ class Viz(State):
 
         # Set the x-axis limits based on the BE center frequency and bandwidth
         ax[1].set_xlim(
-            dataset.be_center_frequency
-            - dataset.be_bandwidth
-            - dataset.be_bandwidth * 0.25,
-            dataset.be_center_frequency
-            + dataset.be_bandwidth
-            + dataset.be_bandwidth * 0.25,
+            self.be_center_frequency
+            - self.be_bandwidth
+            - self.be_bandwidth * 0.25,
+            self.be_center_frequency
+            + self.be_bandwidth
+            + self.be_bandwidth * 0.25,
         )
 
         self.plot_hysteresis_waveform(fig, ax[2], inset_pos, x_start, x_end)
 
         # Set the dataset state to retrieve the magnitude spectrum
-        dataset.scaled = False
-        dataset.raw_format = "magnitude spectrum"
-        dataset.measurement_state = "all"
-        dataset.resampled = False
+        self.scaled = False
+        self.raw_format = "magnitude spectrum"
+        self.measurement_state = "all"
+        self.resampled = False
 
         # Get the magnitude spectrum for the selected pixel and voltage step
         data_ = self.raw_spectra(pixel, voltagestep)
 
         # Plot the magnitude spectrum
         ax[3].plot(
-            dataset.frequency_bin,
+            self.frequency_bin,
             data_[0].flatten(),
         )
         ax[3].set(
@@ -682,7 +781,7 @@ class Viz(State):
         # Plot the phase spectrum on the same plot with a secondary y-axis
         ax2 = ax[3].twinx()
         ax2.plot(
-            dataset.frequency_bin,
+            self.frequency_bin,
             data_[1].flatten(),
             "r",
         )
@@ -690,14 +789,14 @@ class Viz(State):
         ax[3].set_zorder(ax2.get_zorder() + 1)
 
         # Switch the dataset back to complex format
-        dataset.raw_format = "complex"
+        self.raw_format = "complex"
         data_ = self.raw_spectra(pixel, voltagestep)
 
         # Plot the real and imaginary components of the spectra
-        ax[4].plot(dataset.frequency_bin, data_[0].flatten(), label="Real")
+        ax[4].plot(self.frequency_bin, data_[0].flatten(), label="Real")
         ax[4].set(xlabel="Frequency (Hz)", ylabel="Real (Arb. U.)")
         ax3 = ax[4].twinx()
-        ax3.plot(dataset.frequency_bin, data_[1].flatten(), "r", label="Imaginary")
+        ax3.plot(self.frequency_bin, data_[1].flatten(), "r", label="Imaginary")
         ax3.set(xlabel="Frequency (Hz)", ylabel="Imag (Arb. U.)", facecolor="none")
         
         set_sci_notation_label(ax[1],axis="x",corner = "bottom right")
@@ -771,7 +870,7 @@ class Viz(State):
                 ax.set_box_aspect(1)
 
             if self.verbose:
-                self.dataset.extraction_state
+                self.extraction_state
 
         # prints the figure
         if self.Printer is not None and filename is not None:
@@ -798,7 +897,7 @@ class Viz(State):
 
         if data is None:
             # If no data is provided, select a random pixel from the dataset
-            pixel = np.random.randint(0, self.dataset.num_pix)
+            pixel = np.random.randint(0, self.num_pix)
             data = self.SHO_fit_results()[[pixel], :, :]
 
         # Initialize the figure and axes with a 4x4 grid layout
@@ -806,7 +905,7 @@ class Viz(State):
 
         # Loop over each axis and corresponding SHO label to plot the fit results
         for i, (ax, label) in enumerate(zip(axs, self.SHO_labels)):
-            ax.plot(self.dataset.dc_voltage, data[0, :, i])
+            ax.plot(self.dc_voltage, data[0, :, i])
             ax.set_ylabel(label["y_label"])
             
             
@@ -925,7 +1024,7 @@ class Viz(State):
         names = ["A", "\u03c9", "Q", "\u03c6"]
 
         # Retrieves the DC voltage data (only for the "on" state)
-        voltage = self.dataset.dc_voltage
+        voltage = self.dc_voltage
 
         # Loop through each voltage step to generate images
         for z, voltage in enumerate(voltage):
@@ -942,7 +1041,7 @@ class Viz(State):
             )
 
             # Plot the DC voltage trace for the current step
-            ax[0].plot(self.dataset.dc_voltage, "k")
+            ax[0].plot(self.dc_voltage, "k")
             ax[0].plot(z, voltage, "o", color="k", markersize=10)
             ax[0].set_ylabel("Voltage (V)")
             ax[0].set_xlabel("Step")

@@ -9,7 +9,7 @@ import torch
 from belearn.functions.sho import SHO_nn
 from belearn.dataset.dataset_new import BE_Dataset
 from belearn.dataset.preprocessing import Preprocessing
-
+from contextlib import contextmanager
 from scipy.signal import resample
 
 class State(Preprocessing):
@@ -52,26 +52,29 @@ class State(Preprocessing):
     
     
     
-
     @property
     def get_state(self):
-        """
-        get_state function that return the dictionary of the current state
+        return self.__dict__.copy()
+    
+    # @property
+    # def get_state(self):
+    #     """
+    #     get_state function that return the dictionary of the current state
 
-        Returns:
-            dict: dictionary of the current state
-        """
-        return {
-            "raw_format": self.raw_format,
-            "fitter": self.fitter,
-            "scaled": self.scaled,
-            "output_shape": self.output_shape,
-            "measurement_state": self.measurement_state,
-            "LSQF_phase_shift": self.LSQF_phase_shift,
-            "NN_phase_shift": self.NN_phase_shift,
-            "noise": self.noise,
-            "loop_interpolated": self.loop_interpolated,
-        }
+    #     Returns:
+    #         dict: dictionary of the current state
+    #     """
+    #     return {
+    #         "raw_format": self.raw_format,
+    #         "fitter": self.fitter,
+    #         "scaled": self.scaled,
+    #         "output_shape": self.output_shape,
+    #         "measurement_state": self.measurement_state,
+    #         "LSQF_phase_shift": self.LSQF_phase_shift,
+    #         "NN_phase_shift": self.NN_phase_shift,
+    #         "noise": self.noise,
+    #         "loop_interpolated": self.loop_interpolated,
+    #     }
     
    
 
@@ -96,13 +99,17 @@ class State(Preprocessing):
             to `some_noise_value` (while invoking any custom logic in the `noise` setter).
         """
 
-        # Iterate over each key-value pair in kwargs and set the corresponding attribute
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+        # JGoddy: fixed this to use self__dict__
+        
+        # # Iterate over each key-value pair in kwargs and set the corresponding attribute
+        # for key, value in kwargs.items():
+        #     setattr(self, key, value)
 
-        # If 'noise' is present in kwargs, this explicitly calls the setter for 'noise'
-        if "noise" in kwargs:
-            self.noise = kwargs["noise"]
+        # # If 'noise' is present in kwargs, this explicitly calls the setter for 'noise'
+        # if "noise" in kwargs:
+        #     self.noise = kwargs["noise"]
+        
+        self.__dict__.update(kwargs)
     
     
     def measurement_state_voltage(self, voltage_step):
@@ -382,12 +389,7 @@ class State(Preprocessing):
         voltage_step = self.measurement_state_voltage(voltage_step)
 
         # Determine the number of bins and frequency values based on resampling status
-        if self.resampled:
-            bins = self.resampled_bins
-            frequency_bins = self.get_freq_values(bins)
-        else:
-            bins = self.num_bins
-            frequency_bins = self.get_freq_values(bins)
+        bins, frequency_bins = self.get_bins_and_freq_bins()
 
         # Retrieve the raw data based on whether fit results are provided
         if fit_results is None:
@@ -459,7 +461,16 @@ class State(Preprocessing):
         if frequency:
             return data, frequency_bins
         else:
-            return data            
+            return data 
+
+    def get_bins_and_freq_bins(self):
+        if self.resampled:
+            bins = self.resampled_bins
+            frequency_bins = self.get_freq_values(bins)
+        else:
+            bins = self.num_bins
+            frequency_bins = self.get_freq_values(bins)
+        return bins,frequency_bins           
 
 
     @property
@@ -736,6 +747,20 @@ class State(Preprocessing):
                 return self.get_data_w_voltage_state(dataset_[:])
     
     ##### Decorators #####
+
+    @contextmanager
+    def temporary_state(obj, **modifications):
+        # Create a deep copy of the object's state
+        original_state = obj.get_state()
+        try:
+            # Apply modifications to the object
+            obj.set_attributes(**modifications)
+            yield obj
+        finally:
+            # Restore the original state
+            obj.set_attributes(**original_state)
+
+
 
     def static_dataset_decorator(func):
         """

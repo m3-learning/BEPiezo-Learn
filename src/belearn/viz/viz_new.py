@@ -1,4 +1,3 @@
-
 import os
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Type
@@ -8,11 +7,13 @@ from belearn.dataset.State import State
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
 from matplotlib.ticker import ScalarFormatter
 
 from scipy import fftpack
 
 from contextlib import contextmanager
+import inspect
 
 from m3util.viz.layout import (
     layout_fig,
@@ -169,7 +170,7 @@ class Viz(State):
     
     ##### Methods #####
     
-    #@State.static_dataset_decorator
+    @State.static_dataset_decorator
     def plot_twin_axis(
         self,
         ax1,
@@ -200,28 +201,55 @@ class Viz(State):
         # Get the raw spectral data for the selected pixel and voltage step
         data, x = self.raw_spectra(pixel, voltage_step, frequency=True)
         
+        # Get the valid parameters for the plot method
+        plot_params = mlines.Line2D([], []).properties().keys()
+
+        # Extract kwargs for ax1 and ax2 based on valid plot parameters
+        
+        # Remove the prefixes for ax1 and ax2 kwargs
+        ax1_kwargs = {k[len('ax1_'):]: v for k, v in kwargs.items() if k[len('ax1_'):] in plot_params and k.startswith('ax1_')}
+        ax2_kwargs = {k[len('ax2_'):]: v for k, v in kwargs.items() if k[len('ax2_'):] in plot_params and k.startswith('ax2_')}
+        
+        # Extract kwargs for either plot
+        either_axis_kwargs_for_plotting = {k: v for k, v in kwargs.items() if k in plot_params and not k.startswith('ax1_') and not k.startswith('ax2_')}
+        
+        print("***")
+        print("plot_params: ", plot_params)
+        print("****")
+        print("ax1_kwargs: ", ax1_kwargs)
+        print("ax2_kwargs: ", ax2_kwargs)
+        print("either_axis_kwargs_for_plotting: ", either_axis_kwargs_for_plotting)
+        
         ax1.plot(
             x,
-            data[0].flatten()
-            **kwargs
+            data[0].flatten(),
+            # color = kwargs["ax1_color"],
+            # marker = kwargs["marker"],
+            # label = kwargs["ax1_label"],
+            **ax1_kwargs, **either_axis_kwargs_for_plotting
         )
         
         ax2 = ax1.twinx()
         ax2.plot(
             x,
-            data[1].flatten()
-            **kwargs
-            # FIX THIS TO INCLUDE THE LABEL 
+            data[1].flatten(),
+            # color = kwargs["color"][1],
+            # marker = kwargs["marker"],
+            # label = kwargs["label"][1],
+            **ax2_kwargs, **either_axis_kwargs_for_plotting
         )
         
        
         
          # Ensure ax2 is drawn on top of ax1 by setting a higher zorder
-        ax1.set_zorder(ax2.get_zorder() + 1)
+        #ax1.set_zorder(ax2.get_zorder() + 1)
 
         # Remove the axes background (set to transparent)
         ax1.set_facecolor("none")
  
+        # JGoddy: I don't think this is used. 
+        # I'll leave it here for now, but remove it if 
+        # predict is never used. 
         # If a predicted dataset is provided, plot its:
         # (amplitude and phase) or (real and imaginary components) etc. 
         if predict is not None:
@@ -230,9 +258,9 @@ class Viz(State):
                 pixel, voltage_step, frequency=True, **kwargs
             )
             ax1.plot(
-                x, data[0].flatten(), "bo", label=self.label + " Amplitude"
+                x, data[0].flatten(), "bo", label=self.label + " " + ax1_kwargs["label"]
             )
-            ax2.plot(x, data[1].flatten(), "ro", label=self.label + " Phase")
+            ax2.plot(x, data[1].flatten(), "ro", label=self.label + " " + ax2_kwargs["label"])
             self.set_attributes(**true)
 
         ax1.set_xlabel(kwargs.get("x_label"))
@@ -241,34 +269,9 @@ class Viz(State):
         
         self._scientific_notation_dual(ax1, ax2)
         
-        draw_ellipse_with_arrow(
-                ax1,
-                x,
-                data[0].flatten(),
-                add_arrows["mag_value"],
-                add_arrows["width"],
-                add_arrows["height"],
-                axis=add_arrows.get("axis", "x"),
-                line_direction=add_arrows.get("line_direction", "horizontal"),
-                arrow_position=add_arrows.get("arrow_position", "top"),
-                arrow_length_frac=add_arrows.get("arrow_length_frac", 0.2),
-                color=add_arrows.get("color", color_palette["mag"]),
-                linewidth=add_arrows.get("linewidth", 1),
-                arrow_props=add_arrows.get(
-                    "arrow_props",
-                    {
-                        "facecolor": color_palette["mag"],
-                        "width": 2,
-                        "headwidth": 8,  # Arrowhead width in points
-                        "headlength": 10,  # Arrowhead length in points
-                        "linewidth": 0,
-                    },
-                ),
-                ellipse_props=add_arrows.get("ellipse_props", None),
-                arrow_direction="negative",
-            )
-
-
+       # Add the legend
+       
+       # Add the arrows
        
         return ax1, ax2
         
@@ -436,8 +439,8 @@ class Viz(State):
         ax1, 
         true, 
         predict=None, 
-        pixel=None,
-        voltage_step=None,
+        pixel= 330, #None
+        voltage_step= 87,#None,
         add_arrows=None,
         **kwargs,
     ):
@@ -591,15 +594,44 @@ class Viz(State):
 
         # Initialize figure and axes for plotting
         fig, axs = layout_fig(2, 2, figsize=(5, 1.25))
-
-        ax_mag, ax_phase = self.plot_magnitude_spectrum(
+        
+        pixel = 330
+        voltage_step = 87
+        
+        kwargs["raw_format"] = "magnitude spectrum"
+        kwargs["ax1_color"] = color_palette["mag"] 
+        kwargs["ax2_color"] = color_palette["phase"]
+        kwargs["marker"] = "s"
+        kwargs["ax1_label"] = self.label + " Amplitude"
+        kwargs["ax2_label"] = self.label + " Phase"
+        kwargs["x_label"] = "Frequency (Hz)"
+        kwargs["y1_label"] = "Amplitude (Arb. U.)"
+        kwargs["y2_label"] = "Phase (deg)"
+        ax_mag, ax_phase = self.plot_twin_axis(
             axs[0], true, predict, pixel, voltage_step, fig=fig, **kwargs
         )
-
-
-        ax_real, ax_imag = self.plot_real_imaginary(
-            axs[1], true, predict, pixel, voltage_step, **kwargs
+        
+        kwargs["raw_format"] = "complex"
+        
+        kwargs["ax1_color"] = color_palette["real"]
+        kwargs["ax2_color"] = color_palette["imag"]
+        kwargs["ax1_label"] = self.label + " Real"
+        kwargs["ax2_label"] = self.label + " Imag"
+        kwargs["y1_label"] = "Real (Arb. U.)"
+        kwargs["y2_label"] = "Imag (Arb. U.)"
+        
+        ax_real,ax_imag = self.plot_twin_axis(
+            axs[1], true, predict, pixel, voltage_step, fig=fig, **kwargs
         )
+
+        # ax_mag, ax_phase = self.plot_magnitude_spectrum(
+        #     axs[0], true, predict, pixel, voltage_step, fig=fig, **kwargs
+        # )
+
+
+        # ax_real, ax_imag = self.plot_real_imaginary(
+        #     axs[1], true, predict, pixel, voltage_step, **kwargs
+        # )
 
         # Adjust the format of the tick labels and box aspect for all axes
         axes = [ax_mag, ax_real, ax_phase, ax_imag]

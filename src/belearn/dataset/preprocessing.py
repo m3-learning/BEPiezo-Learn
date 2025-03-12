@@ -2,6 +2,7 @@ from belearn.dataset.dataset_new import BE_Dataset
 from belearn.dataset.scalers import Raw_Data_Scaler
 from belearn.dataset.State import static_state_decorator
 from m3util.util.h5 import find_groups_with_string
+from m3util.util.search import in_list
 import h5py
 import numpy as np
 from scipy.interpolate import interp1d
@@ -189,6 +190,23 @@ class Preprocessing(BE_Dataset):
         self.SHO_scaler.mean_[3] = 0  # Set mean for phase to 0
         self.SHO_scaler.var_[3] = 1  # Set variance for phase to 1 (no scaling)
         self.SHO_scaler.scale_[3] = 1  # Set scale factor for phase to 1 (no scaling)
+        
+        
+    # def set_preprocessing(self):
+    #     """
+    #     set_preprocessing searches the dataset to see what preprocessing is required.
+    #     """
+
+    #     # does preprocessing for the SHO_fit results
+    #     if in_list(self.tree, "*SHO_Fit*"):
+    #         self.SHO_preprocessing()
+    #     else:
+    #         Warning("No SHO fit found")
+
+    #     # does preprocessing for the loop fit results
+    #     if in_list(self.tree, "*Fit-Loop_Fit*"):
+    #         self.loop_fit_preprocessing()
+        
 
     def SHO_preprocessing(self):
         """
@@ -217,7 +235,8 @@ class Preprocessing(BE_Dataset):
             print("*"*20)
             print("Traceback:")
             print(traceback.format_exc())
-            pass
+            #raise e
+            
 
     def set_SHO_LSQF(self):
         """
@@ -250,13 +269,13 @@ class Preprocessing(BE_Dataset):
                         self.num_pix, self.voltage_steps, 5
                     )[:, :, :-1]
             except Exception as e:
-                if e == "list index out of range":
+                if isinstance(e, IndexError):
                     print("*"*20)
                     print(f"SHO_LSQF_data for {dataset} not found")
                     print("Skipping retrieval of SHO_LSQF_data for this dataset")
                     print("*"*20)
                 else:
-                    print("SHO_preprocessing failed with exception:")
+                    print("set_SHO_LSQF failed with exception:")
                     print(e)
                     print("*"*20)
                     print("Traceback:")

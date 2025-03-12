@@ -10,6 +10,7 @@ from belearn.functions.sho import SHO_nn
 from belearn.dataset.dataset_new import BE_Dataset
 from belearn.dataset.preprocessing import Preprocessing
 from contextlib import contextmanager
+from functools import wraps
 from scipy.signal import resample
 
 class State(Preprocessing):
@@ -749,18 +750,38 @@ class State(Preprocessing):
     ##### Decorators #####
 
     @contextmanager
-    def temporary_state(obj, **modifications):
+    def temporary_state(self, **modifications):
         # Create a deep copy of the object's state
-        original_state = obj.get_state()
+        original_state = self.get_state.copy()
         try:
             # Apply modifications to the object
-            obj.set_attributes(**modifications)
-            yield obj
+            self.set_attributes(**modifications)
+            yield self
         finally:
             # Restore the original state
-            obj.set_attributes(**original_state)
+            self.set_attributes(**original_state)
 
 
+    def context_manager_decorator(func):
+        """Decorator that wraps a function inside a temporary state context."""
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            with self.temporary_state(**kwargs.get('true', {})):  # Use the true state if provided
+                return func(self, *args, **kwargs)  # Call the function with modified state
+        return wrapper
+    
+    # def context_manager_decorator(func):
+    #     """Decorator to temporarily modify an object's state for the duration of a method call."""
+    #     @wraps(func)
+    #     def wrapper(self, *args, **kwargs):
+    #         original_state = self.get_state.copy()  # Capture the original state
+
+    #         try:
+    #             return func(self, *args, **kwargs)  # Call the method with the modified state
+    #         finally:
+    #             self.set_attributes(**original_state)  # Restore the original state
+
+    #     return wrapper
 
     def static_dataset_decorator(func):
         """
@@ -831,9 +852,9 @@ class State(Preprocessing):
                     self.get_state
                 )  # Assume this returns a dict of the dataset state
 
-                # Debugging output to verify the preserved state
-                print("current_SHO_ranges:", current_SHO_ranges)
-                print("current_dataset_state:", current_dataset_state)
+                # # Debugging output to verify the preserved state
+                # print("current_SHO_ranges:", current_SHO_ranges)
+                # print("current_dataset_state:", current_dataset_state)
 
                 # Call the original function with the given arguments
                 out = func(self, SHO_data, *args, **kwargs)

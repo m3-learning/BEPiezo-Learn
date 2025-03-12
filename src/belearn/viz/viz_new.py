@@ -141,36 +141,53 @@ class Viz(State):
     
     ###### SETTERS ######
 
-    def set_attributes(self, **kwargs):
-        """
-        Sets the attributes of the dataset using key-value pairs from a dictionary.
+    # def set_attributes(self, **kwargs):
+    #     """
+    #     Sets the attributes of the dataset using key-value pairs from a dictionary.
 
-        This utility function iterates over the provided keyword arguments and sets
-        the corresponding attributes of the dataset object. It also ensures that any
-        necessary setters are triggered, such as for the 'noise' attribute.
+    #     This utility function iterates over the provided keyword arguments and sets
+    #     the corresponding attributes of the dataset object. It also ensures that any
+    #     necessary setters are triggered, such as for the 'noise' attribute.
 
-        Args:
-            **kwargs:
-                Arbitrary keyword arguments representing the attributes to set on the dataset.
-                The keys represent attribute names, and the values represent the values to be set.
+    #     Args:
+    #         **kwargs:
+    #             Arbitrary keyword arguments representing the attributes to set on the dataset.
+    #             The keys represent attribute names, and the values represent the values to be set.
 
-        Returns:
-            None
-        """
+    #     Returns:
+    #         None
+    #     """
 
-        # Iterate over the key-value pairs in kwargs and set the corresponding attributes on the dataset
-        for key, value in kwargs.items():
-            setattr(self, key, value)
+    #     # # Iterate over the key-value pairs in kwargs and set the corresponding attributes on the dataset
+    #     # for key, value in kwargs.items():
+    #     #     setattr(self, key, value)
 
-        # Ensure that the setter for 'noise' is called if the 'noise' attribute is provided in kwargs
-        if kwargs.get("noise"):
-            self.noise = kwargs.get("noise")
+    #     # # Ensure that the setter for 'noise' is called if the 'noise' attribute is provided in kwargs
+    #     # if kwargs.get("noise"):
+    #     #     self.noise = kwargs.get("noise")
+        
+    #     self.__dict__.update(kwargs)
             
+
+    
+    # @contextmanager
+    # def temporary_state(obj, **modifications):
+    #     # Create a deep copy of the object's state
+    #     original_state = obj.get_state
+    #     try:
+    #         # Apply modifications to the object
+    #         obj.set_attributes(**modifications)
+    #         yield obj
+    #     finally:
+    #         # Restore the original state
+    #         obj.set_attributes(**original_state)
+
 
     
     ##### Methods #####
     
-    @State.static_dataset_decorator
+    #@State.static_dataset_decorator
+    @State.context_manager_decorator
     def plot_twin_axis(
         self,
         ax1,
@@ -199,6 +216,7 @@ class Viz(State):
             self.raw_format = kwargs['raw_format']
             
         # Get the raw spectral data for the selected pixel and voltage step
+        #with State.temporary_state(self, **true):
         data, x = self.raw_spectra(pixel, voltage_step, frequency=True)
         
         # Get the valid parameters for the plot method
@@ -213,12 +231,12 @@ class Viz(State):
         # Extract kwargs for either plot
         either_axis_kwargs_for_plotting = {k: v for k, v in kwargs.items() if k in plot_params and not k.startswith('ax1_') and not k.startswith('ax2_')}
         
-        print("***")
-        print("plot_params: ", plot_params)
-        print("****")
-        print("ax1_kwargs: ", ax1_kwargs)
-        print("ax2_kwargs: ", ax2_kwargs)
-        print("either_axis_kwargs_for_plotting: ", either_axis_kwargs_for_plotting)
+        # print("***")
+        # print("plot_params: ", plot_params)
+        # print("****")
+        # print("ax1_kwargs: ", ax1_kwargs)
+        # print("ax2_kwargs: ", ax2_kwargs)
+        # print("either_axis_kwargs_for_plotting: ", either_axis_kwargs_for_plotting)
         
         ax1.plot(
             x,
@@ -242,7 +260,7 @@ class Viz(State):
        
         
          # Ensure ax2 is drawn on top of ax1 by setting a higher zorder
-        #ax1.set_zorder(ax2.get_zorder() + 1)
+        ax1.set_zorder(ax2.get_zorder() + 1)
 
         # Remove the axes background (set to transparent)
         ax1.set_facecolor("none")
@@ -276,8 +294,8 @@ class Viz(State):
         return ax1, ax2
         
     
-    @State.static_dataset_decorator
-    #@contextmanager
+    #@State.static_dataset_decorator
+    @State.context_manager_decorator
     def plot_magnitude_spectrum(
         self,
         ax1,
@@ -433,7 +451,8 @@ class Viz(State):
 
         return ax1, ax2
     
-    @State.static_dataset_decorator
+    #@State.static_dataset_decorator
+    @State.context_manager_decorator
     def plot_real_imaginary(
         self,
         ax1, 
@@ -558,7 +577,8 @@ class Viz(State):
 
         return ax1, ax2
     
-    @State.static_dataset_decorator
+    #@State.static_dataset_decorator
+    @State.context_manager_decorator
     def raw_data_comparison(
         self,
         true,
@@ -680,7 +700,8 @@ class Viz(State):
         ax2.set_box_aspect(1)
         
     
-    @State.static_dataset_decorator
+    #@State.static_dataset_decorator
+    @State.context_manager_decorator
     def plot_hysteresis_waveform(self, fig, ax, inset_pos, x_start, x_end, y_inset_min=-2, y_inset_max=20):
         
         # Plot the hysteresis waveform and add a zoomed-in inset
@@ -717,7 +738,8 @@ class Viz(State):
         ax.set_ylabel("Voltage (V)")
         
             
-    @State.static_dataset_decorator
+    #@State.static_dataset_decorator
+    @State.context_manager_decorator
     def raw_be(
         self,
         dataset,
@@ -964,7 +986,8 @@ class Viz(State):
     
 ###### MOVIES #####
 
-    @State.static_dataset_decorator
+    #@State.static_dataset_decorator
+    @State.context_manager_decorator
     def SHO_fit_movie_images(
         self,
         noise=0,

@@ -1,5 +1,6 @@
 from belearn.dataset.dataset_new import BE_Dataset
 from belearn.dataset.scalers import Raw_Data_Scaler
+from belearn.dataset.State import static_state_decorator
 from m3util.util.h5 import find_groups_with_string
 import h5py
 import numpy as np
@@ -7,8 +8,8 @@ from scipy.interpolate import interp1d
 from scipy.signal import resample
 #from dataclasses import field
 from typing import Optional, Dict, Any
-
-
+import traceback
+from sklearn.preprocessing import StandardScaler
 class Preprocessing(BE_Dataset):
 
     
@@ -156,6 +157,38 @@ class Preprocessing(BE_Dataset):
 
         return new_y
    
+    @static_state_decorator
+    def SHO_Scaler(self, noise=0):
+        """
+        Applies scaling to the SHO (Simple Harmonic Oscillator) fit data using a standard scaler.
+
+        This function initializes a standard scaler for the SHO fit data, applies noise if specified,
+        and ensures that the phase component (typically the third component in the data) is not scaled.
+
+        Args:
+            noise (int, optional):
+                Noise level to be applied before scaling the data. Defaults to 0.
+
+        Returns:
+            None
+        """
+
+        # Set the noise level and dataset attributes
+        self.noise = noise
+
+        # Initialize the standard scaler for the SHO data
+        self.SHO_scaler = StandardScaler()
+
+        # Retrieve the SHO least squares fit (LSQF) data and reshape it for scaling
+        data = self.SHO_LSQF().reshape(-1, 4)
+
+        # Fit the scaler to the SHO data
+        self.SHO_scaler.fit(data)
+
+        # Ensure that the phase component (fourth column in data) is not scaled
+        self.SHO_scaler.mean_[3] = 0  # Set mean for phase to 0
+        self.SHO_scaler.var_[3] = 1  # Set variance for phase to 1 (no scaling)
+        self.SHO_scaler.scale_[3] = 1  # Set scale factor for phase to 1 (no scaling)
 
     def SHO_preprocessing(self):
         """
@@ -178,7 +211,12 @@ class Preprocessing(BE_Dataset):
 
             # computes the SHO scaler
             self.SHO_Scaler()
-        except:
+        except Exception as e:
+            print("SHO_preprocessing failed with exception:")
+            print(e)
+            print("*"*20)
+            print("Traceback:")
+            print(traceback.format_exc())
             pass
 
     def set_SHO_LSQF(self):
@@ -191,27 +229,38 @@ class Preprocessing(BE_Dataset):
 
         for dataset in self.raw_datasets:
             # data groups in file
-            SHO_fits = find_groups_with_string(self.file, f"{dataset}-SHO_Fit_000")[0]
+            try:
+                SHO_fits = find_groups_with_string(self.file, f"{dataset}-SHO_Fit_000")[0]
 
-            with h5py.File(self.file, "r+") as h5_f:
-                # extract the name of the fit
-                name = SHO_fits.split("/")[-1]
+                with h5py.File(self.file, "r+") as h5_f:
+                    # extract the name of the fit
+                    name = SHO_fits.split("/")[-1]
 
-                # create a list for parameters
-                SHO_LSQF_list = []
-                for sublist in np.array(h5_f[f"{SHO_fits}/Fit"]):
-                    for item in sublist:
-                        for i in item:
-                            SHO_LSQF_list.append(i)
+                    # create a list for parameters
+                    SHO_LSQF_list = []
+                    for sublist in np.array(h5_f[f"{SHO_fits}/Fit"]):
+                        for item in sublist:
+                            for i in item:
+                                SHO_LSQF_list.append(i)
 
-                data_ = np.array(SHO_LSQF_list).reshape(-1, 5)
+                    data_ = np.array(SHO_LSQF_list).reshape(-1, 5)
 
-                # saves the SHO LSQF data as an attribute of the dataset object
-                self.SHO_LSQF_data[name] = data_.reshape(
-                    self.num_pix, self.voltage_steps, 5
-                )[:, :, :-1]
-                
-                
+                    # saves the SHO LSQF data as an attribute of the dataset object
+                    self.SHO_LSQF_data[name] = data_.reshape(
+                        self.num_pix, self.voltage_steps, 5
+                    )[:, :, :-1]
+            except Exception as e:
+                if e == "list index out of range":
+                    print("*"*20)
+                    print(f"SHO_LSQF_data for {dataset} not found")
+                    print("Skipping retrieval of SHO_LSQF_data for this dataset")
+                    print("*"*20)
+                else:
+                    print("SHO_preprocessing failed with exception:")
+                    print(e)
+                    print("*"*20)
+                    print("Traceback:")
+                    print(traceback.format_exc())
                 
     def raw_data(self, pixel=None, voltage_step=None):
         """

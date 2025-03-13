@@ -57,10 +57,15 @@ color_palette = {
     "LSQF_P": "#444e86",  # bluish purple
     "NN_A": "#955196",  # purple
     "NN_P": "#dd5182",  # pinkish red
-    "real": "#ff6e54",  # orange
-    "imag": "#ffa600",  # yellow-orange
-    "mag": "#2f9eaa",  # cyan
-    "phase": "#66c21f",  # green
+    "true_real": "#ff6e54",  # orange
+    "true_imag": "#ffa600",  # yellow-orange
+    "true_mag": "#2f9eaa",  # cyan
+    "true_phase": "#66c21f",  # green
+    
+    "predict_real":  "#D84315" ,#dark orange
+    "predict_imag" : "#b37400", #dark yellowish tan 
+    "predict_mag": "#003300", # dark green
+    "predict_phase": "#1A237E" # dark blue
 }
 
 @dataclass
@@ -235,12 +240,7 @@ class Viz(State):
         # Extract kwargs for either plot
         either_axis_kwargs_for_plotting = {k: v for k, v in kwargs.items() if k in plot_params and not k.startswith('ax1_') and not k.startswith('ax2_')}
         
-        # print("***")
-        # print("plot_params: ", plot_params)
-        # print("****")
-        # print("ax1_kwargs: ", ax1_kwargs)
-        # print("ax2_kwargs: ", ax2_kwargs)
-        # print("either_axis_kwargs_for_plotting: ", either_axis_kwargs_for_plotting)
+        
         
         ax1.plot(
             x,
@@ -264,7 +264,7 @@ class Viz(State):
        
         
          # Ensure ax2 is drawn on top of ax1 by setting a higher zorder
-        ax1.set_zorder(ax2.get_zorder() + 1)
+        #ax1.set_zorder(ax2.get_zorder() + 1)
 
         # Remove the axes background (set to transparent)
         ax1.set_facecolor("none")
@@ -273,17 +273,21 @@ class Viz(State):
         # (amplitude and phase) or (real and imaginary components) etc. 
         if predict is not None:
             self.set_attributes(**predict)
-            data, x = self.raw_spectra(
+            data_predict, x = self.raw_spectra(
                 pixel, voltage_step, frequency=True, **kwargs
             )
-            ax1.plot(
-                x, data[0].flatten(), 
-                "bo", label= ax1_predict_kwargs["label"] #self.label + " " + ax1_kwargs["label"]
+            ax1.scatter(
+                x, data_predict[0].flatten(),
+                color = ax1_predict_kwargs["color"],
+                marker = "o",
+                label= ax1_predict_kwargs["label"] #self.label + " " + ax1_kwargs["label"]
                 #**ax1_predict_kwargs
             )
-            ax2.plot(x, data[1].flatten(),
-                     "ro", label= ax2_predict_kwargs["label"] #self.label + " " + ax2_kwargs["label"]
-                     #**ax2_predict_kwargs
+            ax2.scatter(x, data_predict[1].flatten(),
+                color = ax2_predict_kwargs["color"],
+                marker = "o",
+                label= ax2_predict_kwargs["label"] #self.label + " " + ax2_kwargs["label"]
+                #**ax2_predict_kwargs
             )
             self.set_attributes(**true)
 
@@ -617,35 +621,29 @@ class Viz(State):
 
         # Set the attributes for the true dataset
         self.set_attributes(**true)
-        
-        # PREVENT TRUE_STATE FROM BEING MODIFIED BY PREDICT_STATE
-        
+            
      
 
         # Initialize figure and axes for plotting
-        fig, axs = layout_fig(2, 2, figsize=(5, 1.25))
+        fig, axs = layout_fig(2, 2, figsize=(5.75, 1.25))
         
         if pixel is None:
             pixel = 330
         if voltage_step is None:
             voltage_step = 87
         
-        # kwargs["raw_format"] = "magnitude spectrum"
-        # kwargs["ax1_color"] = color_palette["mag"] 
-        # kwargs["ax2_color"] = color_palette["phase"]
-        # kwargs["marker"] = "s"
-        # kwargs["ax1_label"] = self.label + " Amplitude"
-        # kwargs["ax2_label"] = self.label + " Phase"
-        # kwargs["x_label"] = "Frequency (Hz)"
-        # kwargs["y1_label"] = "Amplitude (Arb. U.)"
-        # kwargs["y2_label"] = "Phase (deg)"
+        print("***")
+        print("pixel: ", pixel)
+        print("voltage_step: ", voltage_step)
+        print("***")
+        
         ax_mag, ax_phase = self.plot_twin_axis(
             axs[0], true, predict, pixel, voltage_step, fig=fig,
             raw_format = "magnitude spectrum",
-            ax1_true_color = color_palette["mag"],
-            ax2_true_color = color_palette["phase"],
-            ax1_predict_color = 'blue',
-            ax2_predict_color = 'red',
+            ax1_true_color = color_palette["true_mag"],
+            ax2_true_color = color_palette["true_phase"],
+            ax1_predict_color = color_palette["predict_mag"],
+            ax2_predict_color = color_palette["predict_phase"],
             ax1_predict_marker = 'o',
             ax2_predict_marker = 'o',
             marker = "s",
@@ -658,24 +656,18 @@ class Viz(State):
             y2_label = "Phase (deg)",
         )
         
-        # kwargs["raw_format"] = "complex"
-        
-        # kwargs["ax1_color"] = color_palette["real"]
-        # kwargs["ax2_color"] = color_palette["imag"]
-        # kwargs["ax1_label"] = self.label + " Real"
-        # kwargs["ax2_label"] = self.label + " Imag"
-        # kwargs["y1_label"] = "Real (Arb. U.)"
-        # kwargs["y2_label"] = "Imag (Arb. U.)"
+       
         
         ax_real,ax_imag = self.plot_twin_axis(
-            axs[1], true, predict, pixel, voltage_step, fig=fig,
+            axs[1], true, predict, pixel=pixel, voltage_step=voltage_step, fig=fig,
             raw_format = "complex",
-            ax1_true_color = color_palette["real"],
-            ax2_true_color = color_palette["imag"],
-            ax1_predict_color = 'blue',
-            ax2_predict_color = 'red',
+            ax1_true_color = color_palette["true_real"],
+            ax2_true_color = color_palette["true_imag"],
+            ax1_predict_color = color_palette["predict_real"],
+            ax2_predict_color = color_palette["predict_imag"],
             ax1_predict_marker = 'o',
             ax2_predict_marker = 'o',
+            marker = "s",
             ax1_true_label = true["label"] + " Real",
             ax2_true_label = true["label"] + " Imag",
             ax1_predict_label = predict["label"] + " Real" if predict is not None else None,
@@ -703,10 +695,12 @@ class Viz(State):
         # Optionally print the dataset states
         if self.verbose:
             print("True \n")
-            true_state = self.set_attributes(**true)
+            self.set_attributes(**true)
+            self.extraction_state
             if predict is not None:
                 print("predicted \n")
-                predict_state = self.set_attributes(**predict)
+                self.set_attributes(**predict)
+                self.extraction_state
 
         # Display the legend if requested
         if legend:

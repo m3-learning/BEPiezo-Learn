@@ -2,7 +2,7 @@ import os
 
 from typing import Optional, Dict, Any
 from dataclasses import field
-from belearn.util.wrappers import static_state_decorator
+from belearn.util.wrappers import static_state_decorator, context_manager_decorator
 import h5py
 import numpy as np
 import torch
@@ -111,6 +111,8 @@ class State(Preprocessing):
         #     self.noise = kwargs["noise"]
         
         self.__dict__.update(kwargs)
+        
+ 
     
     
     def measurement_state_voltage(self, voltage_step):
@@ -333,7 +335,8 @@ class State(Preprocessing):
         return data
    
     
-    @static_state_decorator
+    #@static_state_decorator
+    @context_manager_decorator
     def raw_spectra(
         self,
         pixel=None,
@@ -342,6 +345,7 @@ class State(Preprocessing):
         frequency=False,
         noise=None,
         state=None,
+        **kwargs
     ):
         """
         Simplifies the retrieval of raw band excitation data.
@@ -619,6 +623,7 @@ class State(Preprocessing):
         return voltage_step
     
     @static_state_decorator
+    #@context_manager_decorator
     def SHO_fit_results(self, state=None, model=None, phase_shift=None, X_data=None):
         """
         Retrieves the SHO (Simple Harmonic Oscillator) fit results from the dataset, either
@@ -749,26 +754,7 @@ class State(Preprocessing):
     
     ##### Decorators #####
 
-    @contextmanager
-    def temporary_state(self, **modifications):
-        # Create a deep copy of the object's state
-        original_state = self.get_state.copy()
-        try:
-            # Apply modifications to the object
-            self.set_attributes(**modifications)
-            yield self
-        finally:
-            # Restore the original state
-            self.set_attributes(**original_state)
-
-
-    def context_manager_decorator(func):
-        """Decorator that wraps a function inside a temporary state context."""
-        @wraps(func)
-        def wrapper(self, *args, **kwargs):
-            with self.temporary_state(**kwargs.get('true', {})):  # Use the true state if provided
-                return func(self, *args, **kwargs)  # Call the function with modified state
-        return wrapper
+    
     
     # def context_manager_decorator(func):
     #     """Decorator to temporarily modify an object's state for the duration of a method call."""

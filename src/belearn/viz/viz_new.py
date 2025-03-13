@@ -4,6 +4,7 @@ from typing import List, Dict, Optional, Any, Type
 
 from belearn.dataset.dataset_new import BE_Dataset
 from belearn.dataset.State import State
+from belearn.util.wrappers import context_manager_decorator
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -187,7 +188,7 @@ class Viz(State):
     ##### Methods #####
     
     #@State.static_dataset_decorator
-    @State.context_manager_decorator
+    @context_manager_decorator
     def plot_twin_axis(
         self,
         ax1,
@@ -226,8 +227,11 @@ class Viz(State):
         
         # Remove the prefixes for ax1 and ax2 kwargs
         ax1_kwargs = {k[len('ax1_'):]: v for k, v in kwargs.items() if k[len('ax1_'):] in plot_params and k.startswith('ax1_')}
+        ax1_true_kwargs = {k[len('ax1_true_'):]: v for k, v in kwargs.items() if k[len('ax1_true_'):] in plot_params and k.startswith('ax1_true_')}
+        ax1_predict_kwargs = {k[len('ax1_predict_'):]: v for k, v in kwargs.items() if k[len('ax1_predict_'):] in plot_params and k.startswith('ax1_predict_')}
         ax2_kwargs = {k[len('ax2_'):]: v for k, v in kwargs.items() if k[len('ax2_'):] in plot_params and k.startswith('ax2_')}
-        
+        ax2_true_kwargs = {k[len('ax2_true_'):]: v for k, v in kwargs.items() if k[len('ax2_true_'):] in plot_params and k.startswith('ax2_true_')}
+        ax2_predict_kwargs = {k[len('ax2_predict_'):]: v for k, v in kwargs.items() if k[len('ax2_predict_'):] in plot_params and k.startswith('ax2_predict_')}
         # Extract kwargs for either plot
         either_axis_kwargs_for_plotting = {k: v for k, v in kwargs.items() if k in plot_params and not k.startswith('ax1_') and not k.startswith('ax2_')}
         
@@ -244,7 +248,7 @@ class Viz(State):
             # color = kwargs["ax1_color"],
             # marker = kwargs["marker"],
             # label = kwargs["ax1_label"],
-            **ax1_kwargs, **either_axis_kwargs_for_plotting
+            **ax1_kwargs, **ax1_true_kwargs, **either_axis_kwargs_for_plotting
         )
         
         ax2 = ax1.twinx()
@@ -254,7 +258,7 @@ class Viz(State):
             # color = kwargs["color"][1],
             # marker = kwargs["marker"],
             # label = kwargs["label"][1],
-            **ax2_kwargs, **either_axis_kwargs_for_plotting
+            **ax2_kwargs, **ax2_true_kwargs, **either_axis_kwargs_for_plotting
         )
         
        
@@ -264,10 +268,7 @@ class Viz(State):
 
         # Remove the axes background (set to transparent)
         ax1.set_facecolor("none")
- 
-        # JGoddy: I don't think this is used. 
-        # I'll leave it here for now, but remove it if 
-        # predict is never used. 
+  
         # If a predicted dataset is provided, plot its:
         # (amplitude and phase) or (real and imaginary components) etc. 
         if predict is not None:
@@ -276,9 +277,14 @@ class Viz(State):
                 pixel, voltage_step, frequency=True, **kwargs
             )
             ax1.plot(
-                x, data[0].flatten(), "bo", label=self.label + " " + ax1_kwargs["label"]
+                x, data[0].flatten(), 
+                "bo", label= ax1_predict_kwargs["label"] #self.label + " " + ax1_kwargs["label"]
+                #**ax1_predict_kwargs
             )
-            ax2.plot(x, data[1].flatten(), "ro", label=self.label + " " + ax2_kwargs["label"])
+            ax2.plot(x, data[1].flatten(),
+                     "ro", label= ax2_predict_kwargs["label"] #self.label + " " + ax2_kwargs["label"]
+                     #**ax2_predict_kwargs
+            )
             self.set_attributes(**true)
 
         ax1.set_xlabel(kwargs.get("x_label"))
@@ -295,7 +301,7 @@ class Viz(State):
         
     
     #@State.static_dataset_decorator
-    @State.context_manager_decorator
+    @context_manager_decorator
     def plot_magnitude_spectrum(
         self,
         ax1,
@@ -335,7 +341,7 @@ class Viz(State):
             data[0].flatten(),
             color=color_palette["mag"],
             marker="s",
-            label=self.label + " Amplitude",
+            label= "True " + self.label + " Amplitude",
         )
         ax2 = ax1.twinx()
         ax2.plot(
@@ -343,7 +349,7 @@ class Viz(State):
             data[1].flatten(),
             color=color_palette["phase"],
             marker="s",
-            label=self.label + " Phase",
+            label= "True " + self.label + " Phase",
         )
 
         # Ensure ax2 is drawn on top of ax1 by setting a higher zorder
@@ -452,7 +458,7 @@ class Viz(State):
         return ax1, ax2
     
     #@State.static_dataset_decorator
-    @State.context_manager_decorator
+    @context_manager_decorator
     def plot_real_imaginary(
         self,
         ax1, 
@@ -578,7 +584,7 @@ class Viz(State):
         return ax1, ax2
     
     #@State.static_dataset_decorator
-    @State.context_manager_decorator
+    @context_manager_decorator
     def raw_data_comparison(
         self,
         true,
@@ -611,37 +617,72 @@ class Viz(State):
 
         # Set the attributes for the true dataset
         self.set_attributes(**true)
+        
+        # PREVENT TRUE_STATE FROM BEING MODIFIED BY PREDICT_STATE
+        
+     
 
         # Initialize figure and axes for plotting
         fig, axs = layout_fig(2, 2, figsize=(5, 1.25))
         
-        pixel = 330
-        voltage_step = 87
+        if pixel is None:
+            pixel = 330
+        if voltage_step is None:
+            voltage_step = 87
         
-        kwargs["raw_format"] = "magnitude spectrum"
-        kwargs["ax1_color"] = color_palette["mag"] 
-        kwargs["ax2_color"] = color_palette["phase"]
-        kwargs["marker"] = "s"
-        kwargs["ax1_label"] = self.label + " Amplitude"
-        kwargs["ax2_label"] = self.label + " Phase"
-        kwargs["x_label"] = "Frequency (Hz)"
-        kwargs["y1_label"] = "Amplitude (Arb. U.)"
-        kwargs["y2_label"] = "Phase (deg)"
+        # kwargs["raw_format"] = "magnitude spectrum"
+        # kwargs["ax1_color"] = color_palette["mag"] 
+        # kwargs["ax2_color"] = color_palette["phase"]
+        # kwargs["marker"] = "s"
+        # kwargs["ax1_label"] = self.label + " Amplitude"
+        # kwargs["ax2_label"] = self.label + " Phase"
+        # kwargs["x_label"] = "Frequency (Hz)"
+        # kwargs["y1_label"] = "Amplitude (Arb. U.)"
+        # kwargs["y2_label"] = "Phase (deg)"
         ax_mag, ax_phase = self.plot_twin_axis(
-            axs[0], true, predict, pixel, voltage_step, fig=fig, **kwargs
+            axs[0], true, predict, pixel, voltage_step, fig=fig,
+            raw_format = "magnitude spectrum",
+            ax1_true_color = color_palette["mag"],
+            ax2_true_color = color_palette["phase"],
+            ax1_predict_color = 'blue',
+            ax2_predict_color = 'red',
+            ax1_predict_marker = 'o',
+            ax2_predict_marker = 'o',
+            marker = "s",
+            ax1_true_label = true["label"] + " Amplitude",
+            ax2_true_label = true["label"] + " Phase",
+            ax1_predict_label = predict["label"] + " Amplitude" if predict is not None else None,
+            ax2_predict_label = predict["label"] + " Phase" if predict is not None else None,
+            x_label = "Frequency (Hz)",
+            y1_label = "Amplitude (Arb. U.)",
+            y2_label = "Phase (deg)",
         )
         
-        kwargs["raw_format"] = "complex"
+        # kwargs["raw_format"] = "complex"
         
-        kwargs["ax1_color"] = color_palette["real"]
-        kwargs["ax2_color"] = color_palette["imag"]
-        kwargs["ax1_label"] = self.label + " Real"
-        kwargs["ax2_label"] = self.label + " Imag"
-        kwargs["y1_label"] = "Real (Arb. U.)"
-        kwargs["y2_label"] = "Imag (Arb. U.)"
+        # kwargs["ax1_color"] = color_palette["real"]
+        # kwargs["ax2_color"] = color_palette["imag"]
+        # kwargs["ax1_label"] = self.label + " Real"
+        # kwargs["ax2_label"] = self.label + " Imag"
+        # kwargs["y1_label"] = "Real (Arb. U.)"
+        # kwargs["y2_label"] = "Imag (Arb. U.)"
         
         ax_real,ax_imag = self.plot_twin_axis(
-            axs[1], true, predict, pixel, voltage_step, fig=fig, **kwargs
+            axs[1], true, predict, pixel, voltage_step, fig=fig,
+            raw_format = "complex",
+            ax1_true_color = color_palette["real"],
+            ax2_true_color = color_palette["imag"],
+            ax1_predict_color = 'blue',
+            ax2_predict_color = 'red',
+            ax1_predict_marker = 'o',
+            ax2_predict_marker = 'o',
+            ax1_true_label = true["label"] + " Real",
+            ax2_true_label = true["label"] + " Imag",
+            ax1_predict_label = predict["label"] + " Real" if predict is not None else None,
+            ax2_predict_label = predict["label"] + " Imag" if predict is not None else None,
+            y1_label = "Real (Arb. U.)",
+            y2_label = "Imag (Arb. U.)",
+            x_label = "Frequency (Hz)",
         )
 
         # ax_mag, ax_phase = self.plot_magnitude_spectrum(
@@ -662,12 +703,10 @@ class Viz(State):
         # Optionally print the dataset states
         if self.verbose:
             print("True \n")
-            self.set_attributes(**true)
-            self.extraction_state
+            true_state = self.set_attributes(**true)
             if predict is not None:
                 print("predicted \n")
-                self.set_attributes(**predict)
-                self.extraction_state
+                predict_state = self.set_attributes(**predict)
 
         # Display the legend if requested
         if legend:
@@ -701,7 +740,7 @@ class Viz(State):
         
     
     #@State.static_dataset_decorator
-    @State.context_manager_decorator
+    @context_manager_decorator
     def plot_hysteresis_waveform(self, fig, ax, inset_pos, x_start, x_end, y_inset_min=-2, y_inset_max=20):
         
         # Plot the hysteresis waveform and add a zoomed-in inset
@@ -739,7 +778,7 @@ class Viz(State):
         
             
     #@State.static_dataset_decorator
-    @State.context_manager_decorator
+    @context_manager_decorator
     def raw_be(
         self,
         dataset,
@@ -987,7 +1026,7 @@ class Viz(State):
 ###### MOVIES #####
 
     #@State.static_dataset_decorator
-    @State.context_manager_decorator
+    @context_manager_decorator
     def SHO_fit_movie_images(
         self,
         noise=0,
@@ -1343,7 +1382,7 @@ class Viz(State):
     
     
     #@static_dataset_decorator
-    @State.context_manager_decorator
+    @context_manager_decorator
     def fit_tester(self, true, predict, pixel=None, voltage_step=None, **kwargs):
         """
         Tests the fit of a model by comparing predicted data against true data for a specific pixel and voltage step.
@@ -1389,7 +1428,7 @@ class Viz(State):
         )
 
     #@static_dataset_decorator
-    @State.context_manager_decorator
+    @context_manager_decorator
     def nn_checker(
         self, state, filename=None, pixel=None, voltage_step=None, legend=True, **kwargs
     ):

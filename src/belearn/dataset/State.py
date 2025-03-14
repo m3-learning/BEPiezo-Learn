@@ -626,8 +626,8 @@ class State(Preprocessing):
         # Return the computed number of voltage steps
         return voltage_step
     
-    @static_state_decorator
-    #@context_manager_decorator
+    #@static_state_decorator
+    @context_manager_decorator
     def SHO_fit_results(self, state=None, model=None, phase_shift=None, X_data=None):
         """
         Retrieves the SHO (Simple Harmonic Oscillator) fit results from the dataset, either

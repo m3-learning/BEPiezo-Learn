@@ -909,7 +909,8 @@ class Viz(State):
             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
             
         
-    @State.static_scale_decorator
+    #@State.static_scale_decorator
+    @context_manager_decorator
     def SHO_hist(self, SHO_data, filename=None, scaled=False):
         
 

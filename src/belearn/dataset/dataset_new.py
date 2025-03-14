@@ -30,6 +30,19 @@ from belearn.util.wrappers import static_state_decorator
 # spectroscopic_length
 # set_raw_data
 
+# import time
+
+# #profiling decorator
+# def profile(func):
+#     def wrapper(self, *args, **kwargs):
+#         start_time = time.time()
+#         result = func(self, *args, **kwargs)
+#         end_time = time.time()
+#         print(f"{func.__name__} took {end_time - start_time:.4f} seconds")
+#         return result
+#     return wrapper
+
+
 @dataclass
 class BE_Dataset:
     file: str =  '/home/julian/Alibek_BEPFM/Rapid-Fitting-BEPFM-NN/notebooks/Data/data_raw.h5' #TODO: make required
@@ -571,6 +584,10 @@ class BE_Dataset:
 
 
     #@static_state_decorator
+    #@profile
+    
+    # does this have the static_state_decorator in the original code?
+    
     def set_raw_data(self):
         """
         set_raw_data Function that parses the datafile and extracts the raw data names

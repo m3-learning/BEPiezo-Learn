@@ -13,6 +13,9 @@ from contextlib import contextmanager
 from functools import wraps
 from scipy.signal import resample
 
+
+
+
 class State(Preprocessing):
     # None of these are actually used in the class, but they are here to be (hopefully)used in the future
     
@@ -48,6 +51,7 @@ class State(Preprocessing):
         self.resampled = resampled
         # self.resampled_bins = resampled_bins
         # self.resampled_data = resampled_data
+        
         
         self.set_raw_data()
     

@@ -43,7 +43,6 @@ from m3util.viz.text import (
 
 
 
-
 from m3util.util.IO import make_folder
 from m3util.viz.movies import make_movie
 
@@ -57,6 +56,11 @@ color_palette = {
     "LSQF_P": "#444e86",  # bluish purple
     "NN_A": "#955196",  # purple
     "NN_P": "#dd5182",  # pinkish red
+    "real": "#ff6e54",  # orange
+    "imag": "#ffa600",  # yellow-orange
+    "mag": "#2f9eaa",  # cyan
+    "phase": "#66c21f",  # green
+
     "true_real": "#ff6e54",  # orange
     "true_imag": "#ffa600",  # yellow-orange
     "true_mag": "#2f9eaa",  # cyan
@@ -67,6 +71,7 @@ color_palette = {
     "predict_mag": "#003300", # dark green
     "predict_phase": "#1A237E" # dark blue
 }
+
 
 @dataclass
 class Viz(State):
@@ -276,16 +281,16 @@ class Viz(State):
             data_predict, x = self.raw_spectra(
                 pixel, voltage_step, frequency=True, **kwargs
             )
-            ax1.scatter(
+            ax1.plot(
                 x, data_predict[0].flatten(),
                 color = ax1_predict_kwargs["color"],
-                marker = "o",
+                marker = "o", linestyle = (5, (10, 3)),
                 label= ax1_predict_kwargs["label"] #self.label + " " + ax1_kwargs["label"]
                 #**ax1_predict_kwargs
             )
-            ax2.scatter(x, data_predict[1].flatten(),
+            ax2.plot(x, data_predict[1].flatten(),
                 color = ax2_predict_kwargs["color"],
-                marker = "o",
+                marker = "o", linestyle = (5, (10, 3)),
                 label= ax2_predict_kwargs["label"] #self.label + " " + ax2_kwargs["label"]
                 #**ax2_predict_kwargs
             )
@@ -654,6 +659,7 @@ class Viz(State):
             x_label = "Frequency (Hz)",
             y1_label = "Amplitude (Arb. U.)",
             y2_label = "Phase (deg)",
+            **kwargs
         )
         
        
@@ -675,6 +681,7 @@ class Viz(State):
             y1_label = "Real (Arb. U.)",
             y2_label = "Imag (Arb. U.)",
             x_label = "Frequency (Hz)",
+            **kwargs
         )
 
         # ax_mag, ax_phase = self.plot_magnitude_spectrum(
@@ -808,6 +815,10 @@ class Viz(State):
         # Select a random pixel and voltage step from the dataset to plot
         pixel = np.random.randint(0, self.num_pix)
         voltagestep = np.random.randint(0, self.voltage_steps)
+        
+ 
+        print("pixel: ", pixel)
+        print("voltagestep: ", voltagestep)
 
         # Initialize the figure and axes for plotting
         fig, ax = layout_fig(5, 5, figsize=figsize)

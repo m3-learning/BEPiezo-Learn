@@ -473,8 +473,8 @@ class Viz(State):
         ax1, 
         true, 
         predict=None, 
-        pixel= 330, #None
-        voltage_step= 87,#None,
+        pixel= 130, #None
+        voltage_step= 149,#None,
         add_arrows=None,
         **kwargs,
     ):
@@ -633,9 +633,9 @@ class Viz(State):
         fig, axs = layout_fig(2, 2, figsize=(5.75, 1.25))
         
         if pixel is None:
-            pixel = 330
+            pixel = 130
         if voltage_step is None:
-            voltage_step = 87
+            voltage_step = 149
         
         print("***")
         print("pixel: ", pixel)

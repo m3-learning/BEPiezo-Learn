@@ -1,5 +1,7 @@
 import os
 import numpy as np
+from numpy.lib.recfunctions import structured_to_unstructured
+
 import time
 import sidpy
 from BGlib import be as belib
@@ -19,7 +21,7 @@ from dataclasses import dataclass
 from typing import Optional
 from belearn.util.wrappers import static_state_decorator
 
-
+# THIS IS OUTDATED
 #functions in BE_Dataset class: 
 # get_tree
 # print_be_tree
@@ -649,3 +651,51 @@ class BE_Dataset:
     #             make_dataset(h5_f[base],
     #                          name,
     #                          data)
+    
+    
+    def set_SHO_LSQF(self):
+        """
+        set_SHO_LSQF Sets the SHO Scaler data to make accessible
+        """
+
+        # initializes the dictionary
+        self.SHO_LSQF_data = {}
+        
+        with h5py.File(self.file, "r+") as h5_f:
+            self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(h5_f[f"{self.dataset_name}-SHO_Fit_000/Fit"][:])[:,:,:-1] 
+        
+
+        # for dataset in self.raw_datasets:
+        #     # data groups in file
+        #     try:
+        #         SHO_fits = find_groups_with_string(self.file, f"{dataset}-SHO_Fit_000")[0]
+
+        #         with h5py.File(self.file, "r+") as h5_f:
+        #             # extract the name of the fit
+        #             name = SHO_fits.split("/")[-1]
+
+        #             # create a list for parameters
+        #             SHO_LSQF_list = []
+        #             for sublist in np.array(h5_f[f"{SHO_fits}/Fit"]):
+        #                 for item in sublist:
+        #                     for i in item:
+        #                         SHO_LSQF_list.append(i)
+
+        #             data_ = np.array(SHO_LSQF_list).reshape(-1, 5)
+
+        #             # saves the SHO LSQF data as an attribute of the dataset object
+        #             self.SHO_LSQF_data[name] = data_.reshape(
+        #                 self.num_pix, self.voltage_steps, 5
+        #             )[:, :, :-1]
+        #     except Exception as e:
+        #         if isinstance(e, IndexError):
+        #             print("*"*20)
+        #             print(f"SHO_LSQF_data for {dataset} not found")
+        #             print("Skipping retrieval of SHO_LSQF_data for this dataset")
+        #             print("*"*20)
+        #         else:
+        #             print("set_SHO_LSQF failed with exception:")
+        #             print(e)
+        #             print("*"*20)
+        #             print("Traceback:")
+        #             print(traceback.format_exc())

@@ -70,7 +70,7 @@ class Preprocessing(BE_Dataset):
                 
                 # self.resampler is defined by the resampler function below
                 resampled_ = self.resampler(
-                    self.raw_data_reshaped[data].reshape(-1, self.num_bins), axis=2
+                    self.SHO_LSQF_data[data].reshape(-1, self.num_bins), axis=2
                 )
 
                 # Reshape the resampled data to match the original dimensions
@@ -82,7 +82,7 @@ class Preprocessing(BE_Dataset):
                 )
         else:
             # If no resampling is needed, use the original reshaped data
-            self.resampled_data = self.raw_data_reshaped
+            self.resampled_data = self.SHO_LSQF_data
 
         # Write the resampled data to the specified location within the HDF5 file
         if kwargs.get("basepath"):
@@ -217,70 +217,35 @@ class Preprocessing(BE_Dataset):
         # extract the raw data and reshapes is
         # in dataset_new.py for now because it reads the data from the h5 file
        # self.set_raw_data() 
+       
+       # first get the raw data directly from the h5 file
+        self.set_SHO_LSQF()
 
         # # resamples the data if necessary
         self.set_raw_data_resampler()
 
         # computes the scalar on the raw data
         self.raw_data_scaler = Raw_Data_Scaler(self.raw_data())
+        
+        # computes the SHO scaler
+        self.SHO_Scaler()
 
-        try:
-            # gets the LSQF results
-            self.set_SHO_LSQF()
+        # try:
+        #     # gets the LSQF results
+        #     self.set_SHO_LSQF()
 
-            # computes the SHO scaler
-            self.SHO_Scaler()
-        except Exception as e:
-            print("SHO_preprocessing failed with exception:")
-            print(e)
-            print("*"*20)
-            print("Traceback:")
-            print(traceback.format_exc())
-            #raise e
+        #     # computes the SHO scaler
+        #     self.SHO_Scaler()
+        # except Exception as e:
+        #     print("SHO_preprocessing failed with exception:")
+        #     print(e)
+        #     print("*"*20)
+        #     print("Traceback:")
+        #     print(traceback.format_exc())
+        #     #raise e
             
 
-    def set_SHO_LSQF(self):
-        """
-        set_SHO_LSQF Sets the SHO Scaler data to make accessible
-        """
-
-        # initializes the dictionary
-        self.SHO_LSQF_data = {}
-
-        for dataset in self.raw_datasets:
-            # data groups in file
-            try:
-                SHO_fits = find_groups_with_string(self.file, f"{dataset}-SHO_Fit_000")[0]
-
-                with h5py.File(self.file, "r+") as h5_f:
-                    # extract the name of the fit
-                    name = SHO_fits.split("/")[-1]
-
-                    # create a list for parameters
-                    SHO_LSQF_list = []
-                    for sublist in np.array(h5_f[f"{SHO_fits}/Fit"]):
-                        for item in sublist:
-                            for i in item:
-                                SHO_LSQF_list.append(i)
-
-                    data_ = np.array(SHO_LSQF_list).reshape(-1, 5)
-
-                    # saves the SHO LSQF data as an attribute of the dataset object
-                    self.SHO_LSQF_data[name] = data_.reshape(
-                        self.num_pix, self.voltage_steps, 5
-                    )[:, :, :-1]
-            except Exception as e:
-                if isinstance(e, IndexError):
-                    print("*"*20)
-                    print(f"SHO_LSQF_data for {dataset} not found")
-                    print("Skipping retrieval of SHO_LSQF_data for this dataset")
-                    print("*"*20)
-                else:
-                    print("set_SHO_LSQF failed with exception:")
-                    print(e)
-                    print("*"*20)
-                    print("Traceback:")
-                    print(traceback.format_exc())
+    
                 
     def raw_data(self, pixel=None, voltage_step=None):
         """
@@ -312,12 +277,12 @@ class Preprocessing(BE_Dataset):
             # Extract data based on provided pixel and voltage_step indices
         if pixel is not None and voltage_step is not None:
             # Specific pixel and voltage_step provided
-            return self.raw_data_reshaped[self.dataset_name][[pixel], :, :][
+            return self.SHO_LSQF_data[self.dataset_name][[pixel], :, :][
                 :, [voltage_step], :
             ]
         else:
             # Return the entire dataset if pixel or voltage_step is not specified
-            return self.raw_data_reshaped[self.dataset_name][:]
+            return self.SHO_LSQF_data[self.dataset_name][:]
         
         
     

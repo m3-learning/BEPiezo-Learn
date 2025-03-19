@@ -53,7 +53,7 @@ class State(Preprocessing):
         # self.resampled_data = resampled_data
         
         
-        self.set_raw_data()
+        #self.set_raw_data()
     
     
     
@@ -253,45 +253,6 @@ class State(Preprocessing):
 
         return data
 
-    
-    def raw_data(self, pixel=None, voltage_step=None):
-        """
-        Extracts raw data from the specified dataset, optionally resampled with noise consideration.
-
-        This function allows retrieval of raw data from a dataset stored in an HDF5 file.
-        If specific `pixel` and `voltage_step` are provided, the function extracts the data
-        corresponding to those indices. Otherwise, it returns the entire dataset.
-        Optionally, noise can be taken into account during the extraction process.
-
-        Args:
-            pixel (int, optional): The pixel index to extract data from. If None, all pixels are selected.
-                                Defaults to None.
-            voltage_step (int, optional): The voltage step index to extract data from. If None, all voltage steps
-                                        are selected. Defaults to None.
-
-        Returns:
-            np.array: The extracted BE data as a complex number array.
-
-        Example:
-            data = obj.raw_data(pixel=5, voltage_step=10)
-            This will extract the data for the 5th pixel and the 10th voltage step.
-        """
-
-        # JGoddy commented out the h5py file opening because
-        # h5_f was not being used in the code
-        
-        # Open the HDF5 file in read+write mode
-        #with h5py.File(self.file, "r+") as h5_f:
-        # consequently I also unindented the relevant code
-        # Extract data based on provided pixel and voltage_step indices
-        if pixel is not None and voltage_step is not None:
-            # Specific pixel and voltage_step provided
-            return self.raw_data_reshaped[self.dataset_name][[pixel], :, :][
-                :, [voltage_step], :
-            ]
-        else:
-            # Return the entire dataset if pixel or voltage_step is not specified
-            return self.raw_data_reshaped[self.dataset_name][:]
 
     
     def raw_data_resampled(self, pixel=None, voltage_step=None):
@@ -994,39 +955,4 @@ class State(Preprocessing):
 
     ## SHO State 
 
-    def SHO_LSQF(self, pixel=None, voltage_step=None):
-        """
-        Retrieves the Simple Harmonic Oscillator (SHO) fit results using the Least Squares Fitting (LSQF) method.
-
-        This function extracts the SHO fit results from the dataset stored in an HDF5 file. The results can be
-        retrieved for a specific pixel and voltage step, or for the entire dataset, depending on the provided arguments.
-
-        Args:
-            pixel (int, optional): The index of the pixel for which the SHO fit results are to be extracted.
-                                If None, results for all pixels will be returned. Defaults to None.
-            voltage_step (int, optional): The index of the voltage step for which the SHO fit results are to be extracted.
-                                        If None, results for all voltage steps will be returned. Defaults to None.
-
-        Returns:
-            np.array: The extracted SHO LSQF results. The shape of the returned array depends on the
-                    combination of the pixel and voltage_step parameters.
-        """
-
-        # Open the HDF5 file containing the SHO LSQF data
-        with h5py.File(self.file, "r+") as h5_f:
-            # Copy the SHO LSQF data for the specific dataset
-            dataset_ = self.SHO_LSQF_data[f"{self.dataset_name}-SHO_Fit_000"].copy()
-
-            # If both pixel and voltage_step are provided, return the data for the specific pixel and voltage step
-            if pixel is not None and voltage_step is not None:
-                return self.get_data_w_voltage_state(dataset_[[pixel], :, :])[
-                    :, [voltage_step], :
-                ]
-
-            # If only pixel is provided, return the data for the specific pixel across all voltage steps
-            elif pixel is not None:
-                return self.get_data_w_voltage_state(dataset_[[pixel], :, :])
-
-            # If neither pixel nor voltage_step are provided, return the entire dataset
-            else:
-                return self.get_data_w_voltage_state(dataset_[:])
+    

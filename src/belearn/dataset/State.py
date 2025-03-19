@@ -701,7 +701,8 @@ class State(Preprocessing):
         # Open the HDF5 file containing the SHO LSQF data
         with h5py.File(self.file, "r+") as h5_f:
             # Copy the SHO LSQF data for the specific dataset
-            dataset_ = self.SHO_LSQF_data[f"{self.dataset_name}-SHO_Fit_000"].copy()
+            #dataset_ = self.SHO_LSQF_data[f"{self.dataset_name}-SHO_Fit_000"].copy()
+            dataset_ = self.SHO_LSQF_data[f"{self.dataset_name}"].copy()
 
             # If both pixel and voltage_step are provided, return the data for the specific pixel and voltage step
             if pixel is not None and voltage_step is not None:

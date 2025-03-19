@@ -1454,18 +1454,18 @@ class Viz(State):
         fig = plt.figure(figsize=(3, 1.25), layout="compressed")
         axs = plt.subplot(111)
 
-        self.dataset.raw_format = "complex"
+        self.raw_format = "complex"
 
         data, x = self.raw_spectra(
             pixel, voltage_step, frequency=True, **kwargs
         )
 
-        axs.plot(x, data[0].flatten(), "k", label=self.dataset.label + " Real")
+        axs.plot(x, data[0].flatten(), "k", label=self.label + " Real")
         axs.set_xlabel("Frequency (Hz)")
         axs.set_ylabel("Real (Arb. U.)")
         ax2 = axs.twinx()
         ax2.set_ylabel("Imag (Arb. U.)")
-        ax2.plot(x, data[1].flatten(), "g", label=self.dataset.label + " Imag")
+        ax2.plot(x, data[1].flatten(), "g", label=self.label + " Imag")
         self._scientific_notation_dual(axs,ax2)
 
 
@@ -1476,7 +1476,7 @@ class Viz(State):
             ax.set_box_aspect(1)
 
         if self.verbose:
-            self.dataset.extraction_state
+            self.extraction_state
 
         if legend:
             fig.legend(bbox_to_anchor=(1.0, 1), loc="upper right", borderaxespad=0.1)

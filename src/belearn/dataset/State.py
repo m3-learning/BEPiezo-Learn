@@ -364,9 +364,12 @@ class State(Preprocessing):
         # Retrieve the raw data based on whether fit results are provided
         if fit_results is None:
             if self.resampled:
-                data = self.raw_data_resampled(
-                    pixel=pixel, voltage_step=voltage_step
-                )
+                # this has shape (1, 1, 4)
+                data = self.raw_data_reshaped[self.dataset_name][pixel][voltage_step]
+                
+                #data = self.raw_data_resampled(
+                #    pixel=pixel, voltage_step=voltage_step
+                #)
             else:
                 data = self.raw_data(pixel=pixel, voltage_step=voltage_step)
         else:

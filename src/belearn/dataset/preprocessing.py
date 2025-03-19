@@ -277,12 +277,12 @@ class Preprocessing(BE_Dataset):
             # Extract data based on provided pixel and voltage_step indices
         if pixel is not None and voltage_step is not None:
             # Specific pixel and voltage_step provided
-            return self.SHO_LSQF_data[self.dataset_name][[pixel], :, :][
+            return self.raw_data_reshaped[self.dataset_name][[pixel], :, :][
                 :, [voltage_step], :
             ]
         else:
             # Return the entire dataset if pixel or voltage_step is not specified
-            return self.SHO_LSQF_data[self.dataset_name][:]
+            return self.raw_data_reshaped[self.dataset_name][:]
         
         
     

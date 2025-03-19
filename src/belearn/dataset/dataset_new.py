@@ -660,10 +660,16 @@ class BE_Dataset:
 
         # initializes the dictionary
         self.SHO_LSQF_data = {}
+        self.raw_data_reshaped = {}
         
         with h5py.File(self.file, "r+") as h5_f:
             self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(h5_f[f"{self.dataset_name}-SHO_Fit_000/Fit"][:])[:,:,:-1] 
-        
+            
+            self.raw_data_reshaped[self.dataset_name] = h5_f[f"Measurement_000/Channel_000/{self.dataset_name}"][:].reshape(
+                self.num_pix, self.voltage_steps, self.num_bins
+            )
+                        
+
 
         # for dataset in self.raw_datasets:
         #     # data groups in file

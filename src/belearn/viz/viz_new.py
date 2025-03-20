@@ -56,20 +56,22 @@ color_palette = {
     "LSQF_P": "#444e86",  # bluish purple
     "NN_A": "#955196",  # purple
     "NN_P": "#dd5182",  # pinkish red
+    
+    "mag":  "#2f9eaa",  # cyan
+    "phase": "#66c21f",  # green
     "real": "#ff6e54",  # orange
     "imag": "#ffa600",  # yellow-orange
-    "mag": "#2f9eaa",  # cyan
-    "phase": "#66c21f",  # green
 
-    "true_real": "#ff6e54",  # orange
-    "true_imag": "#ffa600",  # yellow-orange
     "true_mag": "#2f9eaa",  # cyan
     "true_phase": "#66c21f",  # green
+    "true_real": "#ff6e54",  # orange
+    "true_imag": "#ffa600",  # yellow-orange
     
+    "predict_mag":  "#1A237E", # dark blue 
+    "predict_phase": "#003300", # dark green
     "predict_real":  "#D84315" ,#dark orange
     "predict_imag" : "#b37400", #dark yellowish tan 
-    "predict_mag": "#003300", # dark green
-    "predict_phase": "#1A237E" # dark blue
+   
 }
 
 
@@ -694,8 +696,10 @@ class Viz(State):
         # )
 
         # Adjust the format of the tick labels and box aspect for all axes
-        axes = [ax_mag, ax_real, ax_phase, ax_imag]
+        #axes = [ax_mag, ax_real, ax_phase, ax_imag]
 
+        axes = [ax_mag, ax_phase, ax_real, ax_imag]
+        
         for ax in axes:
             ax.set_box_aspect(1)
 
@@ -711,7 +715,10 @@ class Viz(State):
 
         # Display the legend if requested
         if legend:
-            fig.legend(bbox_to_anchor=(1.0, 1), loc="upper right", borderaxespad=0.1)
+            handles = [ax_mag.lines[0],ax_mag.lines[1], ax_phase.lines[0], ax_phase.lines[1], 
+                       ax_real.lines[0], ax_real.lines[1], ax_imag.lines[0], ax_imag.lines[1]]
+            labels = [h.get_label() for h in handles]
+            fig.legend(handles, labels, bbox_to_anchor=(1.0, 1), loc="upper right", borderaxespad=0.1)
 
         # Save the figure if a Printer object and filename are provided
         if self.Printer is not None and filename is not None:

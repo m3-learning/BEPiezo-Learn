@@ -18,8 +18,11 @@ import pyUSID as usid
 import h5py
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
+from pathlib import Path
 from belearn.util.wrappers import static_state_decorator
+
+from belearn.dataset.datafed import BE_DataFed
 
 # THIS IS OUTDATED
 #functions in BE_Dataset class: 
@@ -46,11 +49,12 @@ from belearn.util.wrappers import static_state_decorator
 
 
 @dataclass
-class BE_Dataset:
+class BE_Dataset(BE_DataFed):
     file: str =  '/home/julian/Alibek_BEPFM/Rapid-Fitting-BEPFM-NN/notebooks/Data/data_raw.h5' #TODO: make required
     noise: int = 0
     resampled_bins: int = None
     resampled_data: dict = None
+    datafed: Optional[Union[None, str, Path]] = None
     """
     A class to represent a h5 file.
 
@@ -59,7 +63,9 @@ class BE_Dataset:
         resampled_bins (int): The number of bins to resample the data to.
         resampled_data (dict): The data to resample.
     """
-    def __post_init__(self):
+    def __post_init__(self,datafed=None):
+        #super().__init__(datafed)
+        self.datafed = datafed
         
         self.get_dataset(self.noise)
 

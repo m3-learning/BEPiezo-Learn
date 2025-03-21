@@ -1823,5 +1823,36 @@ class Viz(State):
             return (d1, d2, x1, x2, labels, full_indices, index1, mse1, params)
         else:
             return (d1, d2, x1, x2, labels, full_indices, index1, mse1)
+        
+        
+   # TODO: add comments and docstring
+    def out_state(self, data, out_state):
+        # holds the raw state
+        current_state = self.get_state
+
+        def convert_to_mag(data):
+            data = self.to_complex(data, axis=1)
+            data = self.raw_data_scaler.inverse_transform(data)
+            data = self.to_magnitude(data)
+            data = np.array(data)
+            data = np.rollaxis(data, 0, data.ndim - 1)
+            return data
+
+        labels = ["real", "imaginary"]
+
+        if out_state is not None:
+            if "raw_format" in out_state.keys():
+                if out_state["raw_format"] == "magnitude spectrum":
+                    data = convert_to_mag(data)
+                    labels = ["Amplitude", "Phase"]
+
+            elif "scaled" in out_state.keys():
+                if out_state["scaled"] == False:
+                    data = self.raw_data_scaler.inverse_transform(data)
+                    labels = ["Scaled " + s for s in labels]
+
+        self.set_attributes(**current_state)
+
+        return data, labels
 
     

@@ -5,6 +5,7 @@ from typing import List, Dict, Optional, Any, Type
 from belearn.dataset.dataset_new import BE_Dataset
 from belearn.dataset.State import State
 from belearn.util.wrappers import context_manager_decorator
+from belearn.dataset.analytics import get_rankings, MSE
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,6 +13,10 @@ import matplotlib.lines as mlines
 from matplotlib.ticker import ScalarFormatter
 
 from scipy import fftpack
+
+import torch
+from torch import nn
+
 
 from contextlib import contextmanager
 import inspect
@@ -23,7 +28,7 @@ from m3util.viz.layout import (
     scalebar,
     imagemap,
     FigDimConverter,
-    # subfigures,
+    subfigures,
     # get_axis_pos_inches,
     # draw_line_with_text,
 )
@@ -1492,5 +1497,331 @@ class Viz(State):
         if self.Printer is not None and filename is not None:
             self.Printer.savefig(fig, filename, style="b")
     
-    
+     ##### Analytics #####
+
+    #@static_dataset_decorator
+    @context_manager_decorator
+    def bmw_nn(
+        self,
+        true_state,
+        prediction=None,
+        model=None,
+        out_state=None,
+        n=1,
+        gaps=(0.8,0.4),
+        size=(1.25, 1.25),
+        filename=None,
+        compare_state=None,
+        fit_type="SHO",
+        **kwargs,
+    ):
+        # TODO: I had to remove this for fitting --
+        # true_state = torch.atleast_3d(torch.tensor(true_state.reshape(-1,96)))
+
+        d1, d2, x1, x2, label, index1, mse1 = None, None, None, None, None, None, None
+
+        if fit_type == "SHO":
+            d1, d2, x1, x2, label,full_indices, index1, mse1 = self.get_best_median_worst(
+                true_state,
+                prediction=prediction,
+                model=model,
+                out_state=out_state,
+                n=n,
+                compare_state=compare_state,
+                **kwargs,
+            )
+
+            fig, ax = subfigures(1, 3, gaps=gaps, size=size)
+
+            for i, (true, prediction, error) in enumerate(zip(d1, d2, mse1)):
+                ax_ = ax[i]
+                ax_.plot(
+                    x2,
+                    prediction[0].flatten(),
+                    color_palette["NN_A"],
+                    label=f"NN {label[0]}",
+                )
+                ax1 = ax_.twinx()
+                ax1.plot(
+                    x2,
+                    prediction[1].flatten(),
+                    color_palette["NN_P"],
+                    label=f"NN {label[1]}]",
+                )
+
+                ax_.plot(
+                    x1,
+                    true[0].flatten(),
+                    "o",
+                    color=color_palette["NN_A"],
+                    label=f"Raw {label[0]}",
+                )
+                ax1.plot(
+                    x1,
+                    true[1].flatten(),
+                    "o",
+                    color=color_palette["NN_P"],
+                    label=f"Raw {label[1]}",
+                )
+
+                ax_.set_xlabel("Frequency (Hz)",labelpad = 0)
+
+                # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
+                text_position_in_inches = (
+                    -1 * (gaps[0] + size[0]) * ((2 - i) % 3) + size[0] / 2,
+                    (gaps[1] + size[1]) * (1.25 - i // 3 - 1.25) - gaps[1],
+                )
+                text = f"MSE: {error:0.4f}"
+                add_text_to_figure(
+                    fig, text, text_position_in_inches, fontsize=6, ha="center"
+                )
+
+                if out_state is not None:
+                    if "measurement state" in out_state.keys():
+                        if out_state["raw_format"] == "magnitude spectrum":
+                            ax_.set_ylabel("Amplitude (Arb. U.)",labelpad=1)
+                            ax1.set_ylabel("Phase (rad)",labelpad=1)
+                    else:
+                        ax_.set_ylabel("Real (Arb. U.)",labelpad=1)
+                        ax1.set_ylabel("Imag (Arb. U.)",labelpad=1)
+                        
+                self._scientific_notation_dual(ax_,ax1)
+
+            # add a legend just for the last one
+            lines, labels = ax_.get_legend_handles_labels()
+            lines2, labels2 = ax1.get_legend_handles_labels()
+            ax_.legend(lines + lines2, labels + labels2, loc="upper right")
+            
+
+        elif fit_type == "hysteresis":
+            d1, d2, x1, x2, label, full_indices, index1, mse1 = self.get_best_median_worst(
+                true_state,
+                prediction=prediction,
+                n=n,
+                **kwargs,
+                fit_type = fit_type,
+            )
+
+
+            
+            
+            fig, ax = subfigures(1, 3, gaps=gaps, size=size)
+
+            for i, (true, prediction, error) in enumerate(zip(d1, d2, mse1)):
+                ax_ = ax[i]
+                
+                #unscale the hysteresis loops for plotting
+                prediction = self.hysteresis_scaler.inverse_transform(prediction)
+                true = self.hysteresis_scaler.inverse_transform(true)
+
+                ax_.plot(
+                    x2,
+                    prediction,
+                    color=color_palette["NN_A"],
+                    # label=f"NN {label[0]}",
+                )
+
+                ax_.plot(
+                    x1,
+                    true,
+                    "o",
+                    color=color_palette["NN_A"],
+                    # label=f"Raw {label[0]}",
+                )
+
+                ax_.set_xlabel("Voltage (V)")
+
+                # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
+                text_position_in_inches = (
+                    -1 * (gaps[0] + size[0]) * ((2 - i) % 3) + size[0] / 2,
+                    (gaps[1] + size[1]) * (1.25 - i // 3 - 1.25) - gaps[1],
+                )
+
+                text = f"MSE: {error:0.4f}"
+                add_text_to_figure(
+                    fig, text, text_position_in_inches, fontsize=6, ha="center"
+                )
+
+                ax_.set_ylabel("(Arb. U.)")
+
+                # add a legend just for the last one
+                lines, labels = ax_.get_legend_handles_labels()
+                ax_.legend(lines, labels, loc="upper right")
+                
+                set_sci_notation_label(ax_, axis = "y", corner = 'top left')
+
+
+        else:
+            raise ValueError("fit_type must be SHO or hysteresis")
+
+        # prints the figure
+        if self.Printer is not None and filename is not None:
+            self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+
+        if "returns" in kwargs.keys():
+            if kwargs["returns"] == True:
+                return d1, d2, index1, mse1
+            
+            
+    def get_best_median_worst(
+        self,
+        true_state,
+        prediction=None,
+        out_state=None,
+        n=1,
+        SHO_results=False,
+        index=None,
+        compare_state=None,
+        fit_type = "SHO",
+        **kwargs,
+    ):
+        def data_converter(data):
+            # converts to a standard form which is a list
+            data = self.to_real_imag(data)
+
+            try:
+                # converts to numpy from tensor
+                data = [data.numpy() for data in data]
+            except:
+                pass
+
+            return data
+
+        if fit_type=="SHO":
+            if type(true_state) is dict:
+                self.set_attributes(**true_state)
+
+                # the data must be scaled to rank the results
+                self.scaled = True
+
+                true, x1 = self.raw_spectra(frequency=True)
+                
+            elif isinstance(true_state, (torch.Tensor, np.ndarray, list)):
+                true_state = true_state.numpy() if isinstance(true_state, torch.Tensor) else true_state
+                true = data_converter(true_state)
+                
+                # gets the frequency values
+                if true[0].ndim == 2:
+                    x1 = self.get_freq_values(true[0].shape[1])
+
+            # # condition if x_data is passed
+            # elif np.iscomplex(true_state).all():
+            #     true = data_converter(true_state)
+
+            #     # gets the frequency values
+            #     if true[0].ndim == 2:
+            #         x1 = self.get_freq_values(true[0].shape[1])
+            else:
+                raise ValueError("true_state must be a dictionary, torch.Tensor, np.ndarray, or list")
+        elif fit_type =="hysteresis":
+             # gets the true data
+             
+             # gets the x values
+            data, voltage = self.get_hysteresis(scaled=True, loop_interpolated=True)
+
+            x1 = self.get_voltage
+
+        # holds the raw state
+        current_state = self.get_state
+
+        if isinstance(prediction, nn.Module):
+            fitter = "NN"
+
+            if fit_type == "SHO":
+            
+                # sets the phase shift to zero for parameters
+                # This is important if doing the fits because the fits will be wrong if the phase is shifted.
+                self.NN_phase_shift = 0
+
+                data = self.to_nn(true)
+
+                pred_data, scaled_params, params = prediction.predict(data)
+                
+                self.scaled = True
+
+                prediction, x2 = self.raw_spectra(
+                    fit_results=params, frequency=True
+                )
+            elif fit_type == "hysteresis":    
+                pred_data, scaled_params, params = prediction.predict(torch.tensor(data.reshape(-1,96,1)),is_SHO=False)
+                x2=self.get_voltage
+
+
+                self.scaled = True
+
+            # prediction, x2 = self.dataset.raw_spectra(
+            #     fit_results=params, voltage_step = self.get_voltage_step(), frequency=True
+            # )
+            
+            # prediction, embedding = self.model(data) #or maybe true_state 
+            # prediction = prediction.to(torch.float32)
+            # prediction = prediction.reshape(prediction.shape[0],prediction.shape[1],1)
+
+        elif isinstance(prediction, dict):
+
+            fitter = prediction["fitter"]
+
+            exec(f"self.{prediction['fitter']}_phase_shift =0")
+
+            self.scaled = False
+
+            params = self.SHO_fit_results()
+
+            params = params.reshape(-1, 4)
+
+            self.scaled = True
+
+            prediction, x2 = self.raw_spectra(
+                fit_results=params, voltage_step = self.get_voltage_step(), frequency=True
+            )
+
+        if "x2" not in locals():
+            # if you do not use the model will run the
+            x2 = self.get_freq_values(prediction[0].shape[1])
+
+        # index the data if provided
+        if index is not None:
+            true = [true[0][index], true[1][index]]
+            prediction = [prediction[0][index], prediction[1][index]]
+            # params = params[index]
+
+        if compare_state is not None:
+            compare_state = data_converter(compare_state)
+
+            # this must take the scaled data
+            index1, mse1, d1, d2 = get_rankings(compare_state, prediction, n=n)
+        else:
+            # this must take the scaled data
+            if fit_type == "SHO":
+                
+                full_indices, index1, mse1, d1, d2 = get_rankings(true, prediction, n=n)
+
+            elif fit_type == "hysteresis":
+                full_indices, index1, mse1, d1, d2 = get_rankings(torch.tensor(data).reshape(-1,96,1), pred_data, n=n,fit_type='hysteresis')
+            #index1, mse1, d1, d2 = get_rankings(data, pred_data.reshape(60,60,4,96), n=n)
+
+        d1, labels = self.out_state(d1, out_state)
+        d2, labels = self.out_state(d2, out_state)
+
+
+        # saves just the parameters that are needed
+        params = params[index1]
+
+        # resets the current state to apply the phase shifts
+        self.set_attributes(**current_state)
+
+        # gets the original index values
+        if index is not None:
+            index1 = index[index1]
+
+        # if statement that will return the values for the SHO Results
+        if SHO_results:
+            if eval(f"self.{fitter}_phase_shift") is not None:
+                params[:, 3] = eval(
+                    f"self.shift_phase(params[:, 3], self.{fitter}_phase_shift)"
+                )
+            return (d1, d2, x1, x2, labels, full_indices, index1, mse1, params)
+        else:
+            return (d1, d2, x1, x2, labels, full_indices, index1, mse1)
+
     

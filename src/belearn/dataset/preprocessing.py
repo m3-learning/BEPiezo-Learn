@@ -5,12 +5,14 @@ from m3util.util.h5 import find_groups_with_string
 from m3util.util.search import in_list
 import h5py
 import numpy as np
+import torch
 from scipy.interpolate import interp1d
 from scipy.signal import resample
 #from dataclasses import field
 from typing import Optional, Dict, Any
 import traceback
 from sklearn.preprocessing import StandardScaler
+
 class Preprocessing(BE_Dataset):
 
     
@@ -285,4 +287,119 @@ class Preprocessing(BE_Dataset):
             return self.raw_data_reshaped[self.dataset_name][:]
         
         
+    def to_complex(self, data, axis=None):
+        """
+        to_complex function that converts data to complex
+
+        Args:
+            data (any): data to convert
+            axis (int, optional): axis which the data is structured. Defaults to None.
+
+        Returns:
+            np.array: complex array of the BE response
+        """
+
+        # converts to an array
+        if type(data) == list:
+            data = np.array(data)
+
+        # if the data is already in complex form return
+        if self.is_complex(data):
+            return data
+
+        # if axis is not provided take the last axis
+        if axis is None:
+            axis = data.ndim - 1
+
+        return np.take(data, 0, axis=axis) + 1j * np.take(data, 1, axis=axis)
+
+    def is_complex(self, data):
+        """
+        is_complex function to check if data is complex. If not complex makes it a complex number
+
+        Args:
+            data (any): input data
+
+        Returns:
+            any: array or tensor as a complex number
+        """
+
+        data = data[0]
+
+        if type(data) == torch.Tensor:
+            complex_ = data.is_complex()
+
+        if type(data) == np.ndarray:
+            complex_ = np.iscomplex(data)
+            complex_ = complex_.any()
+
+        return complex_
+   
+    def to_real_imag(self, data):
+        """
+        Extracts the real and imaginary components from band excitation (BE) data.
+
+        This function takes in BE data, which may be in either a NumPy array or a PyTorch
+        tensor format, converts it to its complex form, and then separates the real and
+        imaginary parts.
+
+        Args:
+            data (np.array or torch.Tensor): BE data, either as a NumPy array or a PyTorch tensor.
+
+        Returns:
+            list: A list containing two NumPy arrays: the first array represents the real
+                components, and the second array represents the imaginary components
+                of the BE response.
+        """
+
+        # Convert the data to its complex form using the to_complex method from the BE_Dataset class.
+        data = self.to_complex(data)
+
+        # Extract and return the real and imaginary components as a list of NumPy arrays.
+        return [np.real(data), np.imag(data)]
+
+        
+    
+    def to_nn(self, data):
+        """
+        Converts band excitation data into a form suitable for training a neural network.
+
+        This utility function takes in band excitation data, typically in the form of real and
+        imaginary components, and processes it into a tensor format that can be used as input
+        for neural networks. If the data is already a PyTorch tensor, it returns the data as is.
+
+        Args:
+            data (tuple or torch.Tensor): Band excitation data, typically as a tuple of
+                                        (real, imag) or directly as a PyTorch tensor.
+
+        Returns:
+            torch.Tensor: A tensor with the real and imaginary components stacked along
+                        a new dimension, ready for neural network training.
+        """
+
+        # If data is already a PyTorch tensor, return it as is.
+        if type(data) == torch.Tensor:
+            return data
+
+        # Determine the number of bins based on whether the data has been resampled or not.
+        if self.resampled: 
+            bins = self.resampled_bins
+        else:
+            bins = self.num_bins
+
+        # Unpack the real and imaginary parts of the data.
+        real, imag = data
+
+        # Reshape the real and imaginary components to have dimensions of samples x timesteps.
+        real = real.reshape(-1, bins)
+        imag = imag.reshape(-1, bins)
+
+        # Stack the real and imaginary components along a new axis.
+        # The result is a 3D array where the third dimension contains the real and imaginary parts.
+        x_data = np.stack((real, imag), axis=2)
+
+        # Convert the stacked array to a PyTorch tensor with the appropriate data type.
+        x_data = torch.tensor(x_data, dtype=torch.float32)
+
+        return x_data    
     

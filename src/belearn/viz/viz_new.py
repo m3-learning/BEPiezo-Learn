@@ -1740,7 +1740,7 @@ class Viz(State):
                 self.scaled = True
 
                 prediction, x2 = self.raw_spectra(
-                    fit_results=params, frequency=True
+                    fit_results=params, frequency=True, scaled = self.scaled
                 )
             elif fit_type == "hysteresis":    
                 pred_data, scaled_params, params = prediction.predict(torch.tensor(data.reshape(-1,96,1)),is_SHO=False)
@@ -1772,7 +1772,7 @@ class Viz(State):
             self.scaled = True
 
             prediction, x2 = self.raw_spectra(
-                fit_results=params, voltage_step = self.get_voltage_step(), frequency=True
+                fit_results=params, voltage_step = self.get_voltage_step(), frequency=True, scaled = self.scaled
             )
 
         if "x2" not in locals():

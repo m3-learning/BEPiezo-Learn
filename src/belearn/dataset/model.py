@@ -20,13 +20,14 @@ class BE_model_utils(State):
 
     #@static_state_decorator
     @context_manager_decorator
-    def NN_data(self, resampled=None, scaled=True):
+    def NN_data(self, resampled=None, noise = None,scaled=True):
         """
         Utility function that retrieves and prepares the data for neural network training.
 
         Args:
             resampled (bool, optional): If True, use the resampled data; otherwise, use original data. Defaults to None.
             scaled (bool, optional): If True, use scaled data; otherwise, use unscaled data. Defaults to True.
+            noise (int, optional): If provided, use the specified noise level; otherwise, use the default noise level. Defaults to None.
 
         Returns:
             torch.tensor: A tuple containing:
@@ -41,11 +42,12 @@ class BE_model_utils(State):
         if resampled is not None:
             self.resampled = resampled
 
+        self.noise = noise
         # Ensure the data is scaled if required, as scaling is often necessary for neural network training
         self.scaled = scaled
 
         # Retrieve the raw spectral data
-        data = self.viz.raw_spectra()
+        data = self.viz.raw_spectra(noise=self.noise, scaled=self.scaled)
 
         # Convert the raw data into a format suitable for neural network input
         x_data = self.to_nn(data)
@@ -61,7 +63,7 @@ class BE_model_utils(State):
     
     
     def test_train_split_(
-        self, test_size=0.2, random_state=42, resampled=None, scaled=True, shuffle=True
+        self, test_size=0.2, random_state=42, resampled=None, noise = None, scaled=True, shuffle=True
     ):
         """
         Utility function that performs the train-test split on the neural network data.
@@ -82,7 +84,7 @@ class BE_model_utils(State):
         """
 
         # Retrieve the neural network data based on resampling and scaling options
-        x_data, y_data = self.NN_data(resampled, scaled)
+        x_data, y_data = self.NN_data(resampled, noise, scaled)
 
         # Perform the train-test split using the specified test size, random state, and shuffle options
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(

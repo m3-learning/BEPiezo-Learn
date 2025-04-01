@@ -309,6 +309,7 @@ class State(Preprocessing):
         fit_results=None,
         frequency=False,
         noise=None,
+        scaled=False,
         state=None,
         **kwargs
     ):
@@ -330,6 +331,8 @@ class State(Preprocessing):
                 Whether to return the frequency bins along with the data. Defaults to False.
             noise (int, optional):
                 Noise level to use in data extraction. If None, no noise adjustment is made.
+            scaled (bool, optional):
+                Whether to scale the data. If Fa    lse, no scaling is made.
             state (dict, optional):
                 A dictionary defining the extraction state. If provided, attributes are set accordingly.
 
@@ -341,6 +344,9 @@ class State(Preprocessing):
         # Set the noise level if provided
         if noise is not None:
             self.noise = noise
+
+        if scaled:
+            self.scaled = scaled
 
         # Set the extraction state attributes if provided
         if state is not None:
@@ -364,7 +370,7 @@ class State(Preprocessing):
         # Retrieve the raw data based on whether fit results are provided
         if fit_results is None:
             if self.resampled:
-                # this has shape (1, 1, 4)
+                # this has shape (1, 1, 3600,384,165) and type complex64
                 data = self.raw_data_reshaped[self.dataset_name][pixel][voltage_step]
                 
                 #data = self.raw_data_resampled(
@@ -409,7 +415,7 @@ class State(Preprocessing):
             # Apply scaling if enabled
             if self.scaled:
                 data = self.raw_data_scaler.transform(data.reshape(-1, bins))
-
+                
             if shaper_:
                 data = self.shaper(data, pixel, voltage_step)
 

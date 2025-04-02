@@ -1530,24 +1530,24 @@ class Viz(State):
                 compare_state=compare_state,
                 **kwargs,
             )
-
+            print("index1", index1)
             fig, ax = subfigures(1, 3, gaps=gaps, size=size)
 
             for i, (true, prediction, error) in enumerate(zip(d1, d2, mse1)):
                 ax_ = ax[i]
-                ax_.plot(
-                    x2,
-                    prediction[0].flatten(),
-                    color_palette["NN_A"],
-                    label=f"NN {label[0]}",
-                )
+                # ax_.plot(
+                #     x2,
+                #     prediction[0].flatten(),
+                #     color_palette["NN_A"],
+                #     label=f"NN {label[0]}",
+                # )
                 ax1 = ax_.twinx()
-                ax1.plot(
-                    x2,
-                    prediction[1].flatten(),
-                    color_palette["NN_P"],
-                    label=f"NN {label[1]}]",
-                )
+                # ax1.plot(
+                #     x2,
+                #     prediction[1].flatten(),
+                #     color_palette["NN_P"],
+                #     label=f"NN {label[1]}]",
+                # )
 
                 ax_.plot(
                     x1,
@@ -1701,6 +1701,7 @@ class Viz(State):
                 true = data_converter(true_state)
                 
                 # gets the frequency values
+
                 if true[0].ndim == 2:
                     x1 = self.get_freq_values(true[0].shape[1])
 
@@ -1723,6 +1724,7 @@ class Viz(State):
 
         # holds the raw state
         current_state = self.get_state
+        # LSQF_phase_shift is pi/2 here and 0 on Shenron
 
         if isinstance(prediction, nn.Module):
             fitter = "NN"
@@ -1732,6 +1734,7 @@ class Viz(State):
                 # sets the phase shift to zero for parameters
                 # This is important if doing the fits because the fits will be wrong if the phase is shifted.
                 self.NN_phase_shift = 0
+                self.LSQF_phase_shift = 0
 
                 data = self.to_nn(true)
 

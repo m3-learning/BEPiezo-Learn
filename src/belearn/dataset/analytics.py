@@ -133,7 +133,6 @@ def get_rankings(raw_data, pred, n=1, curves=True,fit_type="SHO"):
         d1 = np.stack((d1[:n], d1[start_index:end_index], d1[-n:])).squeeze()
         d2 = np.stack((d2[:n], d2[start_index:end_index], d2[-n:])).squeeze()
     elif fit_type == "hysteresis":
-        
         d1 = np.stack((d1[:,:n], d1[:,start_index:end_index], d1[:,-n:])).squeeze()
         d2 = np.stack((d2[:,:n], d2[:,start_index:end_index], d2[:,-n:])).squeeze()
 

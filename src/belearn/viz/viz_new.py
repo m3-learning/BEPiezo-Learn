@@ -1535,19 +1535,19 @@ class Viz(State):
 
             for i, (true, prediction, error) in enumerate(zip(d1, d2, mse1)):
                 ax_ = ax[i]
-                # ax_.plot(
-                #     x2,
-                #     prediction[0].flatten(),
-                #     color_palette["NN_A"],
-                #     label=f"NN {label[0]}",
-                # )
+                ax_.plot(
+                    x2,
+                    prediction[0].flatten(),
+                    color_palette["NN_A"],
+                    label=f"NN {label[0]}",
+                )
                 ax1 = ax_.twinx()
-                # ax1.plot(
-                #     x2,
-                #     prediction[1].flatten(),
-                #     color_palette["NN_P"],
-                #     label=f"NN {label[1]}]",
-                # )
+                ax1.plot(
+                    x2,
+                    prediction[1].flatten(),
+                    color_palette["NN_P"],
+                    label=f"NN {label[1]}]",
+                )
 
                 ax_.plot(
                     x1,
@@ -1734,7 +1734,7 @@ class Viz(State):
                 # sets the phase shift to zero for parameters
                 # This is important if doing the fits because the fits will be wrong if the phase is shifted.
                 self.NN_phase_shift = 0
-                self.LSQF_phase_shift = 0
+                self.LSQF_phase_shift = 0 #*********
 
                 data = self.to_nn(true)
 

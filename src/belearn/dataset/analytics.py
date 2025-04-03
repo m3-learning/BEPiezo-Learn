@@ -80,7 +80,7 @@ def mse_rankings(true, prediction, curves=False):
     # If curves is True, return ranked true and predicted values
     if curves:
         # true will be in the form [ranked error, channel, timestep]
-        return index, errors[index], true, prediction
+        return index, errors[index], true[index], prediction[index]
 
     # Otherwise, return the indices and ranked errors only
     return index, errors[index]
@@ -135,6 +135,13 @@ def get_rankings(raw_data, pred, n=1, curves=True,fit_type="SHO"):
     elif fit_type == "hysteresis":
         d1 = np.stack((d1[:,:n], d1[:,start_index:end_index], d1[:,-n:])).squeeze()
         d2 = np.stack((d2[:,:n], d2[:,start_index:end_index], d2[:,-n:])).squeeze()
+    
+    # if fit_type == "SHO":
+    #     d1=np.stack((d1[index[:n]], d1[index[start_index:end_index]], d1[index[-n:]])).squeeze()
+    #     d2=np.stack((d2[index[:n]], d2[index[start_index:end_index]], d2[index[-n:]])).squeeze()
+    # elif fit_type == "hysteresis":
+    #     d1=np.stack((d1[index[:,:n]], d1[index[:,start_index:end_index]], d1[index[:,-n:]])).squeeze()
+    #     d2=np.stack((d2[index[:,:n]], d2[index[:,start_index:end_index]], d2[index[:,-n:]])).squeeze()
 
     # Return the indices, MSE values, and optionally the reconstruction curves (d1, d2).
     return index, ind, mse, d1, d2

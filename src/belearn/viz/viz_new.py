@@ -1530,7 +1530,7 @@ class Viz(State):
                 compare_state=compare_state,
                 **kwargs,
             )
-            print("index1", index1)
+            #print("index1", index1)
             fig, ax = subfigures(1, 3, gaps=gaps, size=size)
 
             for i, (true, prediction, error) in enumerate(zip(d1, d2, mse1)):
@@ -1571,7 +1571,9 @@ class Viz(State):
                     -1 * (gaps[0] + size[0]) * ((2 - i) % 3) + size[0] / 2,
                     (gaps[1] + size[1]) * (1.25 - i // 3 - 1.25) - gaps[1],
                 )
+               # text = f"Index: {index1[i]}, MSE: {error:0.4f}"
                 text = f"MSE: {error:0.4f}"
+
                 add_text_to_figure(
                     fig, text, text_position_in_inches, fontsize=6, ha="center"
                 )
@@ -1734,7 +1736,7 @@ class Viz(State):
                 # sets the phase shift to zero for parameters
                 # This is important if doing the fits because the fits will be wrong if the phase is shifted.
                 self.NN_phase_shift = 0
-                self.LSQF_phase_shift = 0 #*********
+                self.LSQF_phase_shift = 0 #********
 
                 data = self.to_nn(true)
 

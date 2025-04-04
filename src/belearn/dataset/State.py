@@ -332,7 +332,7 @@ class State(Preprocessing):
             noise (int, optional):
                 Noise level to use in data extraction. If None, no noise adjustment is made.
             scaled (bool, optional):
-                Whether to scale the data. If Fa    lse, no scaling is made.
+                Whether to scale the data. If False, no scaling is made.
             state (dict, optional):
                 A dictionary defining the extraction state. If provided, attributes are set accordingly.
 

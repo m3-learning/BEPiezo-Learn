@@ -4,7 +4,7 @@ from belearn.util.wrappers import context_manager_decorator
 import torch
 import numpy as np
 from dataclasses import dataclass
-from belearn.viz.viz_new import Viz
+#from belearn.viz.viz_new import Viz
 from autophyslearn.spectroscopic.nn_new import Model
 
 
@@ -12,10 +12,11 @@ from autophyslearn.spectroscopic.nn_new import Model
 class BE_model_utils(State):
 ##### Machine Learning Functions #####
 
-    def __init__(self, model: Model, viz: Viz, **kwargs):
-        super().__init__(**kwargs)
-        self.viz = viz
-        self.model = model
+    def __init__(self):
+        super().__init__()
+        #self.model = model
+       # self.set_model_utils(self)
+        
 
 
     #@static_state_decorator
@@ -47,13 +48,13 @@ class BE_model_utils(State):
         self.scaled = scaled
 
         # Retrieve the raw spectral data
-        data = self.viz.raw_spectra(noise=self.noise, scaled=self.scaled)
+        data = self.raw_spectra(noise=self.noise, scaled=self.scaled)
 
         # Convert the raw data into a format suitable for neural network input
         x_data = self.to_nn(data)
 
         # Retrieve the SHO fit results, which are scaled LSQF parameters
-        y_data = self.viz.SHO_fit_results().reshape(-1, 4)
+        y_data = self.SHO_fit_results().reshape(-1, 4)
 
         # Convert the LSQF results into a tensor for use in training and evaluation
         y_data = torch.tensor(y_data, dtype=torch.float32)
@@ -125,9 +126,9 @@ class BE_model_utils(State):
 
         # Determine the number of bins based on whether the data has been resampled or not.
         if self.resampled: 
-            bins = self.viz.resampled_bins
+            bins = self.resampled_bins
         else:
-            bins = self.viz.num_bins
+            bins = self.num_bins
 
         # Unpack the real and imaginary parts of the data.
         real, imag = data

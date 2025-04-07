@@ -27,13 +27,14 @@ class State(Preprocessing):
                 scaled: bool = False,
                 output_shape: str = "pixels",
                 measurement_state: str = "all",
+                cycle: int = None,
                 loop_interpolated: bool = False,
                 LSQF_phase_shift: Optional[float] = None,
                 NN_phase_shift: Optional[float] = None,
                 verbose: bool = False,
                 resampled: bool = False,
                 resampled_bins =  None, #Optional[int] = field(default=None, init=False),
-                resampled_data = None #Dict[str, Any] = field(default_factory=dict, init=False)
+                resampled_data = None, #Dict[str, Any] = field(default_factory=dict, init=False),
             ):
         #super().__init__()
         super().__init__(resampled_bins=resampled_bins, resampled_data=resampled_data)
@@ -44,6 +45,7 @@ class State(Preprocessing):
         self.scaled = scaled
         self.output_shape = output_shape
         self.measurement_state = measurement_state
+        self.cycle = cycle
         self.loop_interpolated = loop_interpolated
         self.LSQF_phase_shift = LSQF_phase_shift
         self.NN_phase_shift = NN_phase_shift
@@ -53,9 +55,8 @@ class State(Preprocessing):
         # self.resampled_data = resampled_data
         
         
-        #self.set_raw_data()
-    
-    
+    #self.set_raw_data()
+
     
     @property
     def get_state(self):
@@ -669,7 +670,7 @@ class State(Preprocessing):
             # If X_data is not provided, generate the necessary input data (X_data, Y_data) from the dataset
             if X_data is None:
                 X_data, Y_data = self.NN_data()
-
+     
             # Predict the SHO parameters using the model
             pred_data, scaled_param, data = model.predict(X_data)
 
@@ -687,6 +688,7 @@ class State(Preprocessing):
             return data.reshape(-1, 4)
         else:
             # Return data as a 3D array (num_pix, num_voltage_steps, SHO_params)
+            print("data type", type(data))
             return data.reshape(self.num_pix, self.state_num_voltage_steps(), 4)
         
     @static_state_decorator
@@ -989,7 +991,7 @@ class State(Preprocessing):
     
     ##### GETTERS #####
 
-    def get_voltage_step(self, voltage_step):
+    def get_voltage_step(self, voltage_step=None):
         """
         Determine and return a valid voltage step index.
 
@@ -1021,7 +1023,85 @@ class State(Preprocessing):
 
         # Return the determined or provided voltage step index
         return voltage_step
+    
+    def get_cycle(self, data, axis=0, **kwargs):
+        """
+        Extracts data for a specific cycle from the hysteresis loop.
+
+        Args:
+            data (np.array): The band excitation data from which to extract the cycle.
+                            This is typically a multi-dimensional array containing several cycles.
+            axis (int, optional): The axis along which to split the data into cycles. Defaults to 0.
+            **kwargs: Additional keyword arguments to pass to np.array_split for custom behavior.
+
+        Returns:
+            np.array: The data corresponding to the specific cycle set by `self.cycle`.
+
+        This function splits the data into multiple cycles based on the attribute `self.num_cycles`
+        and then returns the data for the specific cycle indicated by `self.cycle`.
+        """
+
+        # Split the input data along the specified axis into 'num_cycles' parts
+        data = np.array_split(data, self.num_cycles, axis=axis, **kwargs)
+
+        # Extract the data for the cycle specified by 'self.cycle' (1-based index)
+        data = data[self.cycle - 1]
+
+        # Return the data corresponding to the specified cycle
+        return data
+
 
     ## SHO State 
 
     
+    def get_measurement_cycle(self, data, cycle=None, axis=1):
+        """
+        Retrieves the data for a specific measurement cycle from band excitation data.
+
+        This function extracts a specific cycle from the provided band excitation data.
+        If a cycle number is provided, it updates the current cycle. The data is first
+        processed based on the voltage state, and then the corresponding cycle is extracted
+        using the `get_cycle` method.
+
+        Args:
+            data (np.array): The band excitation data to extract the cycle from. Typically a multi-dimensional array.
+            cycle (int, optional): The specific cycle to extract. If not provided, the default cycle stored in the object is used. Defaults to None.
+            axis (int, optional): The axis where the cycle dimension is located. Defaults to 1.
+
+        Returns:
+            np.array: The data corresponding to the specified measurement cycle.
+
+        Notes:
+            - The cycle number can be updated dynamically if passed as an argument.
+            - The function first processes the data through `get_data_w_voltage_state` to align it with the correct voltage state.
+            - Finally, it extracts the cycle using the `get_cycle` method.
+        """
+
+        # If a specific cycle is provided, update the current cycle attribute
+        if cycle is not None:
+            self.cycle = cycle
+
+        # Process the data to align with the voltage state
+        data = self.get_data_w_voltage_state(data)
+
+        # Extract and return the data corresponding to the specific cycle along the specified axis
+        return self.get_cycle(data, axis=axis)
+
+    ### Hysteresis State
+    
+    def hysteresis_measurement_state(self, hysteresis_data):
+        """utility function to extract the measurement state from the hysteresis data
+
+        Args:
+            hysteresis_data (np.array): hysteresis data to extract the measurement state from
+
+        Returns:
+            np.array: hysteresis data with the measurement state extracted
+        """
+
+        if self.measurement_state == "all" or self.measurement_state is None:
+            return hysteresis_data
+        if self.measurement_state == "off":
+            return hysteresis_data[:, :, hysteresis_data.shape[2]//2:hysteresis_data.shape[2], :]
+        if self.measurement_state == "on":
+            return hysteresis_data[:, :, 0:hysteresis_data.shape[2]//2, :]

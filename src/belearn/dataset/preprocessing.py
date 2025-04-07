@@ -403,3 +403,32 @@ class Preprocessing(BE_Dataset):
 
         return x_data    
     
+    
+    
+    
+    
+    def roll_hysteresis(self, bias_vector, hysteresis=None,
+                        shift=4):
+        """
+        roll_hysteresis function to shift the bias vector and the hysteresis loop by a quarter cycle. 
+        This is to compensate for the difference in how the data is stored.
+
+        Args:
+            hysteresis (np.array): array for the hysteresis loop
+            bias_vector (np.array): array for the bias vector
+            shift (int, optional): fraction to roll the hysteresis loop by. Defaults to 4.
+
+        Returns:
+            _type_: _description_
+        """
+
+        # TODO: long term this is likely the wrong way to do this, should get this from the USID file spectroscopic index
+
+        # Shift the bias vector and the loops by a quarter cycle
+        shift_ind = int(-1 * bias_vector.shape[0] / shift)
+        bias_vector = np.roll(bias_vector, shift_ind, axis=0)
+        if hysteresis is None:
+            return bias_vector
+        else:
+            proj_nd_shifted = np.roll(hysteresis, shift_ind, axis=2)
+            return proj_nd_shifted, bias_vector

@@ -148,7 +148,7 @@ def get_rankings(raw_data, pred, n=1, curves=True,fit_type="SHO"):
 
 
 
-def print_mse(model_obj, model_predictor, data, labels,is_SHO=False):
+def print_mse(model_obj, model_predictor, model_utils, data, labels,is_SHO=False):
     """
     Prints the Mean Squared Error (MSE) of the model's predictions for each dataset provided.
 
@@ -175,9 +175,9 @@ def print_mse(model_obj, model_predictor, data, labels,is_SHO=False):
         # If the data is a dictionary, use raw data extraction methods from model_obj
         elif isinstance(data, dict):
             # Extract raw data from LSQF SHO fits in the dataset
-            pred_data, _ = model_obj.dataset.get_raw_data_from_LSQF_SHO(data)
+            pred_data, _ = model_predictor.dataset.get_raw_data_from_LSQF_SHO(data)
             # Get true data in NN format from the dataset
-            data, _ = model_obj.dataset.NN_data()
+            data, _ = model_utils.NN_data()
             # Convert predictions to a PyTorch tensor
             pred_data = torch.from_numpy(pred_data)
 

@@ -688,6 +688,65 @@ class State(Preprocessing):
         else:
             # Return data as a 3D array (num_pix, num_voltage_steps, SHO_params)
             return data.reshape(self.num_pix, self.state_num_voltage_steps(), 4)
+        
+    @static_state_decorator
+    def get_raw_data_from_LSQF_SHO(self, model, index=None):
+        """
+        Extracts raw data from LSQF (Least Squares Fit) SHO (Simple Harmonic Oscillator) fits.
+
+        Args:
+            model (dict): A dictionary that defines the state for extracting the SHO fit results.
+                        The dictionary typically contains information about the fitter and its parameters.
+            index (int, optional): The index of the specific data point to extract. Defaults to None,
+                                meaning all data will be returned.
+
+        Returns:
+            tuple:
+                pred_data (numpy.ndarray): The predicted raw spectra data reconstructed from the SHO fits.
+                params (numpy.ndarray): The SHO parameters used for reconstruction.
+
+        This method extracts the unscaled SHO fit parameters, reconstructs the raw spectra, and optionally
+        returns the result for a specific index.
+        """
+
+        # Set object attributes based on the provided model dictionary.
+        self.set_attributes(**model)
+
+        # Disable scaling of parameters for accurate reconstructions.
+        self.scaled = False
+
+        # Get the unscaled SHO fit results (shifted parameters).
+        params_shifted = self.SHO_fit_results()
+
+        # Set the phase shift of the current fitter to 0.
+        # This ensures that the reconstructed results are not phase-shifted.
+        exec(f"self.{model['fitter']}_phase_shift=0")
+
+        # Retrieve the SHO fit parameters with zero phase shift.
+        params = self.SHO_fit_results()
+
+        # Re-enable scaling of parameters after fetching the fit results.
+        self.scaled = True
+
+        # Reconstruct the raw spectra based on the SHO fit parameters (scaled values).
+        pred_data = self.raw_spectra(fit_results=params)
+
+        # Construct an array containing amplitude and phase, formatted as [amplitude, phase].
+        pred_data = np.array([pred_data[0], pred_data[1]])
+
+        # Reshape the data to match the expected format of the package.
+        pred_data = np.swapaxes(pred_data, 0, 1)  # Swap axis 0 and 1.
+        pred_data = np.swapaxes(pred_data, 1, 2)  # Swap axis 1 and 2.
+
+        # If an index is provided, extract only the specified data point and corresponding parameters.
+        if index is not None:
+            pred_data = pred_data[[index]]  # Select the data at the given index.
+            params = params_shifted[
+                [index]
+            ]  # Select the shifted parameters at the given index.
+
+        # Return the reconstructed spectra (pred_data) and the SHO parameters.
+        return pred_data, params
     
     def SHO_LSQF(self, pixel=None, voltage_step=None):
         """

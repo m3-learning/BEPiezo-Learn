@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Type
 
 from belearn.dataset.dataset_new import BE_Dataset
-from belearn.dataset.model import BE_model_utils
+from belearn.dataset.model_utils import BE_model_utils
 from belearn.util.wrappers import context_manager_decorator
 from belearn.dataset.analytics import get_rankings, MSE
 

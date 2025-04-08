@@ -38,10 +38,6 @@ def is_complex(data):
     Returns:
         any: array or tensor as a complex number
     """
-    try:
-        data = data[0]
-    except:
-        pass
 
     if type(data) == torch.Tensor:
         complex_ = data.is_complex()

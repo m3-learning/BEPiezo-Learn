@@ -17,7 +17,6 @@ from scipy.signal import resample
 
 
 class State(Preprocessing):
-    # None of these are actually used in the class, but they are here to be (hopefully)used in the future
     
     
     def __init__(self,
@@ -291,12 +290,15 @@ class State(Preprocessing):
         """
 
         # only does this if getting the full dataset, will reduce to off and on state
+        
+        # JGoddy added these if statements because for the resampled data, the shape is (1,1,3600,384,165)
+        # so the indexing is different
         if self.measurement_state == "all":
             data = data
         elif self.measurement_state == "on":
-            data = data[:, 1::2, :]
+            data = data[:, 1::2, :] if data.ndim < 5 else data[:,:,1::2,:]
         elif self.measurement_state == "off":
-            data = data[:, ::2, :]
+            data = data[:, ::2, :] if data.ndim < 5 else data[:,:,::2,:]
 
         return data
    
@@ -971,7 +973,7 @@ class State(Preprocessing):
         """
 
         # Set the noise level for the dataset
-        self.dataset.noise = noise
+        self.noise = noise
 
         # Set the measurement state to "on" to get the data for the "on" state
         self.measurement_state = "on"

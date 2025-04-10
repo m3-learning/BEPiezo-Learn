@@ -7,7 +7,7 @@ import sidpy
 from BGlib import be as belib
 
 from m3util.util.h5 import (
-    #find_groups_with_string,
+    # find_groups_with_string,
     print_tree,
     get_tree,
     find_measurement,
@@ -29,7 +29,7 @@ from belearn.filters.filters import clean_interpolate
 from belearn.dataset.datafed import BE_DataFed
 
 # THIS IS OUTDATED
-#functions in BE_Dataset class: 
+# functions in BE_Dataset class:
 # get_tree
 # print_be_tree
 # get_original_data
@@ -54,11 +54,13 @@ from belearn.dataset.datafed import BE_DataFed
 
 @dataclass
 class BE_Dataset(BE_DataFed):
-    file: str =  '/home/julian/Alibek_BEPFM/Rapid-Fitting-BEPFM-NN/notebooks/Data/data_raw.h5' #TODO: make required
+    file: str = "/home/julian/Alibek_BEPFM/Rapid-Fitting-BEPFM-NN/notebooks/Data/data_raw.h5"  # TODO: make required
     noise: int = 0
     resampled_bins: int = None
     resampled_data: dict = None
     datafed: Optional[Union[None, str, Path]] = None
+    basegroup: str = "/Measurement_000/Channel_000"
+    raw_data_path: str = "Raw_Data_SHO_Fit/Raw_Data-SHO_Fit_000"
     """
     A class to represent a h5 file.
 
@@ -67,37 +69,30 @@ class BE_Dataset(BE_DataFed):
         resampled_bins (int): The number of bins to resample the data to.
         resampled_data (dict): The data to resample.
     """
-    def __post_init__(self,datafed=None):
-        #super().__init__(datafed)
+
+    def __post_init__(self, datafed=None):
+        # super().__init__(datafed)
         self.datafed = datafed
-        
         self.get_dataset(self.noise)
 
-        self.tree = self.get_tree() 
-        
-    
         # self.resampled_bins = self.resampled_bins
         # self.resampled_data = self.resampled_data
-        
-        
         # # Initialize resampled_bins if it's None
         # if self.resampled_bins is None:
         #     self.resampled_bins = self.num_bins
 
-
-   
     def get_dataset(self, noise):
         """Property that returns the current dataset based on the noise state."""
 
         if noise == 0:
-            self.dataset_name =  "Raw_Data"
+            self.dataset_name = "Raw_Data"
         else:
             self.dataset_name = f"Noisy_Data_{noise}"
-    
-    #@property
-    def get_tree(self):
+
+    @property
+    def tree(self):
         """
-        get_tree reads the tree from the H5 file
+        tree reads the tree from the H5 file
 
         Returns:
             list: list of the tree from the H5 file
@@ -105,8 +100,8 @@ class BE_Dataset(BE_DataFed):
 
         with h5py.File(self.file, "r+") as h5_f:
             return get_tree(h5_f)
-        
-    #@property
+
+    # @property
     def print_be_tree(self):
         """Utility file to print the Tree of a BE Dataset
 
@@ -140,10 +135,9 @@ class BE_Dataset(BE_DataFed):
 
             for key in h5_f.file["/Measurement_000"].attrs:
                 print("{} : {}".format(key, h5_f.file["/Measurement_000"].attrs[key]))
-                
-                
+
     @property
-    def Raw_SHO_Data(self):
+    def raw_SHO_data(self):
         """
         Retrieves the original raw Band Excitation (BE) data as a complex number array.
 
@@ -163,59 +157,60 @@ class BE_Dataset(BE_DataFed):
         with h5py.File(self.file, "r+") as h5_f:
             # Check if the dataset is 'Raw_Data'
             if self.dataset_name == "Raw_Data":
-                # Directly return the 'Raw_Data' from the HDF5 file
-                return h5_f["Measurement_000"]["Channel_000"]["Raw_Data"][:]
+            # Directly return the 'Raw_Data' from the HDF5 file
+                name = self.dataset_name
             else:
                 # If not 'Raw_Data', find the dataset that matches the noise-specific name
                 name = find_measurement(
                     self.file, f"original_data_{self.noise}STD", group=self.basegroup
                 )
                 # Return the matched dataset
-                return h5_f["Measurement_000"]["Channel_000"][name][:]        
-            
+                return h5_f["Measurement_000"]["Channel_000"][name][:]
+
     @property
     def num_pix(self):
         """Number of pixels in the data"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f["Measurement_000"].attrs["num_pix"] 
-    
+            return h5_f["Measurement_000"].attrs["num_pix"]
+
     @property
     def num_bins(self):
         """Number of frequency bins in the data"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"].attrs["num_bins"]
-        
+
     @property
     def frequency_bin(self):
         """Frequency bin vector in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"]["Channel_000"]["Bin_Frequencies"][:]
-        
+
     @property
     def be_center_frequency(self):
         """BE center frequency in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"].attrs["BE_center_frequency_[Hz]"]
-        
+
     @property
     def be_bandwidth(self):
         """BE bandwidth in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"].attrs["BE_band_width_[Hz]"]
-        
+
     @property
     def be_waveform(self):
         """BE excitation waveform"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"]["Channel_000"]["Excitation_Waveform"][:]
-        
+
     @property
     def be_repeats(self):
         """Number of BE repeats"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"].attrs["BE_repeats"]
-        
-    
+
+
+    #TODO: Josh look into this.
     @property
     def num_cycles(self):
         """
@@ -234,9 +229,8 @@ class BE_Dataset(BE_DataFed):
             # Retrieve the number of cycles from the attributes of "Measurement_000"
             cycles = h5_f["Measurement_000"].attrs["VS_number_of_cycles"]
 
+            # JGODDY comments this out for now
 
-            # JGODDY comments this out for now 
-            
             # Check if the measurement was performed 'in and out-of-field'
             # If so, double the number of cycles to account for both directions
             # if (
@@ -247,16 +241,16 @@ class BE_Dataset(BE_DataFed):
 
             # Return the total number of cycles
             return cycles
-        
+
+    # TODO: Voltage steps should not be hardcoded.
     @property
     def dc_voltage(self):
         """Gets the DC voltage vector"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f[f"Raw_Data_SHO_Fit/Raw_Data-SHO_Fit_000/Spectroscopic_Values"][
+            return h5_f[f"{self.raw_data_path}/Spectroscopic_Values"][
                 0, 1::2
             ]
 
-        
     @property
     def get_voltage(self):
         """
@@ -265,11 +259,13 @@ class BE_Dataset(BE_DataFed):
         Returns:
             np.array: voltage vector
         """
-        
-        # TODO: Look for a way to refactor and not hard code. 
+
+        # TODO: Look for a way to refactor and not hard code.
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f['Measurement_000']['Channel_000']['UDVS'][::2][:, 1][24:120] * -1
-    
+            return (
+                h5_f["Measurement_000"]["Channel_000"]["UDVS"][::2][:, 1][24:120] * -1
+            )
+
     @property
     def voltage_steps(self):
         """Number of DC voltage steps"""
@@ -287,25 +283,25 @@ class BE_Dataset(BE_DataFed):
                         == "in and out-of-field"
                         else 1
                     )
-                )    
-        
+                )
+
     @property
     def spectroscopic_length(self):
         """Gets the length of the spectroscopic vector"""
-        return self.num_bins * self.voltage_steps    
-    
+        return self.num_bins * self.voltage_steps
+
     @property
     def sampling_rate(self):
         """Sampling rate in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"].attrs["IO_rate_[Hz]"]
-        
+
     @property
     def spectroscopic_values(self):
         """Spectroscopic values"""
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f["Measurement_000"]["Channel_000"]["Spectroscopic_Values"][:]
-        
+
     @property
     def hysteresis_waveform(self, loop_number=2):
         """Gets the hysteresis waveform"""
@@ -318,7 +314,7 @@ class BE_Dataset(BE_DataFed):
                     int(self.voltage_steps / loop_number) :
                 ]
             )
-    
+
     @property
     def get_pos_dims(self):
         """
@@ -395,8 +391,6 @@ class BE_Dataset(BE_DataFed):
 
             return spec_dim
 
-              
-            
     def generate_noisy_data_records(
         self,
         noise_levels,
@@ -428,7 +422,7 @@ class BE_Dataset(BE_DataFed):
 
         # Compute the noise standard deviation if it is not provided
         if noise_STD is None:
-            noise_STD = np.std(self.Raw_SHO_Data)
+            noise_STD = np.std(self.raw_SHO_data)
 
         if verbose:
             print(f"The STD of the data is: {noise_STD}")
@@ -459,7 +453,7 @@ class BE_Dataset(BE_DataFed):
                 noise = noise_real + noise_imag * 1.0j
 
                 # Add the generated noise to the original data
-                data = self.Raw_SHO_Data + noise
+                data = self.raw_SHO_data + noise
 
                 # Find the original dataset in the HDF5 file
                 h5_main = usid.hdf_utils.find_dataset(h5_f, "Raw_Data")[0]
@@ -479,8 +473,8 @@ class BE_Dataset(BE_DataFed):
                     h5_spec_vals=h5_main.h5_spec_vals,  # Spectroscopic values
                     compression="gzip",
                 )  # Compression type for storage
-                
-    # this should maybe go in a separate 'preprocessing' class 
+
+    # this should maybe go in a separate 'preprocessing' class
     def SHO_Fitter(
         self,
         force=False,
@@ -639,12 +633,11 @@ class BE_Dataset(BE_DataFed):
             else:
                 return sho_fitter
 
+    # @static_state_decorator
+    # @profile
 
-    #@static_state_decorator
-    #@profile
-    
     # does this have the static_state_decorator in the original code?
-    
+
     def set_raw_data(self):
         """
         set_raw_data Function that parses the datafile and extracts the raw data names
@@ -677,11 +670,10 @@ class BE_Dataset(BE_DataFed):
                 ].reshape(self.num_pix, self.voltage_steps, self.num_bins)
 
                 self.raw_datasets.extend([dataset.name.split("/")[-1]])
-                
-                
+
     # From JGoddy: I don't think we actually use this data_writer function since
-    # I never uncommented it but I'm putting it here for now (still uncommented) 
-    
+    # I never uncommented it but I'm putting it here for now (still uncommented)
+
     # def data_writer(self, base, name, data):
     #     """
     #     data_writer function to write data to an USID dataset
@@ -706,9 +698,9 @@ class BE_Dataset(BE_DataFed):
     #             make_dataset(h5_f[base],
     #                          name,
     #                          data)
-    
-    # this function replaces: 
-    # set_SHO_LSQF (self.SHO_LSQF_data) 
+
+    # this function replaces:
+    # set_SHO_LSQF (self.SHO_LSQF_data)
     # set_raw_data (self.raw_data_reshaped)
     def set_SHO_LSQF(self):
         """
@@ -718,15 +710,15 @@ class BE_Dataset(BE_DataFed):
         # initializes the dictionary
         self.SHO_LSQF_data = {}
         self.raw_data_reshaped = {}
-        
-        with h5py.File(self.file, "r+") as h5_f:
-            self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(h5_f[f"{self.dataset_name}-SHO_Fit_000/Fit"][:])[:,:,:-1] 
-            
-            self.raw_data_reshaped[self.dataset_name] = h5_f[f"Measurement_000/Channel_000/{self.dataset_name}"][:].reshape(
-                self.num_pix, self.voltage_steps, self.num_bins
-            )
-                        
 
+        with h5py.File(self.file, "r+") as h5_f:
+            self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(
+                h5_f[f"{self.dataset_name}-SHO_Fit_000/Fit"][:]
+            )[:, :, :-1]
+
+            self.raw_data_reshaped[self.dataset_name] = h5_f[
+                f"Measurement_000/Channel_000/{self.dataset_name}"
+            ][:].reshape(self.num_pix, self.voltage_steps, self.num_bins)
 
         # for dataset in self.raw_datasets:
         #     # data groups in file
@@ -762,8 +754,7 @@ class BE_Dataset(BE_DataFed):
         #             print("*"*20)
         #             print("Traceback:")
         #             print(traceback.format_exc())
-        
-      
+
     # JGoddy put this function here because it relates the the h5 files
     # but it doesn't actually use the h5 file so maybe it should be elsewhere?
     def get_loop_path(self):
@@ -775,22 +766,23 @@ class BE_Dataset(BE_DataFed):
         """
 
         if self.noise == 0 or self.noise is None:
-            prefix = 'Raw_Data'
+            prefix = "Raw_Data"
             return f"Measurement_000/{prefix}-SHO_Fit_000/Fit-Loop_Fit_000"
         else:
             prefix = f"Noisy_Data_{self.noise}"
             return f"/Noisy_Data_{self.noise}_SHO_Fit/Noisy_Data_{self.noise}-SHO_Fit_000/Guess-Loop_Fit_000"
-      
+
     @static_state_decorator
-    def get_hysteresis(self,
-                       fits = False,
-                       noise=None,
-                       plotting_values=False,
-                       output_shape=None,
-                       scaled=None,
-                       loop_interpolated=None,
-                       measurement_state=None,
-                       ):
+    def get_hysteresis(
+        self,
+        fits=False,
+        noise=None,
+        plotting_values=False,
+        output_shape=None,
+        scaled=None,
+        loop_interpolated=None,
+        measurement_state=None,
+    ):
         """
         get_hysteresis function to get the hysteresis loops
 
@@ -812,7 +804,6 @@ class BE_Dataset(BE_DataFed):
             self.measurement_state = measurement_state
 
         with h5py.File(self.file, "r+") as h5_f:
-
             # sets the noise value
             if noise is None:
                 self.noise = noise
@@ -834,42 +825,44 @@ class BE_Dataset(BE_DataFed):
 
             if fits is False:
                 # gets the projected loops
-                h5_projected_loops = h5_f[ h5_path + '/Projected_Loops']
+                h5_projected_loops = h5_f[h5_path + "/Projected_Loops"]
             else:
-                h5_projected_loops = h5_f[ h5_path + '/Fit']
+                h5_projected_loops = h5_f[h5_path + "/Fit"]
 
             # Prepare some variables for plotting loops fits and guesses
             # Plot the Loop Guess and Fit Results
             proj_nd, _ = reshape_to_n_dims(h5_projected_loops)
 
-            spec_ind = get_auxiliary_datasets(h5_projected_loops,
-                                              aux_dset_name='Spectroscopic_Indices')[-1]
-            spec_values = get_auxiliary_datasets(h5_projected_loops,
-                                                 aux_dset_name='Spectroscopic_Values')[-1]
-            pos_ind = get_auxiliary_datasets(h5_projected_loops,
-                                             aux_dset_name='Position_Indices')[-1]
+            spec_ind = get_auxiliary_datasets(
+                h5_projected_loops, aux_dset_name="Spectroscopic_Indices"
+            )[-1]
+            spec_values = get_auxiliary_datasets(
+                h5_projected_loops, aux_dset_name="Spectroscopic_Values"
+            )[-1]
+            pos_ind = get_auxiliary_datasets(
+                h5_projected_loops, aux_dset_name="Position_Indices"
+            )[-1]
 
             pos_nd, _ = reshape_to_n_dims(pos_ind, h5_pos=pos_ind)
-            pos_dims = list(pos_nd.shape[:pos_ind.shape[1]])
+            pos_dims = list(pos_nd.shape[: pos_ind.shape[1]])
 
             # reshape the vdc_vec into DC_step by Loop
             spec_nd, _ = reshape_to_n_dims(spec_values, h5_spec=spec_ind)
             loop_spec_dims = np.array(spec_nd.shape[1:])
-            loop_spec_labels = sidpy.hdf.hdf_utils.get_attr(spec_values, 'labels')
+            loop_spec_labels = sidpy.hdf.hdf_utils.get_attr(spec_values, "labels")
 
-            spec_step_dim_ind = np.where(loop_spec_labels == 'DC_Offset')[0][0]
+            spec_step_dim_ind = np.where(loop_spec_labels == "DC_Offset")[0][0]
 
             # Also reshape the projected loops to Positions-DC_Step-Loop
-            final_loop_shape = pos_dims + \
-                [loop_spec_dims[spec_step_dim_ind]] + [-1]
+            final_loop_shape = pos_dims + [loop_spec_dims[spec_step_dim_ind]] + [-1]
             proj_nd2 = np.moveaxis(
-                proj_nd, spec_step_dim_ind + len(pos_dims), len(pos_dims))
+                proj_nd, spec_step_dim_ind + len(pos_dims), len(pos_dims)
+            )
             proj_nd_3 = np.reshape(proj_nd2, final_loop_shape)
 
             # Get the bias vector:
-            spec_nd2 = np.moveaxis(
-                spec_nd[spec_step_dim_ind], spec_step_dim_ind, 0)
-            bias_vec = np.reshape(spec_nd2, final_loop_shape[len(pos_dims):])
+            spec_nd2 = np.moveaxis(spec_nd[spec_step_dim_ind], spec_step_dim_ind, 0)
+            bias_vec = np.reshape(spec_nd2, final_loop_shape[len(pos_dims) :])
 
             if plotting_values:
                 proj_nd_3, bias_vec = self.roll_hysteresis(bias_vec, proj_nd_3)
@@ -882,19 +875,21 @@ class BE_Dataset(BE_DataFed):
 
             # transforms the data with the scaler if necessary.
             if self.scaled:
-                hysteresis_data = self.hysteresis_scaler_.transform(
-                    hysteresis_data)
+                hysteresis_data = self.hysteresis_scaler_.transform(hysteresis_data)
 
             # sets the data to the correct output shape
             if self.output_shape == "index":
                 hysteresis_data = proj_nd_3.reshape(
-                    self.num_cycles*self.num_pix, self.voltage_steps//self.num_cycles)
+                    self.num_cycles * self.num_pix,
+                    self.voltage_steps // self.num_cycles,
+                )
             elif self.output_shape == "pixels":
                 pass
 
-            hysteresis_data = self.hysteresis_measurement_state(
-                hysteresis_data)
+            hysteresis_data = self.hysteresis_measurement_state(hysteresis_data)
 
         # output shape (x,y, cycle, voltage_steps)
         # bias_vec
-        return hysteresis_data, np.swapaxes(np.atleast_2d(self.get_voltage), 0, 1).astype(np.float64)
+        return hysteresis_data, np.swapaxes(
+            np.atleast_2d(self.get_voltage), 0, 1
+        ).astype(np.float64)

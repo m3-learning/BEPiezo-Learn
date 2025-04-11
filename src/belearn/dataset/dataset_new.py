@@ -172,8 +172,8 @@ class BE_Dataset(BE_DataFed):
                 name = find_measurement(
                     self.file, f"original_data_{self.noise}STD", group=self.basegroup
                 )
-                # Return the matched dataset
-                return h5_f[f"{self.basegroup}"][name][:]
+            # Return the matched dataset
+            return h5_f[f"{self.basegroup}"][name][:]
 
     @property
     def num_pix(self):

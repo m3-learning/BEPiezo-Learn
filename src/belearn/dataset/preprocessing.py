@@ -1,6 +1,6 @@
 from belearn.dataset.dataset_new import BE_Dataset
 from belearn.dataset.scalers import Raw_Data_Scaler
-from belearn.dataset.State import static_state_decorator, context_manager_decorator
+from belearn.util.wrappers import static_state_decorator, context_manager_decorator
 from m3util.util.h5 import find_groups_with_string
 from m3util.util.search import in_list
 import h5py

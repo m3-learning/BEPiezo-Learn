@@ -22,7 +22,7 @@ from pyUSID.io.hdf_utils import reshape_to_n_dims, get_auxiliary_datasets
 from dataclasses import dataclass
 from typing import Optional, Union
 from pathlib import Path
-from belearn.util.wrappers import static_state_decorator
+from belearn.util.wrappers import static_state_decorator, context_manager_decorator
 from belearn.filters.filters import clean_interpolate
 
 
@@ -61,6 +61,13 @@ class BE_Dataset(BE_DataFed):
     datafed: Optional[Union[None, str, Path]] = None
     basegroup: str = "/Measurement_000/Channel_000"
     raw_data_path: str = "Raw_Data_SHO_Fit/Raw_Data-SHO_Fit_000"
+    measurement_data_path: str = "Measurement_Data/Measurement_Data-000"
+    measurement: str = "Measurement_000"
+    SHO_fit_relative_base_path: str = "SHO_Fit-000"
+    SHO_hysteresis_loop_fit_name: str = "Fit-Loop_Fit_000"
+    SHO_hysteresis_loop_guess_name: str = "Guess-Loop_Fit_000"
+
+
     """
     A class to represent a h5 file.
 
@@ -101,7 +108,7 @@ class BE_Dataset(BE_DataFed):
         with h5py.File(self.file, "r+") as h5_f:
             return get_tree(h5_f)
 
-    # @property
+    @property
     def print_be_tree(self):
         """Utility file to print the Tree of a BE Dataset
 
@@ -124,17 +131,17 @@ class BE_Dataset(BE_DataFed):
             print("\nThe main dataset:\n------------------------------------")
             print(h5_f)
             print("\nThe ancillary datasets:\n------------------------------------")
-            print(h5_f.file["/Measurement_000/Channel_000/Position_Indices"])
-            print(h5_f.file["/Measurement_000/Channel_000/Position_Values"])
-            print(h5_f.file["/Measurement_000/Channel_000/Spectroscopic_Indices"])
-            print(h5_f.file["/Measurement_000/Channel_000/Spectroscopic_Values"])
+            print(h5_f.file[f"{self.basegroup}/Position_Indices"])
+            print(h5_f.file[f"{self.basegroup}/Position_Values"])
+            print(h5_f.file[f"{self.basegroup}/Spectroscopic_Indices"])
+            print(h5_f.file[f"{self.basegroup}/Spectroscopic_Values"])
 
             print(
                 "\nMetadata or attributes in a datagroup\n------------------------------------"
             )
 
-            for key in h5_f.file["/Measurement_000"].attrs:
-                print("{} : {}".format(key, h5_f.file["/Measurement_000"].attrs[key]))
+            for key in h5_f.file[self.measurement].attrs:
+                print("{} : {}".format(key, h5_f.file[self.measurement].attrs[key]))
                 
     # This function was called get_original_data in the old code           
     @property
@@ -143,25 +150,7 @@ class BE_Dataset(BE_DataFed):
         Retrieves the original raw Band Excitation (BE) data as a complex number array.
 
         This property accesses the raw data from an HDF5 file. Depending on the dataset
-        specified, it eithe
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        r retrieves the data directly from the 'Raw_Data' dataset or
+        specified, it either retrieves the data directly from the 'Raw_Data' dataset or
         searches for a dataset that matches a noise-specific naming convention.
 
         Returns:
@@ -184,49 +173,49 @@ class BE_Dataset(BE_DataFed):
                     self.file, f"original_data_{self.noise}STD", group=self.basegroup
                 )
                 # Return the matched dataset
-                return h5_f["Measurement_000"]["Channel_000"][name][:]
+                return h5_f[f"{self.basegroup}"][name][:]
 
     @property
     def num_pix(self):
         """Number of pixels in the data"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f["Measurement_000"].attrs["num_pix"]
+            return h5_f[self.measurement].attrs["num_pix"]
 
     @property
     def num_bins(self):
         """Number of frequency bins in the data"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f["Measurement_000"].attrs["num_bins"]
+            return h5_f[self.measurement].attrs["num_bins"]
 
     @property
     def frequency_bin(self):
         """Frequency bin vector in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f["Measurement_000"]["Channel_000"]["Bin_Frequencies"][:]
+            return h5_f[self.basegroup]["Bin_Frequencies"][:]
 
     @property
     def be_center_frequency(self):
         """BE center frequency in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f["Measurement_000"].attrs["BE_center_frequency_[Hz]"]
+            return h5_f[self.measurement].attrs["BE_center_frequency_[Hz]"]
 
     @property
     def be_bandwidth(self):
         """BE bandwidth in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f["Measurement_000"].attrs["BE_band_width_[Hz]"]
+            return h5_f[self.measurement].attrs["BE_band_width_[Hz]"]
 
     @property
     def be_waveform(self):
         """BE excitation waveform"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f["Measurement_000"]["Channel_000"]["Excitation_Waveform"][:]
+            return h5_f[self.basegroup]["Excitation_Waveform"][:]
 
     @property
     def be_repeats(self):
         """Number of BE repeats"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f["Measurement_000"].attrs["BE_repeats"]
+            return h5_f[self.measurement].attrs["BE_repeats"]
 
 
     #TODO: Josh look into this.
@@ -245,17 +234,17 @@ class BE_Dataset(BE_DataFed):
 
         # Open the HDF5 file in read/write mode
         with h5py.File(self.file, "r+") as h5_f:
-            # Retrieve the number of cycles from the attributes of "Measurement_000"
-            cycles = h5_f["Measurement_000"].attrs["VS_number_of_cycles"]
+            # Retrieve the number of cycles from the attributes of "self.measurement"
+            cycles = h5_f[self.measurement].attrs["VS_number_of_cycles"]
 
             # JGODDY comments this out for now
 
             # Check if the measurement was performed 'in and out-of-field'
             # If so, double the number of cycles to account for both directions
             # if (
-            #     h5_f["Measurement_000"].attrs["VS_measure_in_field_loops"]
+            #     h5_f[self.measurement].attrs["VS_measure_in_field_loops"]
             #     == "in and out-of-field"
-            # ):
+            # ): # VS_measure_in_field_loops = 2
             #     cycles *= 2
 
             # Return the total number of cycles
@@ -282,7 +271,7 @@ class BE_Dataset(BE_DataFed):
         # TODO: Look for a way to refactor and not hard code.
         with h5py.File(self.file, "r+") as h5_f:
             return (
-                h5_f["Measurement_000"]["Channel_000"]["UDVS"][::2][:, 1][24:120] * -1
+                h5_f[self.basegroup]["UDVS"][::2][:, 1][24:120] * -1
             )
 
     @property
@@ -290,15 +279,15 @@ class BE_Dataset(BE_DataFed):
         """Number of DC voltage steps"""
         with h5py.File(self.file, "r+") as h5_f:
             try:
-                return h5_f["Measurement_000"].attrs["num_udvs_steps"]
+                return h5_f[self.measurement].attrs["num_udvs_steps"]
             except:
                 # computes the number of voltage steps for datasets that do not contain the attribute
                 return (
-                    h5_f["Measurement_000"].attrs["VS_steps_per_full_cycle"]
-                    * h5_f["Measurement_000"].attrs["VS_number_of_cycles"]
+                    h5_f[self.measurement].attrs["VS_steps_per_full_cycle"]
+                    * h5_f[self.measurement].attrs["VS_number_of_cycles"]
                     * (
                         2
-                        if h5_f["Measurement_000"].attrs["VS_measure_in_field_loops"]
+                        if h5_f[self.measurement].attrs["VS_measure_in_field_loops"]
                         == "in and out-of-field"
                         else 1
                     )
@@ -313,13 +302,13 @@ class BE_Dataset(BE_DataFed):
     def sampling_rate(self):
         """Sampling rate in Hz"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f["Measurement_000"].attrs["IO_rate_[Hz]"]
+            return h5_f[self.measurement].attrs["IO_rate_[Hz]"]
 
     @property
     def spectroscopic_values(self):
         """Spectroscopic values"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f["Measurement_000"]["Channel_000"]["Spectroscopic_Values"][:]
+            return h5_f[self.basegroup]["Spectroscopic_Values"][:]
 
     @property
     def hysteresis_waveform(self, loop_number=2):
@@ -334,6 +323,10 @@ class BE_Dataset(BE_DataFed):
                 ]
             )
 
+    # this function is very similar to get_spec_dims right below. 
+    # the only difference is "pos" vs "spec". 
+    # If I combine them it would make the code shorter but I would maybe need a way to select between the two
+    # so it doesn't waste time getting the position/spectroscopic dimensions if I don't need them.
     @property
     def get_pos_dims(self):
         """
@@ -413,7 +406,7 @@ class BE_Dataset(BE_DataFed):
     def generate_noisy_data_records(
         self,
         noise_levels,
-        basegroup="/Measurement_000/Channel_000",
+        # basegroup="/Measurement_000/Channel_000", # now self.basegroup
         verbose=False,
         noise_STD=None,
     ):
@@ -479,7 +472,7 @@ class BE_Dataset(BE_DataFed):
 
                 # Write the noisy data to the HDF5 file
                 usid.hdf_utils.write_main_dataset(
-                    h5_f[basegroup],  # Parent group where data is saved
+                    h5_f[self.basegroup],  # Parent group where data is saved
                     data,  # Noisy data to be written
                     f"Noisy_Data_{noise_level}",  # Name for the noisy dataset
                     "Piezoresponse",  # Physical quantity being measured
@@ -544,7 +537,9 @@ class BE_Dataset(BE_DataFed):
             start_time_lsqf = time.time()
 
             # Split the directory path and the file name from the full file path
-            (data_dir, filename) = os.path.split(self.file)
+            # JGoddy commented out the line below because I don't think either
+            # data_dir or filename are used anywhere in the code.
+            #(data_dir, filename) = os.path.split(self.file)
 
             if self.file.endswith(".h5"):
                 # If the file is an HDF5 file, set the HDF5 path
@@ -652,43 +647,44 @@ class BE_Dataset(BE_DataFed):
             else:
                 return sho_fitter
 
-    # @static_state_decorator
-    # @profile
+ 
 
-    # does this have the static_state_decorator in the original code?
+    # this function and set_SHO_LSQF are replaced by the new set_SHO_LSQF function 
+    # in the new code
+    # I'll leave it here for now but no longer edit it 
+    # @context_manager_decorator
+    # def set_raw_data(self):
+    #     """
+    #     set_raw_data Function that parses the datafile and extracts the raw data names
+    #     """
 
-    def set_raw_data(self):
-        """
-        set_raw_data Function that parses the datafile and extracts the raw data names
-        """
+    #     with h5py.File(self.file, "r+") as h5_f:
+    #         # initializes the dictionary
+    #         self.raw_data_reshaped = {}
 
-        with h5py.File(self.file, "r+") as h5_f:
-            # initializes the dictionary
-            self.raw_data_reshaped = {}
+    #         # list of datasets to be read
+    #         datasets = []
+    #         self.raw_datasets = []
 
-            # list of datasets to be read
-            datasets = []
-            self.raw_datasets = []
+    #         # Finds all the datasets
+    #         datasets.extend(
+    #             usid.hdf_utils.find_dataset(
+    #                 h5_f["Measurement_000/Channel_000"], "Noisy"
+    #             )
+    #         )
+    #         datasets.extend(
+    #             usid.hdf_utils.find_dataset(
+    #                 h5_f["Measurement_000/Channel_000"], "Raw_Data"
+    #             )
+    #         )
 
-            # Finds all the datasets
-            datasets.extend(
-                usid.hdf_utils.find_dataset(
-                    h5_f["Measurement_000/Channel_000"], "Noisy"
-                )
-            )
-            datasets.extend(
-                usid.hdf_utils.find_dataset(
-                    h5_f["Measurement_000/Channel_000"], "Raw_Data"
-                )
-            )
+    #         # loops around all the datasets and stores them reshaped in a dictionary
+    #         for dataset in datasets:
+    #             self.raw_data_reshaped[dataset.name.split("/")[-1]] = dataset[
+    #                 :
+    #             ].reshape(self.num_pix, self.voltage_steps, self.num_bins)
 
-            # loops around all the datasets and stores them reshaped in a dictionary
-            for dataset in datasets:
-                self.raw_data_reshaped[dataset.name.split("/")[-1]] = dataset[
-                    :
-                ].reshape(self.num_pix, self.voltage_steps, self.num_bins)
-
-                self.raw_datasets.extend([dataset.name.split("/")[-1]])
+    #             self.raw_datasets.extend([dataset.name.split("/")[-1]])
 
     # From JGoddy: I don't think we actually use this data_writer function since
     # I never uncommented it but I'm putting it here for now (still uncommented)
@@ -732,11 +728,11 @@ class BE_Dataset(BE_DataFed):
 
         with h5py.File(self.file, "r+") as h5_f:
             self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(
-                h5_f[f"{self.dataset_name}-SHO_Fit_000/Fit"][:]
+                h5_f[f"{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"][:]
             )[:, :, :-1]
 
             self.raw_data_reshaped[self.dataset_name] = h5_f[
-                f"Measurement_000/Channel_000/{self.dataset_name}"
+                f"{self.basegroup}/{self.dataset_name}"
             ][:].reshape(self.num_pix, self.voltage_steps, self.num_bins)
 
         # for dataset in self.raw_datasets:
@@ -786,10 +782,10 @@ class BE_Dataset(BE_DataFed):
 
         if self.noise == 0 or self.noise is None:
             prefix = "Raw_Data"
-            return f"Measurement_000/{prefix}-SHO_Fit_000/Fit-Loop_Fit_000"
+            return f"{self.measurement}/{prefix}-{self.SHO_fit_relative_base_path}/{self.SHO_hysteresis_loop_fit_name}"
         else:
             prefix = f"Noisy_Data_{self.noise}"
-            return f"/Noisy_Data_{self.noise}_SHO_Fit/Noisy_Data_{self.noise}-SHO_Fit_000/Guess-Loop_Fit_000"
+            return f"/Noisy_Data_{self.noise}_SHO_Fit/Noisy_Data_{self.noise}-{self.SHO_fit_relative_base_path}/{self.SHO_hysteresis_loop_guess_name}"
 
     @static_state_decorator
     def get_hysteresis(

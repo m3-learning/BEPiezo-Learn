@@ -6,6 +6,7 @@ from belearn.dataset.dataset_new import BE_Dataset
 from belearn.dataset.model_utils import BE_model_utils
 from belearn.util.wrappers import context_manager_decorator
 from belearn.dataset.analytics import get_rankings, MSE
+from belearn.dataset.transformers import to_real_imag, to_complex
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -979,7 +980,7 @@ class Viz(BE_model_utils):
                 # ax.ticklabel_format(axis="x", style="sci", scilimits=(0, 0),useMathText=True)
                 # ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0),useMathText=True)
                 
-                set_sci_notation_label(ax,axis="x",corner="bottom right")
+                set_sci_notation_label(ax,axis="x",corner="bottom right") 
                 set_sci_notation_label(ax,axis="y",corner="top left")
 
                 
@@ -1536,7 +1537,7 @@ class Viz(BE_model_utils):
                 compare_state=compare_state,
                 **kwargs,
             )
-            #print("index1", index1)
+            print("index1", index1)
             fig, ax = subfigures(1, 3, gaps=gaps, size=size)
 
             for i, (true, prediction, error) in enumerate(zip(d1, d2, mse1)):
@@ -1577,8 +1578,8 @@ class Viz(BE_model_utils):
                     -1 * (gaps[0] + size[0]) * ((2 - i) % 3) + size[0] / 2,
                     (gaps[1] + size[1]) * (1.25 - i // 3 - 1.25) - gaps[1],
                 )
-               # text = f"Index: {index1[i]}, MSE: {error:0.4f}"
-                text = f"MSE: {error:0.4f}"
+                text = f"Index: {index1[i]}, MSE: {error:0.4f}"
+               # text = f"MSE: {error:0.4f}"
 
                 add_text_to_figure(
                     fig, text, text_position_in_inches, fontsize=6, ha="center"
@@ -1685,7 +1686,7 @@ class Viz(BE_model_utils):
     ):
         def data_converter(data):
             # converts to a standard form which is a list
-            data = self.to_real_imag(data)
+            data = to_real_imag(data)
 
             try:
                 # converts to numpy from tensor
@@ -1842,7 +1843,7 @@ class Viz(BE_model_utils):
         current_state = self.get_state
 
         def convert_to_mag(data):
-            data = self.to_complex(data, axis=1)
+            data = to_complex(data, axis=1)
             data = self.raw_data_scaler.inverse_transform(data)
             data = [np.abs(data), np.angle(data)] #this to_magnitude function was only one line so unnecessary to call it? self.to_magnitude(data)
             data = np.array(data)

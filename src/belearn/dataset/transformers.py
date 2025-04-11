@@ -39,6 +39,8 @@ def is_complex(data):
         any: array or tensor as a complex number
     """
 
+    data = data[0]
+    
     if type(data) == torch.Tensor:
         complex_ = data.is_complex()
 
@@ -47,3 +49,26 @@ def is_complex(data):
         complex_ = complex_.any()
 
     return complex_
+
+def to_real_imag(data):
+        """
+        Extracts the real and imaginary components from band excitation (BE) data.
+
+        This function takes in BE data, which may be in either a NumPy array or a PyTorch
+        tensor format, converts it to its complex form, and then separates the real and
+        imaginary parts.
+
+        Args:
+            data (np.array or torch.Tensor): BE data, either as a NumPy array or a PyTorch tensor.
+
+        Returns:
+            list: A list containing two NumPy arrays: the first array represents the real
+                components, and the second array represents the imaginary components
+                of the BE response.
+        """
+
+        # Convert the data to its complex form using the to_complex method from the BE_Dataset class.
+        data = to_complex(data)
+
+        # Extract and return the real and imaginary components as a list of NumPy arrays.
+        return [np.real(data), np.imag(data)]

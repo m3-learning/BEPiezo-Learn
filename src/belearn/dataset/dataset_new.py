@@ -141,21 +141,39 @@ class BE_Dataset(BE_DataFed):
             for key in h5_f.file["/Measurement_000"].attrs:
                 print("{} : {}".format(key, h5_f.file["/Measurement_000"].attrs[key]))
                 
-                
+    # This function was called get_original_data in the old code           
     @property
     def Raw_SHO_Data(self):
         """
         Retrieves the original raw Band Excitation (BE) data as a complex number array.
 
         This property accesses the raw data from an HDF5 file. Depending on the dataset
-        specified, it either retrieves the data directly from the 'Raw_Data' dataset or
+        specified, it eithe
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        r retrieves the data directly from the 'Raw_Data' dataset or
         searches for a dataset that matches a noise-specific naming convention.
 
         Returns:
             np.array: The BE data as a complex number array.
 
         Example:
-            data = obj.get_original_data
+            data = obj.Raw_SHO_Data
             This will retrieve the raw BE data from the HDF5 file.
         """
 

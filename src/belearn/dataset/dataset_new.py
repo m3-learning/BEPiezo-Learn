@@ -26,7 +26,7 @@ from belearn.util.wrappers import static_state_decorator, context_manager_decora
 from belearn.filters.filters import clean_interpolate
 
 
-from belearn.dataset.datafed import BE_DataFed
+from belearn.dataset.Datafed import BE_DataFed
 
 # THIS IS OUTDATED
 # functions in BE_Dataset class:

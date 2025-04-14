@@ -1,5 +1,5 @@
 import numpy as np
-from autophyslearn.spectroscopic.nn import Multiscale1DFitter
+#from autophyslearn.spectroscopic.nn import Multiscale1DFitter
 import torch
 from torch import nn
 

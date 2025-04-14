@@ -727,8 +727,14 @@ class Viz(BE_model_utils):
 
         # Display the legend if requested
         if legend:
-            handles = [ax_mag.lines[0],ax_mag.lines[1], ax_phase.lines[0], ax_phase.lines[1], 
-                       ax_real.lines[0], ax_real.lines[1], ax_imag.lines[0], ax_imag.lines[1]]
+            # for now, hard code if len(ax_mag.lines) == 2 or 1? what if its more than 2? should I loop over however
+            # many lines there are? what is the best way to do this?
+            try: 
+                handles = [ax_mag.lines[0],ax_mag.lines[1], ax_phase.lines[0], ax_phase.lines[1], 
+                           ax_real.lines[0], ax_real.lines[1], ax_imag.lines[0], ax_imag.lines[1]]
+            except:
+                handles = [ax_mag.lines[0], ax_phase.lines[0], ax_real.lines[0], ax_imag.lines[0]]
+            
             labels = [h.get_label() for h in handles]
             fig.legend(handles, labels, bbox_to_anchor=(1.0, 1), loc="upper right", borderaxespad=0.1)
 

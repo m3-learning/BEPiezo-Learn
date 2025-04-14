@@ -63,7 +63,7 @@ class BE_Dataset(BE_DataFed):
     raw_data_path: str = "Raw_Data_SHO_Fit/Raw_Data-SHO_Fit_000"
     measurement_data_path: str = "Measurement_Data/Measurement_Data-000"
     measurement: str = "Measurement_000"
-    SHO_fit_relative_base_path: str = "SHO_Fit-000"
+    SHO_fit_relative_base_path: str = "SHO_Fit_000"
     SHO_hysteresis_loop_fit_name: str = "Fit-Loop_Fit_000"
     SHO_hysteresis_loop_guess_name: str = "Guess-Loop_Fit_000"
 

@@ -5,7 +5,7 @@ import torch
 import numpy as np
 from dataclasses import dataclass
 #from belearn.viz.viz_new import Viz
-from autophyslearn.spectroscopic.nn_new import Model
+from autophyslearn.spectroscopic.nn import Model
 
 
 @dataclass

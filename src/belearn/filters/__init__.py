@@ -1,5 +1,7 @@
 # Auto-generated __init__.py
 
-from . import filters
+from belearn.filters import filters
 
-__all__ = ['filters']
+from belearn.filters.filters import (clean_interpolate,)
+
+__all__ = ['clean_interpolate', 'filters']

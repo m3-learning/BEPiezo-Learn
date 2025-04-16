@@ -7,7 +7,7 @@ import h5py
 import numpy as np
 import torch
 from belearn.functions.sho import SHO_nn
-from belearn.dataset.dataset_new import BE_Dataset
+from belearn.dataset.dataset import BE_Dataset
 from belearn.dataset.preprocessing import Preprocessing
 from contextlib import contextmanager
 from functools import wraps

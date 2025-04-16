@@ -20,7 +20,7 @@ from belearn import util
 
 from belearn.dataset import (BE_DataFed, BE_Dataset, BE_model_utils, Datafed,
                              MSE, Preprocessing, Raw_Data_Scaler, State,
-                             analytics, dataset, dataset_new, get_rankings,
+                             analytics, dataset, get_rankings,
                              instantiate_datafed, is_complex, model_utils,
                              mse_rankings, preprocessing, print_mse, scalers,
                              to_complex, to_real_imag, transformers,)
@@ -39,7 +39,7 @@ __all__ = ['BEInference', 'BE_DataFed', 'BE_Dataset', 'BE_model_utils',
            'Raw_Data_Scaler', 'SHO_nn', 'State', 'analysis', 'analytics',
            'clean_interpolate', 'clear_all_tensors',
            'context_manager_decorator', 'convert_csv_df', 'create_models',
-           'dataset', 'dataset_new', 'filters', 'find_best_model', 'functions',
+           'dataset', 'filters', 'find_best_model', 'functions',
            'get_model', 'get_rankings', 'hysteresis', 'hysteresis_nn',
            'inference', 'instantiate_datafed', 'instantiate_fitter',
            'instantiate_model', 'is_complex', 'model_utils', 'mse_rankings',

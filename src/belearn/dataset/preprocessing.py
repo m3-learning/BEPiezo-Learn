@@ -184,6 +184,8 @@ class Preprocessing(BE_Dataset):
         self.SHO_scaler = StandardScaler()
 
         # Retrieve the SHO least squares fit (LSQF) data and reshape it for scaling
+        # I probably have to reorganize stuff because SHO_LSQF is in State.py, which inherits preprocessing.py
+        # this might be confusing
         data = self.SHO_LSQF().reshape(-1, 4)
 
         # Fit the scaler to the SHO data

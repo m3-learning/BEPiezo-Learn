@@ -1,6 +1,9 @@
 from belearn.dataset.dataset import BE_Dataset
 from belearn.dataset.scalers import Raw_Data_Scaler
 from belearn.util.wrappers import static_state_decorator, context_manager_decorator
+from belearn.filters.filters import clean_interpolate
+from m3util.ml.preprocessor import GlobalScaler
+
 from m3util.util.h5 import find_groups_with_string
 from m3util.util.search import in_list
 import h5py
@@ -197,21 +200,7 @@ class Preprocessing(BE_Dataset):
         self.SHO_scaler.scale_[3] = 1  # Set scale factor for phase to 1 (no scaling)
         
         
-    # def set_preprocessing(self):
-    #     """
-    #     set_preprocessing searches the dataset to see what preprocessing is required.
-    #     """
-
-    #     # does preprocessing for the SHO_fit results
-    #     if in_list(self.tree, "*SHO_Fit*"):
-    #         self.SHO_preprocessing()
-    #     else:
-    #         Warning("No SHO fit found")
-
-    #     # does preprocessing for the loop fit results
-    #     if in_list(self.tree, "*Fit-Loop_Fit*"):
-    #         self.loop_fit_preprocessing()
-        
+    
 
     def SHO_preprocessing(self):
         """
@@ -249,7 +238,54 @@ class Preprocessing(BE_Dataset):
         #     #raise e
             
 
-    
+    def set_preprocessing(self):
+        """
+        set_preprocessing searches the dataset to see what preprocessing is required.
+        """
+
+        # does preprocessing for the SHO_fit results
+        if in_list(self.tree, "*SHO_Fit*"):
+            self.SHO_preprocessing()
+        else:
+            Warning("No SHO fit found")
+
+        # does preprocessing for the loop fit results
+        if in_list(self.tree, "*Fit-Loop_Fit*"):
+            self.loop_fit_preprocessing()
+        
+        
+    @property
+    def hysteresis_scaler(self):
+        """
+        get_hysteresis_scaler gets the hysteresis scaler
+
+        Returns:
+            scaler: scaler for the hysteresis loops
+        """
+
+        return self.hysteresis_scaler_
+        
+    def loop_fit_preprocessing(self):
+        """
+        loop_fit_preprocessing preprocessing for the loop fit results
+        """
+
+        # gets the hysteresis loops
+        hysteresis, bias = self.get_hysteresis(
+            plotting_values=True, output_shape="index")
+
+        # interpolates any missing points in the data
+        cleaned_hysteresis = clean_interpolate(hysteresis)
+
+        # instantiates and computes the global scaler
+        self.hysteresis_scaler_ = GlobalScaler()
+        self.hysteresis_scaler_.fit_transform(cleaned_hysteresis)
+
+        try:
+            self.LoopParmScaler()
+        except:
+            pass
+        
                 
     def raw_data(self, pixel=None, voltage_step=None):
         """

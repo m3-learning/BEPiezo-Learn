@@ -1102,8 +1102,16 @@ class State(Preprocessing):
         """
 
         if self.measurement_state == "all" or self.measurement_state is None:
-            return hysteresis_data
+            hysteresis_data = hysteresis_data
         if self.measurement_state == "off":
-            return hysteresis_data[:, :, hysteresis_data.shape[2]//2:hysteresis_data.shape[2], :]
+            if hysteresis_data.ndim < 5:
+                hysteresis_data = hysteresis_data[:, hysteresis_data.shape[2]//2:hysteresis_data.shape[2], :]
+            else:
+                hysteresis_data = hysteresis_data[:, :, hysteresis_data.shape[2]//2:hysteresis_data.shape[2], :]
         if self.measurement_state == "on":
-            return hysteresis_data[:, :, 0:hysteresis_data.shape[2]//2, :]
+            if hysteresis_data.ndim < 5:
+                hysteresis_data = hysteresis_data[:, 0:hysteresis_data.shape[2]//2, :]
+            else:
+                hysteresis_data = hysteresis_data[:, :, 0:hysteresis_data.shape[2]//2, :]
+        
+        return hysteresis_data

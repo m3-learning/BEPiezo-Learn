@@ -1991,9 +1991,18 @@ class Viz(BE_model_utils):
         # # Select a specific cycle from the dataset, if applicable
         # if hasattr(self.dataset, "cycle") and self.dataset.cycle is not None:
         #     voltage = self.dataset.get_cycle(voltage)
-        
-        _,voltage = self.get_hysteresis()
+       
+       # JGoddy doesn't understand why the voltage came from hysteresis
+       # since this is for the SHO switching maps. I replaced with get_voltage
+       # since I think it has the correct shape and voltage values but 
+       # I'm not sure it's correct.
+       # also, see note in roll_hysteresis about how this is not the best 
+       # long term solution 
+        voltage = np.swapaxes(np.atleast_2d(self.get_voltage), 0, 1).astype(np.float64)
         voltage = self.roll_hysteresis(voltage)
+        
+        # _,voltage = self.get_hysteresis()
+        # voltage = self.roll_hysteresis(voltage)
 
         # Get indices of the voltage steps to plot
         inds = np.linspace(0, len(voltage) - 1, number_of_steps, dtype=int)

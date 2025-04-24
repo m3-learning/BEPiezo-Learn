@@ -933,6 +933,8 @@ class Viz(BE_model_utils):
         if self.Printer is not None:
             self.Printer.savefig(fig, filename, label_figs=ax, style="b")
             
+        return fig
+            
         
     #@State.static_scale_decorator
     @context_manager_decorator
@@ -2226,10 +2228,9 @@ class Viz(BE_model_utils):
         #     # gets the cycle of interest
         #     voltage = self.dataset.get_cycle(voltage)
         
-        _,voltage = self.get_hysteresis()
+        voltage = np.swapaxes(np.atleast_2d(self.get_voltage), 0, 1).astype(np.float64)
         voltage = self.roll_hysteresis(voltage)
-
-
+        
         # gets the index of the voltage steps to plot
         inds = np.linspace(0, len(voltage) - 1, number_of_steps, dtype=int)
 
@@ -2303,7 +2304,7 @@ class Viz(BE_model_utils):
                             inset_fraction=(0.2, 0.2),
                         )
 
-                    if (axis_start + j) % (4 * cols) == 1:
+                    if labels is not None and (axis_start + j) % (4 * cols) == 1:
                         ax[axis_start + j].set_ylabel(labels[k])
 
         # if add colorbars

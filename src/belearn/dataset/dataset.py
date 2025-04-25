@@ -1053,13 +1053,6 @@ class BE_Dataset(BE_DataFed):
             data = np.array([data['a_0'], data['a_1'], data['a_2'], data['a_3'], data['a_4'],
                             data['b_0'], data['b_1'], data['b_2'], data['b_3']]).transpose((1, 2, 3, 0))
 
-            ### MAJOR ORGANIZZATIONAL ISSUE ###
-            # loop_param_scaler is in preprocessing.py, which inherits BE_dataset through dataset.py
-            # hysteresis_measurement_state is in State.py, which inherits BE_dataset through preprocessing.py
-            # Therefore, this function does not have access to those attributes
-            # I had organized the code so that dataset.py was everything to do with the h5 file
-            # but that might have to change. 
-            ###################################
 
   
 

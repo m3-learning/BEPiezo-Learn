@@ -470,3 +470,12 @@ class Preprocessing(BE_Dataset):
         else:
             proj_nd_shifted = np.roll(hysteresis, shift_ind, axis=2)
             return proj_nd_shifted, bias_vector
+
+
+    def LoopParmScaler(self):
+        
+        # TODO: Could update not to be hard coded
+        self.loop_param_scaler = StandardScaler()
+        data = self.LSQF_hysteresis_params().reshape(-1, 9)
+
+        self.loop_param_scaler.fit(data)

@@ -2205,10 +2205,15 @@ class BE_Dataset:
         """
         loop_fit_preprocessing preprocessing for the loop fit results
         """
-
+        if self.scaled: 
         # gets the hysteresis loops
-        hysteresis, bias = self.get_hysteresis(
-            plotting_values=True, output_shape="index")
+            hysteresis, bias = self.get_hysteresis(
+                plotting_values=True, output_shape="index", scaled=False)
+            self.scaled = True
+        else:
+            hysteresis, bias = self.get_hysteresis(
+                plotting_values=True, output_shape="index")
+
 
         # interpolates any missing points in the data
         cleaned_hysteresis = clean_interpolate(hysteresis)

@@ -748,6 +748,8 @@ class BE_Dataset(BE_DataFed):
         # initializes the dictionary
         self.SHO_LSQF_data = {}
         self.raw_data_reshaped = {}
+        
+        print(f"{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit")
 
         with h5py.File(self.file, "r+") as h5_f:
             self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(

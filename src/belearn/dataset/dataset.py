@@ -67,7 +67,6 @@ class BE_Dataset(BE_DataFed):
     SHO_hysteresis_loop_fit_name: str = "Fit-Loop_Fit_000"
     SHO_hysteresis_loop_guess_name: str = "Guess-Loop_Fit_000"
 
-
     """
     A class to represent a h5 file.
 
@@ -142,8 +141,8 @@ class BE_Dataset(BE_DataFed):
 
             for key in h5_f.file[self.measurement].attrs:
                 print("{} : {}".format(key, h5_f.file[self.measurement].attrs[key]))
-                
-    # This function was called get_original_data in the old code           
+
+    # This function was called get_original_data in the old code
     @property
     def raw_SHO_data(self):
         """
@@ -165,7 +164,7 @@ class BE_Dataset(BE_DataFed):
         with h5py.File(self.file, "r+") as h5_f:
             # Check if the dataset is 'Raw_Data'
             if self.dataset_name == "Raw_Data":
-            # Directly return the 'Raw_Data' from the HDF5 file
+                # Directly return the 'Raw_Data' from the HDF5 file
                 name = self.dataset_name
             else:
                 # If not 'Raw_Data', find the dataset that matches the noise-specific name
@@ -217,8 +216,7 @@ class BE_Dataset(BE_DataFed):
         with h5py.File(self.file, "r+") as h5_f:
             return h5_f[self.measurement].attrs["BE_repeats"]
 
-
-    #TODO: Josh look into this.
+    # TODO: Josh look into this.
     @property
     def num_cycles(self):
         """
@@ -255,9 +253,7 @@ class BE_Dataset(BE_DataFed):
     def dc_voltage(self):
         """Gets the DC voltage vector"""
         with h5py.File(self.file, "r+") as h5_f:
-            return h5_f[f"{self.raw_data_path}/Spectroscopic_Values"][
-                0, 1::2
-            ]
+            return h5_f[f"{self.raw_data_path}/Spectroscopic_Values"][0, 1::2]
 
     @property
     def get_voltage(self):
@@ -270,9 +266,7 @@ class BE_Dataset(BE_DataFed):
 
         # TODO: Look for a way to refactor and not hard code.
         with h5py.File(self.file, "r+") as h5_f:
-            return (
-                h5_f[self.basegroup]["UDVS"][::2][:, 1][24:120] * -1
-            )
+            return h5_f[self.basegroup]["UDVS"][::2][:, 1][24:120] * -1
 
     @property
     def voltage_steps(self):
@@ -323,8 +317,8 @@ class BE_Dataset(BE_DataFed):
                 ]
             )
 
-    # this function is very similar to get_spec_dims right below. 
-    # the only difference is "pos" vs "spec". 
+    # this function is very similar to get_spec_dims right below.
+    # the only difference is "pos" vs "spec".
     # If I combine them it would make the code shorter but I would maybe need a way to select between the two
     # so it doesn't waste time getting the position/spectroscopic dimensions if I don't need them.
     @property
@@ -443,6 +437,14 @@ class BE_Dataset(BE_DataFed):
         with h5py.File(self.file, "r+") as h5_f:
             # Iterate through each noise level provided in the list
             for noise_level in noise_levels:
+                
+                if (
+                    usid.hdf_utils.find_dataset(h5_f, f"Noisy_Data_{noise_level}")
+                    is not []
+                ):
+                    print(f"Noisy_Data_{noise_level} already exists")
+                    continue
+
                 if verbose:
                     print(f"Adding noise level {noise_level}")
 
@@ -494,7 +496,8 @@ class BE_Dataset(BE_DataFed):
         max_mem=1024 * 8,
         dataset="Raw_Data",
         h5_sho_targ_grp=None,
-        fit_group=False,
+        return_data=False,
+        SHO_fit_points=5,
     ):
         """
         Computes the SHO (Simple Harmonic Oscillator) fit results for a given dataset.
@@ -533,19 +536,17 @@ class BE_Dataset(BE_DataFed):
         """
 
         with h5py.File(self.file, "r+") as h5_file:
+            
             # Record the start time for the fitting process
             start_time_lsqf = time.time()
 
             # Split the directory path and the file name from the full file path
             # JGoddy commented out the line below because I don't think either
             # data_dir or filename are used anywhere in the code.
-            #(data_dir, filename) = os.path.split(self.file)
+            # (data_dir, filename) = os.path.split(self.file)
 
-            if self.file.endswith(".h5"):
-                # If the file is an HDF5 file, set the HDF5 path
-                h5_path = self.file
-            else:
-                pass  # Handle non-HDF5 files if necessary
+            # TODO: likeley delete.
+            h5_path = self.check_H5()
 
             # Split the path to get the folder and raw file name
             folder_path, h5_raw_file_name = os.path.split(h5_path)
@@ -571,49 +572,42 @@ class BE_Dataset(BE_DataFed):
             expt_type = usid.hdf_utils.get_attr(h5_file, "data_type")
 
             # Check if the dataset is cKPFMData and set relevant parameters
-            is_ckpfm = expt_type == "cKPFMData"
-            if is_ckpfm:
-                num_write_steps = parm_dict["VS_num_DC_write_steps"]
-                num_read_steps = parm_dict["VS_num_read_steps"]
-                num_fields = 2
+            self.check_ckpfm(parm_dict, expt_type)
 
             # Handle non-BELineData types
-            if expt_type != "BELineData":
-                vs_mode = usid.hdf_utils.get_attr(h5_meas_grp, "VS_mode")
-                try:
-                    field_mode = usid.hdf_utils.get_attr(
-                        h5_meas_grp, "VS_measure_in_field_loops"
-                    )
-                except KeyError:
-                    print("Field mode could not be found. Setting to default value.")
-                    field_mode = "out-of-field"
-                try:
-                    vs_cycle_frac = usid.hdf_utils.get_attr(
-                        h5_meas_grp, "VS_cycle_fraction"
-                    )
-                except KeyError:
-                    print(
-                        "VS cycle fraction could not be found. Setting to default value."
-                    )
-                    vs_cycle_frac = "full"
+            # if expt_type != "BELineData":
+            #     vs_mode = usid.hdf_utils.get_attr(h5_meas_grp, "VS_mode")
+                
+            #     try:
+            #         field_mode = usid.hdf_utils.get_attr(
+            #             h5_meas_grp, "VS_measure_in_field_loops"
+            #         )
+            #     except KeyError:
+            #         print("Field mode could not be found. Setting to default value.")
+            #         field_mode = "out-of-field"
+                    
+                    
+            #     try:
+            #         vs_cycle_frac = usid.hdf_utils.get_attr(
+            #             h5_meas_grp, "VS_cycle_fraction"
+            #         )
+            #     except KeyError:
+            #         print(
+            #             "VS cycle fraction could not be found. Setting to default value."
+            #         )
+            #         vs_cycle_frac = "full"
 
-            # Set parameters for the SHO fitting process
-            sho_fit_points = 5  # Number of data points to use when fitting
-            sho_override = force  # Whether to force recompute if True
+            # TODO: add a check here with a continue statement for existing SHO fits.
 
             # Determine the file path for saving the SHO fit results
             h5_sho_file_path = os.path.join(folder_path, h5_raw_file_name)
             print("\n\nSHO Fits will be written to:\n" + h5_sho_file_path + "\n\n")
 
-            # Determine the file opening mode
-            f_open_mode = "w" if not os.path.exists(h5_sho_file_path) else "r+"
-            h5_sho_file = h5py.File(h5_sho_file_path, mode=f_open_mode)
+            # Opens the file for writing or modifying
+            h5_sho_file = self.upsert_to_file(h5_sho_file_path)
 
             # Set the target group for saving SHO results
-            if h5_sho_targ_grp is None:
-                h5_sho_targ_grp = h5_sho_file
-            else:
-                h5_sho_targ_grp = make_group(h5_file, h5_sho_targ_grp)
+            h5_sho_targ_grp = self.get_target_group(h5_sho_targ_grp, h5_file, h5_sho_file)
 
             # Initialize the SHO fitter using the specified parameters
             sho_fitter = belib.analysis.BESHOfitter(
@@ -623,17 +617,17 @@ class BE_Dataset(BE_DataFed):
             # Set up the initial guess for the SHO fitting
             sho_fitter.set_up_guess(
                 guess_func=belib.analysis.be_sho_fitter.SHOGuessFunc.complex_gaussian,
-                num_points=sho_fit_points,
+                num_points=SHO_fit_points,
             )
 
             # Perform the initial guess fitting
-            h5_sho_guess = sho_fitter.do_guess(override=sho_override)
+            sho_fitter.do_guess(override=force)
 
             # Set up the actual fitting process
             sho_fitter.set_up_fit()
 
             # Perform the SHO fitting
-            h5_sho_fit = sho_fitter.do_fit(override=sho_override)
+            h5_sho_fit = sho_fitter.do_fit(override=force)
 
             # Retrieve and print the fitting parameters
             parms_dict = sidpy.hdf_utils.get_attributes(h5_main.parent.parent)
@@ -642,16 +636,41 @@ class BE_Dataset(BE_DataFed):
             )
 
             # Return the fitter and fit results if requested
-            if fit_group:
+            if return_data:
                 return sho_fitter, h5_sho_fit
             else:
                 return sho_fitter
 
- 
+    def get_target_group(self, h5_sho_targ_grp, h5_file, h5_sho_file):
+        if h5_sho_targ_grp is None:
+            h5_sho_targ_grp = h5_sho_file
+        else:
+            h5_sho_targ_grp = make_group(h5_file, h5_sho_targ_grp)
+        return h5_sho_targ_grp
 
-    # this function and set_SHO_LSQF are replaced by the new set_SHO_LSQF function 
+    def upsert_to_file(self, h5_sho_file_path):
+        f_open_mode = "w" if not os.path.exists(h5_sho_file_path) else "r+"
+        h5_sho_file = h5py.File(h5_sho_file_path, mode=f_open_mode)
+        return h5_sho_file
+
+    def check_ckpfm(self, parm_dict, expt_type):
+        is_ckpfm = expt_type == "cKPFMData"
+        if is_ckpfm:
+            num_write_steps = parm_dict["VS_num_DC_write_steps"]
+            num_read_steps = parm_dict["VS_num_read_steps"]
+            num_fields = 2
+
+    def check_H5(self):
+        if self.file.endswith(".h5"):
+                # If the file is an HDF5 file, set the HDF5 path
+            h5_path = self.file
+        else:
+            raise ValueError("File is not an HDF5 file")
+        return h5_path
+
+    # this function and set_SHO_LSQF are replaced by the new set_SHO_LSQF function
     # in the new code
-    # I'll leave it here for now but no longer edit it 
+    # I'll leave it here for now but no longer edit it
     # @context_manager_decorator
     # def set_raw_data(self):
     #     """
@@ -908,13 +927,11 @@ class BE_Dataset(BE_DataFed):
         return hysteresis_data, np.swapaxes(
             np.atleast_2d(self.get_voltage), 0, 1
         ).astype(np.float64)
-        
-        
-        
+
     # JGoddy doesn't know if the following function should go here
-    # but putting it here for now because it is used by the 
-    # LSQF_Loop_Fit function below 
-    
+    # but putting it here for now because it is used by the
+    # LSQF_Loop_Fit function below
+
     def measure_group(self):
         """
         measure_group gets the measurement group based on a noise level
@@ -927,13 +944,15 @@ class BE_Dataset(BE_DataFed):
             return "Raw_Data_SHO_Fit"
         else:
             return f"Noisy_Data_{self.noise}"
-            
-    def LSQF_Loop_Fit(self,
-                      main_dataset=None,
-                      h5_target_group=None,
-                      max_cores=None,
-                      force=False,
-                      h5_sho_targ_grp=None):
+
+    def LSQF_Loop_Fit(
+        self,
+        main_dataset=None,
+        h5_target_group=None,
+        max_cores=None,
+        force=False,
+        h5_sho_targ_grp=None,
+    ):
         """
         LSQF_Loop_Fit Function that conducts the hysteresis loop fits based on the LSQF results.
 
@@ -953,65 +972,68 @@ class BE_Dataset(BE_DataFed):
         """
 
         with h5py.File(self.file, "r+") as h5_file:
-
             # finds the main dataset location in the file
-            if main_dataset is None:
-                h5_main = usid.hdf_utils.find_dataset(
-                    h5_file, 'Raw_Data')[0]
-            else:
-                h5_main = usid.hdf_utils.find_dataset(
-                    h5_file, main_dataset)[0]
+            h5_main = self.get_main_dataset(main_dataset, h5_file)
 
             # gets the measurement group name
             h5_meas_grp = h5_main.parent.parent
 
             # does the SHO_fit if it does not exist.
-            sho_fit_points = 5  # The number of data points at each step to use when fitting
+            sho_fit_points = (
+                5  # The number of data points at each step to use when fitting
+            )
             sho_override = False  # Force recompute if True
             sho_fitter = belib.analysis.BESHOfitter(
-                h5_main, cores=max_cores, verbose=False, h5_target_group=h5_meas_grp)
+                h5_main, cores=max_cores, verbose=False, h5_target_group=h5_meas_grp
+            )
             sho_fitter.set_up_guess(
-                guess_func=belib.analysis.be_sho_fitter.SHOGuessFunc.complex_gaussian, num_points=sho_fit_points)
+                guess_func=belib.analysis.be_sho_fitter.SHOGuessFunc.complex_gaussian,
+                num_points=sho_fit_points,
+            )
             h5_sho_guess = sho_fitter.do_guess(override=sho_override)
             sho_fitter.set_up_fit()
             h5_sho_fit = sho_fitter.do_fit(override=sho_override)
             h5_sho_grp = h5_sho_fit.parent
 
             # gets the experiment type from the file
-            expt_type = sidpy.hdf.hdf_utils.get_attr(h5_file, 'data_type')
+            expt_type = sidpy.hdf.hdf_utils.get_attr(h5_file, "data_type")
 
             # finds the dataset from the file
-            h5_meas_grp = usid.hdf_utils.find_dataset(
-                h5_file, self.measure_group())
+            h5_meas_grp = usid.hdf_utils.find_dataset(h5_file, self.measure_group())
 
             # extract the voltage mode
             vs_mode = sidpy.hdf.hdf_utils.get_attr(
-                h5_file["/Measurement_000"], 'VS_mode')
+                h5_file["/Measurement_000"], "VS_mode"
+            )
 
             try:
                 vs_cycle_frac = sidpy.hdf.hdf_utils.get_attr(
-                    h5_file["/Measurement_000"], 'VS_cycle_fraction')
+                    h5_file["/Measurement_000"], "VS_cycle_fraction"
+                )
 
             except KeyError:
-                print('VS cycle fraction could not be found. Setting to default value')
-                vs_cycle_frac = 'full'
+                print("VS cycle fraction could not be found. Setting to default value")
+                vs_cycle_frac = "full"
 
-            sho_fit, sho_dataset = self.SHO_Fitter(fit_group=True)
+            sho_fit, sho_dataset = self.SHO_Fitter(return_data=True)
 
             # instantiates the loop fitter using belib
-            loop_fitter = belib.analysis.BELoopFitter(h5_sho_fit,
-                                                      expt_type, vs_mode, vs_cycle_frac,
-                                                        #  h5_target_group=h5_meas_grp,
-                                                      cores=max_cores,
-                                                      verbose=False)
+            loop_fitter = belib.analysis.BELoopFitter(
+                h5_sho_fit,
+                expt_type,
+                vs_mode,
+                vs_cycle_frac,
+                #  h5_target_group=h5_meas_grp,
+                cores=max_cores,
+                verbose=False,
+            )
 
             # computes the guess for the loop fits
             loop_fitter.set_up_guess()
             h5_loop_guess = loop_fitter.do_guess(override=force)
 
             # Calling explicitly here since Fitter won't do it automatically
-            h5_guess_loop_parms = loop_fitter.extract_loop_parameters(
-                h5_loop_guess)
+            h5_guess_loop_parms = loop_fitter.extract_loop_parameters(h5_loop_guess)
             loop_fitter.set_up_fit()
             h5_loop_fit = loop_fitter.do_fit(override=force)
 
@@ -1020,8 +1042,17 @@ class BE_Dataset(BE_DataFed):
 
         return h5_loop_fit, h5_loop_group
 
+    def get_main_dataset(self, main_dataset, h5_file):
+        if main_dataset is None:
+            h5_main = usid.hdf_utils.find_dataset(h5_file, "Raw_Data")[0]
+        else:
+            h5_main = usid.hdf_utils.find_dataset(h5_file, main_dataset)[0]
+        return h5_main
+
     @static_state_decorator
-    def LSQF_hysteresis_params(self, output_shape=None, scaled=None, measurement_state=None):
+    def LSQF_hysteresis_params(
+        self, output_shape=None, scaled=None, measurement_state=None
+    ):
         """
         LSQF_hysteresis_params Gets the LSQF hysteresis parameters
 
@@ -1047,14 +1078,24 @@ class BE_Dataset(BE_DataFed):
 
         # extracts the hysteresis parameters from the H5 file
         with h5py.File(self.file, "r+") as h5_f:
-           # data = h5_f[f"/Measurement_000/{self.dataset}-SHO_Fit_000/Fit-Loop_Fit_000/Fit"][:]
-            data=h5_f[f"/{self.measurement}/{self.dataset_name}-{self.SHO_fit_relative_base_path}/{self.SHO_hysteresis_relative_base_path}/Fit"][:]
+            # data = h5_f[f"/Measurement_000/{self.dataset}-SHO_Fit_000/Fit-Loop_Fit_000/Fit"][:]
+            data = h5_f[
+                f"/{self.measurement}/{self.dataset_name}-{self.SHO_fit_relative_base_path}/{self.SHO_hysteresis_relative_base_path}/Fit"
+            ][:]
             data = data.reshape(self.num_rows, self.num_cols, self.num_cycles)
-            data = np.array([data['a_0'], data['a_1'], data['a_2'], data['a_3'], data['a_4'],
-                            data['b_0'], data['b_1'], data['b_2'], data['b_3']]).transpose((1, 2, 3, 0))
-
-
-  
+            data = np.array(
+                [
+                    data["a_0"],
+                    data["a_1"],
+                    data["a_2"],
+                    data["a_3"],
+                    data["a_4"],
+                    data["b_0"],
+                    data["b_1"],
+                    data["b_2"],
+                    data["b_3"],
+                ]
+            ).transpose((1, 2, 3, 0))
 
             if self.scaled:
                 # TODO: add the scaling here
@@ -1064,10 +1105,8 @@ class BE_Dataset(BE_DataFed):
                 # pass
 
             if self.output_shape == "index":
-                data = data.reshape(
-                    self.num_pix, self.num_cycles, data.shape[-1])
+                data = data.reshape(self.num_pix, self.num_cycles, data.shape[-1])
 
-         
             data = self.hysteresis_measurement_state(data)
 
             return data

@@ -10,7 +10,7 @@ from belearn.dataset import scalers
 from belearn.dataset import transformers
 
 from belearn.dataset.Datafed import (BE_DataFed, instantiate_datafed,)
-from belearn.dataset.State import (State,)
+from belearn.dataset.state import (State,)
 from belearn.dataset.analytics import (MSE, get_rankings, mse_rankings,
                                        print_mse,)
 from belearn.dataset.dataset import (BE_Dataset,)

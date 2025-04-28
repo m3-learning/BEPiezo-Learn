@@ -39,23 +39,22 @@ from m3util.viz.layout import (
 
 from m3util.viz.arrows import (
     draw_ellipse_with_arrow,
-    #DrawArrow,
-   # draw_extended_arrow_indicator,
+    # DrawArrow,
+    # draw_extended_arrow_indicator,
 )
 
 from m3util.viz.text import (
     add_text_to_figure,
     set_sci_notation_label,
     labelfigs,
-   # obj_offset,
+    # obj_offset,
 )
-
 
 
 from m3util.util.IO import make_folder
 from m3util.viz.movies import make_movie
 
-# functions, attributes, and methods in Viz class: 
+# functions, attributes, and methods in Viz class:
 # plot_magnitude_spectrum
 
 
@@ -65,26 +64,20 @@ color_palette = {
     "LSQF_P": "#444e86",  # bluish purple
     "NN_A": "#955196",  # purple
     "NN_P": "#dd5182",  # pinkish red
-    
-    "mag":  "#2f9eaa",  # cyan
+    "mag": "#2f9eaa",  # cyan
     "phase": "#66c21f",  # green
     "real": "#ff6e54",  # orange
     "imag": "#ffa600",  # yellow-orange
-
     "true_mag": "#2f9eaa",  # cyan
     "true_phase": "#66c21f",  # green
     "true_real": "#ff6e54",  # orange
     "true_imag": "#ffa600",  # yellow-orange
-    
-    "predict_mag":  "#1A237E", # dark blue 
-    "predict_phase": "#003300", # dark green
-    "predict_real":  "#D84315" ,#dark orange
-    "predict_imag" : "#b37400", #dark yellowish tan 
-   
+    "predict_mag": "#1A237E",  # dark blue
+    "predict_phase": "#003300",  # dark green
+    "predict_real": "#D84315",  # dark orange
+    "predict_imag": "#b37400",  # dark yellowish tan
 }
 
-
-@dataclass
 class Viz(BE_model_utils):
     """
     A DataClass for handling various visualization settings and data.
@@ -100,7 +93,7 @@ class Viz(BE_model_utils):
         color_palette (Optional[Any], optional): Color palette settings. Defaults to None.
 
     """
-    
+
     # SHO_labels: List[Dict[str, str]] = field(
     #     default_factory=lambda: [
     #         {"title": "Amplitude", "y_label": "Amplitude \n (Arb. U.)"},
@@ -110,35 +103,40 @@ class Viz(BE_model_utils):
     #     ]
     # )
 
-    
-    def __init__(self, 
-                 dataset: Any,
-                 Printer: Optional[Type] = None, 
-                 verbose: bool = False, 
-                 labelfigs_: bool = True, 
-                 image_scalebar: Optional[Any] = None,
-                 color_palette: Optional[Any] = None,
-                 SHO_ranges: Optional[Any] = None,
-                 SHO_labels: Optional[List[Dict[str, str]]] = None,
-                 
-                 ):
-        super().__init__()
+    def __init__(
+        self,
+        dataset: Any,
+        printer: Optional[Type] = None,
+        verbose: bool = False,
+        labelfigs_: bool = True,
+        image_scalebar: Optional[Any] = None,
+        color_palette: Optional[Any] = None,
+        SHO_ranges: Optional[Any] = None,
+        SHO_labels: Optional[List[Dict[str, str]]] = None,
+    ):
         self.dataset = dataset
-        self.Printer = Printer
+        self.printer = printer
         self.verbose = verbose
         self.labelfigs_ = labelfigs_
         self.image_scalebar = image_scalebar
         self.color_palette = color_palette
         self.SHO_ranges = SHO_ranges
-        self.SHO_labels = SHO_labels if SHO_labels is not None else [
-            {"title": "Amplitude", "y_label": "Amplitude \n (Arb. U.)"},
-            {"title": "Resonance Frequency", "y_label": "Resonant \n Frequency \n (Hz)"},
-            {"title": "Dampening", "y_label": "Quality Factor \n (Arb. U.)"},
-            {"title": "Phase", "y_label": "Phase \n (rad)"},
-        ]
-        
-        
-    
+        self.SHO_labels = (
+            SHO_labels
+            if SHO_labels is not None
+            else [
+                {"title": "Amplitude", "y_label": "Amplitude \n (Arb. U.)"},
+                {
+                    "title": "Resonance Frequency",
+                    "y_label": "Resonant \n Frequency \n (Hz)",
+                },
+                {"title": "Dampening", "y_label": "Quality Factor \n (Arb. U.)"},
+                {"title": "Phase", "y_label": "Phase \n (rad)"},
+            ]
+        )
+
+        super().__init__()
+
     # dataset: Any  # Specify the type based on what you expect
     # # You can also define the type of Printer if you know it
     # Printer: Optional[Type] = None
@@ -160,10 +158,7 @@ class Viz(BE_model_utils):
 
     # # Replace Any with the expected type if known
     # color_palette: Optional[Any] = None
-    
-    
-    
-    
+
     ###### SETTERS ######
 
     # def set_attributes(self, **kwargs):
@@ -190,11 +185,9 @@ class Viz(BE_model_utils):
     #     # # Ensure that the setter for 'noise' is called if the 'noise' attribute is provided in kwargs
     #     # if kwargs.get("noise"):
     #     #     self.noise = kwargs.get("noise")
-        
-    #     self.__dict__.update(kwargs)
-            
 
-    
+    #     self.__dict__.update(kwargs)
+
     # @contextmanager
     # def temporary_state(obj, **modifications):
     #     # Create a deep copy of the object's state
@@ -207,11 +200,9 @@ class Viz(BE_model_utils):
     #         # Restore the original state
     #         obj.set_attributes(**original_state)
 
-
-    
     ##### Methods #####
-    
-    #@State.static_dataset_decorator
+
+    # @State.static_dataset_decorator
     @context_manager_decorator
     def plot_twin_axis(
         self,
@@ -221,55 +212,84 @@ class Viz(BE_model_utils):
         pixel=None,
         voltage_step=None,
         add_arrows=None,
-        **kwargs
+        **kwargs,
     ):
         # Set the attributes for the true dataset
         self.set_attributes(**true)
-        
-            
+
         # If a pixel is not provided, select a random pixel
         if pixel is None:
             pixel = np.random.randint(0, self.num_pix)
-            self.pixel = pixel # JGoddy: is this necessary? 
-            
-        if voltage_step is None: 
+            self.pixel = pixel  # JGoddy: is this necessary?
+
+        if voltage_step is None:
             # Get the voltage step, considering the current state
             voltage_step = self.get_voltage_step(voltage_step)
-            self.voltage_step = voltage_step # JGoddy: is this necessary 
+            self.voltage_step = voltage_step  # JGoddy: is this necessary
 
         if "raw_format" in kwargs.keys():
-            self.raw_format = kwargs['raw_format']
-            
+            self.raw_format = kwargs["raw_format"]
+
         # Get the raw spectral data for the selected pixel and voltage step
-        #with State.temporary_state(self, **true):
+        # with State.temporary_state(self, **true):
         data, x = self.raw_spectra(pixel, voltage_step, frequency=True)
-        
+
         # Get the valid parameters for the plot method
         plot_params = mlines.Line2D([], []).properties().keys()
 
         # Extract kwargs for ax1 and ax2 based on valid plot parameters
-        
+
         # Remove the prefixes for ax1 and ax2 kwargs
-        ax1_kwargs = {k[len('ax1_'):]: v for k, v in kwargs.items() if k[len('ax1_'):] in plot_params and k.startswith('ax1_')}
-        ax1_true_kwargs = {k[len('ax1_true_'):]: v for k, v in kwargs.items() if k[len('ax1_true_'):] in plot_params and k.startswith('ax1_true_')}
-        ax1_predict_kwargs = {k[len('ax1_predict_'):]: v for k, v in kwargs.items() if k[len('ax1_predict_'):] in plot_params and k.startswith('ax1_predict_')}
-        ax2_kwargs = {k[len('ax2_'):]: v for k, v in kwargs.items() if k[len('ax2_'):] in plot_params and k.startswith('ax2_')}
-        ax2_true_kwargs = {k[len('ax2_true_'):]: v for k, v in kwargs.items() if k[len('ax2_true_'):] in plot_params and k.startswith('ax2_true_')}
-        ax2_predict_kwargs = {k[len('ax2_predict_'):]: v for k, v in kwargs.items() if k[len('ax2_predict_'):] in plot_params and k.startswith('ax2_predict_')}
+        ax1_kwargs = {
+            k[len("ax1_") :]: v
+            for k, v in kwargs.items()
+            if k[len("ax1_") :] in plot_params and k.startswith("ax1_")
+        }
+        ax1_true_kwargs = {
+            k[len("ax1_true_") :]: v
+            for k, v in kwargs.items()
+            if k[len("ax1_true_") :] in plot_params and k.startswith("ax1_true_")
+        }
+        ax1_predict_kwargs = {
+            k[len("ax1_predict_") :]: v
+            for k, v in kwargs.items()
+            if k[len("ax1_predict_") :] in plot_params and k.startswith("ax1_predict_")
+        }
+        ax2_kwargs = {
+            k[len("ax2_") :]: v
+            for k, v in kwargs.items()
+            if k[len("ax2_") :] in plot_params and k.startswith("ax2_")
+        }
+        ax2_true_kwargs = {
+            k[len("ax2_true_") :]: v
+            for k, v in kwargs.items()
+            if k[len("ax2_true_") :] in plot_params and k.startswith("ax2_true_")
+        }
+        ax2_predict_kwargs = {
+            k[len("ax2_predict_") :]: v
+            for k, v in kwargs.items()
+            if k[len("ax2_predict_") :] in plot_params and k.startswith("ax2_predict_")
+        }
         # Extract kwargs for either plot
-        either_axis_kwargs_for_plotting = {k: v for k, v in kwargs.items() if k in plot_params and not k.startswith('ax1_') and not k.startswith('ax2_')}
-        
-        
-        
+        either_axis_kwargs_for_plotting = {
+            k: v
+            for k, v in kwargs.items()
+            if k in plot_params
+            and not k.startswith("ax1_")
+            and not k.startswith("ax2_")
+        }
+
         ax1.plot(
             x,
             data[0].flatten(),
             # color = kwargs["ax1_color"],
             # marker = kwargs["marker"],
             # label = kwargs["ax1_label"],
-            **ax1_kwargs, **ax1_true_kwargs, **either_axis_kwargs_for_plotting
+            **ax1_kwargs,
+            **ax1_true_kwargs,
+            **either_axis_kwargs_for_plotting,
         )
-        
+
         ax2 = ax1.twinx()
         ax2.plot(
             x,
@@ -277,53 +297,61 @@ class Viz(BE_model_utils):
             # color = kwargs["color"][1],
             # marker = kwargs["marker"],
             # label = kwargs["label"][1],
-            **ax2_kwargs, **ax2_true_kwargs, **either_axis_kwargs_for_plotting
+            **ax2_kwargs,
+            **ax2_true_kwargs,
+            **either_axis_kwargs_for_plotting,
         )
-        
-       
-        
-         # Ensure ax2 is drawn on top of ax1 by setting a higher zorder
-        #ax1.set_zorder(ax2.get_zorder() + 1)
+
+        # Ensure ax2 is drawn on top of ax1 by setting a higher zorder
+        # ax1.set_zorder(ax2.get_zorder() + 1)
 
         # Remove the axes background (set to transparent)
         ax1.set_facecolor("none")
-  
+
         # If a predicted dataset is provided, plot its:
-        # (amplitude and phase) or (real and imaginary components) etc. 
+        # (amplitude and phase) or (real and imaginary components) etc.
         if predict is not None:
             self.set_attributes(**predict)
             data_predict, x = self.raw_spectra(
                 pixel, voltage_step, frequency=True, **kwargs
             )
             ax1.plot(
-                x, data_predict[0].flatten(),
-                color = ax1_predict_kwargs["color"],
-                marker = "o", linestyle = (5, (10, 3)),
-                label= ax1_predict_kwargs["label"] #self.label + " " + ax1_kwargs["label"]
-                #**ax1_predict_kwargs
+                x,
+                data_predict[0].flatten(),
+                color=ax1_predict_kwargs["color"],
+                marker="o",
+                linestyle=(5, (10, 3)),
+                label=ax1_predict_kwargs[
+                    "label"
+                ],  # self.label + " " + ax1_kwargs["label"]
+                # **ax1_predict_kwargs
             )
-            ax2.plot(x, data_predict[1].flatten(),
-                color = ax2_predict_kwargs["color"],
-                marker = "o", linestyle = (5, (10, 3)),
-                label= ax2_predict_kwargs["label"] #self.label + " " + ax2_kwargs["label"]
-                #**ax2_predict_kwargs
+            ax2.plot(
+                x,
+                data_predict[1].flatten(),
+                color=ax2_predict_kwargs["color"],
+                marker="o",
+                linestyle=(5, (10, 3)),
+                label=ax2_predict_kwargs[
+                    "label"
+                ],  # self.label + " " + ax2_kwargs["label"]
+                # **ax2_predict_kwargs
             )
             self.set_attributes(**true)
 
         ax1.set_xlabel(kwargs.get("x_label"))
         ax1.set_ylabel(kwargs.get("y1_label"))
         ax2.set_ylabel(kwargs.get("y2_label"))
-        
+
         self._scientific_notation_dual(ax1, ax2)
-        
-       # Add the legend
-       
-       # Add the arrows
-       
+
+        # Add the legend
+
+        # Add the arrows
+
         return ax1, ax2
-        
-    
-    #@State.static_dataset_decorator
+
+    # @State.static_dataset_decorator
     @context_manager_decorator
     def plot_magnitude_spectrum(
         self,
@@ -364,7 +392,7 @@ class Viz(BE_model_utils):
             data[0].flatten(),
             color=color_palette["mag"],
             marker="s",
-            label= "True " + self.label + " Amplitude",
+            label="True " + self.label + " Amplitude",
         )
         ax2 = ax1.twinx()
         ax2.plot(
@@ -372,7 +400,7 @@ class Viz(BE_model_utils):
             data[1].flatten(),
             color=color_palette["phase"],
             marker="s",
-            label= "True " + self.label + " Phase",
+            label="True " + self.label + " Phase",
         )
 
         # Ensure ax2 is drawn on top of ax1 by setting a higher zorder
@@ -384,12 +412,8 @@ class Viz(BE_model_utils):
         # If a predicted dataset is provided, plot its amplitude and phase
         if predict is not None:
             self.set_attributes(**predict)
-            data, x = self.raw_spectra(
-                pixel, voltage_step, frequency=True, **kwargs
-            )
-            ax1.plot(
-                x, data[0].flatten(), "bo", label=self.label + " Amplitude"
-            )
+            data, x = self.raw_spectra(pixel, voltage_step, frequency=True, **kwargs)
+            ax1.plot(x, data[0].flatten(), "bo", label=self.label + " Amplitude")
             ax2.plot(x, data[1].flatten(), "ro", label=self.label + " Phase")
             self.set_attributes(**true)
 
@@ -412,15 +436,19 @@ class Viz(BE_model_utils):
                 )
 
             draw_ellipse_with_arrow(
-                ax1, # ax
-                x, # x_data
-                data[0].flatten(), # y_data
-                add_arrows["mag_value"], # value
-                add_arrows["width"], # width
-                add_arrows["height"], # height
-                axis=add_arrows.get("axis", "x"), # axis
-                line_direction=add_arrows.get("line_direction", "horizontal"), # line_direction
-                arrow_position=add_arrows.get("arrow_position", "top"), # arrow_position
+                ax1,  # ax
+                x,  # x_data
+                data[0].flatten(),  # y_data
+                add_arrows["mag_value"],  # value
+                add_arrows["width"],  # width
+                add_arrows["height"],  # height
+                axis=add_arrows.get("axis", "x"),  # axis
+                line_direction=add_arrows.get(
+                    "line_direction", "horizontal"
+                ),  # line_direction
+                arrow_position=add_arrows.get(
+                    "arrow_position", "top"
+                ),  # arrow_position
                 arrow_length_frac=add_arrows.get("arrow_length_frac", 0.2),
                 color=add_arrows.get("color", color_palette["mag"]),
                 linewidth=add_arrows.get("linewidth", 1),
@@ -479,16 +507,16 @@ class Viz(BE_model_utils):
             )
 
         return ax1, ax2
-    
-    #@State.static_dataset_decorator
+
+    # @State.static_dataset_decorator
     @context_manager_decorator
     def plot_real_imaginary(
         self,
-        ax1, 
-        true, 
-        predict=None, 
-        pixel= 130, #None
-        voltage_step= 149,#None,
+        ax1,
+        true,
+        predict=None,
+        pixel=130,  # None
+        voltage_step=149,  # None,
         add_arrows=None,
         **kwargs,
     ):
@@ -530,9 +558,7 @@ class Viz(BE_model_utils):
         # If a predicted dataset is provided, plot its real and imaginary components
         if predict is not None:
             self.set_attributes(**predict)
-            data, x = self.raw_spectra(
-                pixel, voltage_step, frequency=True, **kwargs
-            )
+            data, x = self.raw_spectra(pixel, voltage_step, frequency=True, **kwargs)
             ax1.plot(x, data[0].flatten(), "ko", label=self.label + " Real")
             ax2.plot(x, data[1].flatten(), "gs", label=self.label + " Imag")
             self.set_attributes(**true)
@@ -605,16 +631,16 @@ class Viz(BE_model_utils):
         #     )
 
         return ax1, ax2
-    
-    #@State.static_dataset_decorator
+
+    # @State.static_dataset_decorator
     @context_manager_decorator
     def raw_data_comparison(
         self,
         true,
         predict=None,
         filename=None,
-        pixel= None,
-        voltage_step = None,
+        pixel=None,
+        voltage_step=None,
         legend=True,
         **kwargs,
     ):
@@ -640,78 +666,91 @@ class Viz(BE_model_utils):
 
         # Set the attributes for the true dataset
         self.set_attributes(**true)
-            
-     
 
         # Initialize figure and axes for plotting
         fig, axs = layout_fig(2, 2, figsize=(5.75, 1.25))
-        
+
         if pixel is None:
             pixel = 130
         if voltage_step is None:
             voltage_step = 149
-        
+
         print("***")
         print("pixel: ", pixel)
         print("voltage_step: ", voltage_step)
         print("***")
-        
+
         ax_mag, ax_phase = self.plot_twin_axis(
-            axs[0], true, predict, pixel, voltage_step, fig=fig,
-            raw_format = "magnitude spectrum",
-            ax1_true_color = color_palette["true_mag"],
-            ax2_true_color = color_palette["true_phase"],
-            ax1_predict_color = color_palette["predict_mag"],
-            ax2_predict_color = color_palette["predict_phase"],
-            ax1_predict_marker = 'o',
-            ax2_predict_marker = 'o',
-            marker = "s",
-            ax1_true_label = true["label"] + " Amplitude",
-            ax2_true_label = true["label"] + " Phase",
-            ax1_predict_label = predict["label"] + " Amplitude" if predict is not None else None,
-            ax2_predict_label = predict["label"] + " Phase" if predict is not None else None,
-            x_label = "Frequency (Hz)",
-            y1_label = "Amplitude (Arb. U.)",
-            y2_label = "Phase (deg)",
-            **kwargs
+            axs[0],
+            true,
+            predict,
+            pixel,
+            voltage_step,
+            fig=fig,
+            raw_format="magnitude spectrum",
+            ax1_true_color=color_palette["true_mag"],
+            ax2_true_color=color_palette["true_phase"],
+            ax1_predict_color=color_palette["predict_mag"],
+            ax2_predict_color=color_palette["predict_phase"],
+            ax1_predict_marker="o",
+            ax2_predict_marker="o",
+            marker="s",
+            ax1_true_label=true["label"] + " Amplitude",
+            ax2_true_label=true["label"] + " Phase",
+            ax1_predict_label=predict["label"] + " Amplitude"
+            if predict is not None
+            else None,
+            ax2_predict_label=predict["label"] + " Phase"
+            if predict is not None
+            else None,
+            x_label="Frequency (Hz)",
+            y1_label="Amplitude (Arb. U.)",
+            y2_label="Phase (deg)",
+            **kwargs,
         )
-        
-       
-        
-        ax_real,ax_imag = self.plot_twin_axis(
-            axs[1], true, predict, pixel=pixel, voltage_step=voltage_step, fig=fig,
-            raw_format = "complex",
-            ax1_true_color = color_palette["true_real"],
-            ax2_true_color = color_palette["true_imag"],
-            ax1_predict_color = color_palette["predict_real"],
-            ax2_predict_color = color_palette["predict_imag"],
-            ax1_predict_marker = 'o',
-            ax2_predict_marker = 'o',
-            marker = "s",
-            ax1_true_label = true["label"] + " Real",
-            ax2_true_label = true["label"] + " Imag",
-            ax1_predict_label = predict["label"] + " Real" if predict is not None else None,
-            ax2_predict_label = predict["label"] + " Imag" if predict is not None else None,
-            y1_label = "Real (Arb. U.)",
-            y2_label = "Imag (Arb. U.)",
-            x_label = "Frequency (Hz)",
-            **kwargs
+
+        ax_real, ax_imag = self.plot_twin_axis(
+            axs[1],
+            true,
+            predict,
+            pixel=pixel,
+            voltage_step=voltage_step,
+            fig=fig,
+            raw_format="complex",
+            ax1_true_color=color_palette["true_real"],
+            ax2_true_color=color_palette["true_imag"],
+            ax1_predict_color=color_palette["predict_real"],
+            ax2_predict_color=color_palette["predict_imag"],
+            ax1_predict_marker="o",
+            ax2_predict_marker="o",
+            marker="s",
+            ax1_true_label=true["label"] + " Real",
+            ax2_true_label=true["label"] + " Imag",
+            ax1_predict_label=predict["label"] + " Real"
+            if predict is not None
+            else None,
+            ax2_predict_label=predict["label"] + " Imag"
+            if predict is not None
+            else None,
+            y1_label="Real (Arb. U.)",
+            y2_label="Imag (Arb. U.)",
+            x_label="Frequency (Hz)",
+            **kwargs,
         )
 
         # ax_mag, ax_phase = self.plot_magnitude_spectrum(
         #     axs[0], true, predict, pixel, voltage_step, fig=fig, **kwargs
         # )
 
-
         # ax_real, ax_imag = self.plot_real_imaginary(
         #     axs[1], true, predict, pixel, voltage_step, **kwargs
         # )
 
         # Adjust the format of the tick labels and box aspect for all axes
-        #axes = [ax_mag, ax_real, ax_phase, ax_imag]
+        # axes = [ax_mag, ax_real, ax_phase, ax_imag]
 
         axes = [ax_mag, ax_phase, ax_real, ax_imag]
-        
+
         for ax in axes:
             ax.set_box_aspect(1)
 
@@ -729,18 +768,37 @@ class Viz(BE_model_utils):
         if legend:
             # for now, hard code if len(ax_mag.lines) == 2 or 1? what if its more than 2? should I loop over however
             # many lines there are? what is the best way to do this?
-            try: 
-                handles = [ax_mag.lines[0],ax_mag.lines[1], ax_phase.lines[0], ax_phase.lines[1], 
-                           ax_real.lines[0], ax_real.lines[1], ax_imag.lines[0], ax_imag.lines[1]]
+            try:
+                handles = [
+                    ax_mag.lines[0],
+                    ax_mag.lines[1],
+                    ax_phase.lines[0],
+                    ax_phase.lines[1],
+                    ax_real.lines[0],
+                    ax_real.lines[1],
+                    ax_imag.lines[0],
+                    ax_imag.lines[1],
+                ]
             except:
-                handles = [ax_mag.lines[0], ax_phase.lines[0], ax_real.lines[0], ax_imag.lines[0]]
-            
+                handles = [
+                    ax_mag.lines[0],
+                    ax_phase.lines[0],
+                    ax_real.lines[0],
+                    ax_imag.lines[0],
+                ]
+
             labels = [h.get_label() for h in handles]
-            fig.legend(handles, labels, bbox_to_anchor=(1.0, 1), loc="upper right", borderaxespad=0.1)
+            fig.legend(
+                handles,
+                labels,
+                bbox_to_anchor=(1.0, 1),
+                loc="upper right",
+                borderaxespad=0.1,
+            )
 
         # Save the figure if a Printer object and filename are provided
-        if self.Printer is not None and filename is not None:
-            self.Printer.savefig(
+        if self.printer is not None and filename is not None:
+            self.printer.savefig(
                 fig, filename, label_figs=[ax_phase, ax_imag], style="bw", loc="bl"
             )
 
@@ -763,12 +821,12 @@ class Viz(BE_model_utils):
 
         ax1.set_box_aspect(1)
         ax2.set_box_aspect(1)
-        
-    
-    #@State.static_dataset_decorator
+
+    # @State.static_dataset_decorator
     @context_manager_decorator
-    def plot_hysteresis_waveform(self, fig, ax, inset_pos, x_start, x_end, y_inset_min=-2, y_inset_max=20):
-        
+    def plot_hysteresis_waveform(
+        self, fig, ax, inset_pos, x_start, x_end, y_inset_min=-2, y_inset_max=20
+    ):
         # Plot the hysteresis waveform and add a zoomed-in inset
         ax.plot(self.waveform_constructor())
         ax_new = ax.inset_axes(inset_pos)
@@ -801,9 +859,8 @@ class Viz(BE_model_utils):
 
         ax.set_xlabel("Voltage Steps")
         ax.set_ylabel("Voltage (V)")
-        
-            
-    #@State.static_dataset_decorator
+
+    # @State.static_dataset_decorator
     @context_manager_decorator
     def raw_be(
         self,
@@ -840,8 +897,7 @@ class Viz(BE_model_utils):
         # Select a random pixel and voltage step from the dataset to plot
         pixel = np.random.randint(0, self.num_pix)
         voltagestep = np.random.randint(0, self.voltage_steps)
-        
- 
+
         print("pixel: ", pixel)
         print("voltagestep: ", voltagestep)
 
@@ -874,12 +930,8 @@ class Viz(BE_model_utils):
 
         # Set the x-axis limits based on the BE center frequency and bandwidth
         ax[1].set_xlim(
-            self.be_center_frequency
-            - self.be_bandwidth
-            - self.be_bandwidth * 0.25,
-            self.be_center_frequency
-            + self.be_bandwidth
-            + self.be_bandwidth * 0.25,
+            self.be_center_frequency - self.be_bandwidth - self.be_bandwidth * 0.25,
+            self.be_center_frequency + self.be_bandwidth + self.be_bandwidth * 0.25,
         )
 
         self.plot_hysteresis_waveform(fig, ax[2], inset_pos, x_start, x_end)
@@ -922,26 +974,21 @@ class Viz(BE_model_utils):
         ax3 = ax[4].twinx()
         ax3.plot(self.frequency_bin, data_[1].flatten(), "r", label="Imaginary")
         ax3.set(xlabel="Frequency (Hz)", ylabel="Imag (Arb. U.)", facecolor="none")
-        
-        set_sci_notation_label(ax[1],axis="x",corner = "bottom right")
-        set_sci_notation_label(ax[2],axis="x",corner = "bottom right")
-        set_sci_notation_label(ax[3],axis="x",corner = "bottom right")
-        set_sci_notation_label(ax[4],axis="x",corner = "bottom right")
 
+        set_sci_notation_label(ax[1], axis="x", corner="bottom right")
+        set_sci_notation_label(ax[2], axis="x", corner="bottom right")
+        set_sci_notation_label(ax[3], axis="x", corner="bottom right")
+        set_sci_notation_label(ax[4], axis="x", corner="bottom right")
 
         # Save the figure if a Printer object is available
-        if self.Printer is not None:
-            self.Printer.savefig(fig, filename, label_figs=ax, style="b")
-            
+        if self.printer is not None:
+            self.printer.savefig(fig, filename, label_figs=ax, style="b")
+
         return fig
-            
-        
-    #@State.static_scale_decorator
+
+    # @State.static_scale_decorator
     @context_manager_decorator
     def SHO_hist(self, SHO_data, filename=None, scaled=False):
-        
-
-
         """Plots the SHO hysteresis parameters
 
         Args:
@@ -954,8 +1001,6 @@ class Viz(BE_model_utils):
         # xfmt = ScalarFormatter()
         # xfmt.set_powerlimits()  # Or whatever your limits are . . .
 
-
-
         # if the scale is False will not use the scale in the viz
         if self.scaled or scaled:
             print("dataset is scaled")
@@ -967,7 +1012,9 @@ class Viz(BE_model_utils):
 
         # check distributions of each parameter before and after scaling
         fig, axs = layout_fig(
-            4 * len(SHO_data), 4, figsize=(15, 1.25 * len(SHO_data)) # figsize=(5.25, 1.25 * len(SHO_data))
+            4 * len(SHO_data),
+            4,
+            figsize=(15, 1.25 * len(SHO_data)),  # figsize=(5.25, 1.25 * len(SHO_data))
         )
 
         for k, SHO_data_ in enumerate(SHO_data):
@@ -987,12 +1034,11 @@ class Viz(BE_model_utils):
                 ax.set(xlabel=label["y_label"])
                 # ax.ticklabel_format(axis="x", style="sci", scilimits=(0, 0),useMathText=True)
                 # ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0),useMathText=True)
-                
-                set_sci_notation_label(ax,axis="x",corner="bottom right") 
-                set_sci_notation_label(ax,axis="y",corner="top left")
 
-                
-                ax.xaxis.labelpad = 0 #10
+                set_sci_notation_label(ax, axis="x", corner="bottom right")
+                set_sci_notation_label(ax, axis="y", corner="top left")
+
+                ax.xaxis.labelpad = 0  # 10
 
                 ax.set_box_aspect(1)
 
@@ -1000,11 +1046,8 @@ class Viz(BE_model_utils):
                 self.extraction_state
 
         # prints the figure
-        if self.Printer is not None and filename is not None:
-            self.Printer.savefig(fig, filename, label_figs=axs, style="b")
-            
-            
-            
+        if self.printer is not None and filename is not None:
+            self.printer.savefig(fig, filename, label_figs=axs, style="b")
 
     def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
         """
@@ -1034,31 +1077,26 @@ class Viz(BE_model_utils):
         for i, (ax, label) in enumerate(zip(axs, self.SHO_labels)):
             ax.plot(self.dc_voltage, data[0, :, i])
             ax.set_ylabel(label["y_label"])
-            
-            
-            if abs(int('{:.1e}'.format(np.min(data[0, :, i])).split('e')[1])) > 2:
-                set_sci_notation_label(ax,axis="y",corner="top left")
-                
-                
+
+            if abs(int("{:.1e}".format(np.min(data[0, :, i])).split("e")[1])) > 2:
+                set_sci_notation_label(ax, axis="y", corner="top left")
+
             if i == 3:
-                ax.set_yticks([3,0,-3])
-                
-            ax.set_xticks([-15,0,15])
-            
+                ax.set_yticks([3, 0, -3])
+
+            ax.set_xticks([-15, 0, 15])
 
         # If verbose mode is enabled, log the current extraction state (for debugging or tracking)
         if self.verbose:
             self.extraction_state
 
         # If a Printer object is defined, save the figure with the specified filename and style
-        if self.Printer is not None:
-            self.Printer.savefig(fig, filename, label_figs=axs, style="b")
+        if self.printer is not None:
+            self.printer.savefig(fig, filename, label_figs=axs, style="b")
 
-    
-    
-###### MOVIES #####
+    ###### MOVIES #####
 
-    #@State.static_dataset_decorator
+    # @State.static_dataset_decorator
     @context_manager_decorator
     def SHO_fit_movie_images(
         self,
@@ -1268,8 +1306,8 @@ class Viz(BE_model_utils):
                 scalebar(ax[-1], *self.image_scalebar)
 
             # Save the figure if a Printer object and filename are provided
-            if self.Printer is not None and filename is not None:
-                self.Printer.savefig(
+            if self.printer is not None and filename is not None:
+                self.printer.savefig(
                     fig,
                     f"{filename}_noise_{noise}_{z:04d}",
                     basepath=basepath + "/",
@@ -1282,9 +1320,7 @@ class Viz(BE_model_utils):
         make_movie(
             f"{filename}_noise_{noise}", basepath, basepath, file_format="png", fps=5
         )
-        
-        
-        
+
     def build_figure_for_movie(
         self,
         comparison,
@@ -1412,9 +1448,8 @@ class Viz(BE_model_utils):
                 ax_.extend(ax[5 + 2 * i + 8 * j : 7 + 2 * i + 8 * j])
 
         return fig, ax_, fig_scalar
-    
-    
-    #@static_dataset_decorator
+
+    # @static_dataset_decorator
     @context_manager_decorator
     def fit_tester(self, true, predict, pixel=None, voltage_step=None, **kwargs):
         """
@@ -1460,7 +1495,7 @@ class Viz(BE_model_utils):
             **kwargs,
         )
 
-    #@static_dataset_decorator
+    # @static_dataset_decorator
     @context_manager_decorator
     def nn_checker(
         self, state, filename=None, pixel=None, voltage_step=None, legend=True, **kwargs
@@ -1483,9 +1518,7 @@ class Viz(BE_model_utils):
 
         self.raw_format = "complex"
 
-        data, x = self.raw_spectra(
-            pixel, voltage_step, frequency=True, **kwargs
-        )
+        data, x = self.raw_spectra(pixel, voltage_step, frequency=True, **kwargs)
 
         axs.plot(x, data[0].flatten(), "k", label=self.label + " Real")
         axs.set_xlabel("Frequency (Hz)")
@@ -1493,8 +1526,7 @@ class Viz(BE_model_utils):
         ax2 = axs.twinx()
         ax2.set_ylabel("Imag (Arb. U.)")
         ax2.plot(x, data[1].flatten(), "g", label=self.label + " Imag")
-        self._scientific_notation_dual(axs,ax2)
-
+        self._scientific_notation_dual(axs, ax2)
 
         axes = [axs, ax2]
 
@@ -1509,12 +1541,12 @@ class Viz(BE_model_utils):
             fig.legend(bbox_to_anchor=(1.0, 1), loc="upper right", borderaxespad=0.1)
 
         # prints the figure
-        if self.Printer is not None and filename is not None:
-            self.Printer.savefig(fig, filename, style="b")
-    
-     ##### Analytics #####
+        if self.printer is not None and filename is not None:
+            self.printer.savefig(fig, filename, style="b")
 
-    #@static_dataset_decorator
+    ##### Analytics #####
+
+    # @static_dataset_decorator
     @context_manager_decorator
     def bmw_nn(
         self,
@@ -1523,7 +1555,7 @@ class Viz(BE_model_utils):
         model=None,
         out_state=None,
         n=1,
-        gaps=(0.8,0.4),
+        gaps=(0.8, 0.4),
         size=(1.25, 1.25),
         filename=None,
         compare_state=None,
@@ -1536,14 +1568,16 @@ class Viz(BE_model_utils):
         d1, d2, x1, x2, label, index1, mse1 = None, None, None, None, None, None, None
 
         if fit_type == "SHO":
-            d1, d2, x1, x2, label,full_indices, index1, mse1 = self.get_best_median_worst(
-                true_state,
-                prediction=prediction,
-                model=model,
-                out_state=out_state,
-                n=n,
-                compare_state=compare_state,
-                **kwargs,
+            d1, d2, x1, x2, label, full_indices, index1, mse1 = (
+                self.get_best_median_worst(
+                    true_state,
+                    prediction=prediction,
+                    model=model,
+                    out_state=out_state,
+                    n=n,
+                    compare_state=compare_state,
+                    **kwargs,
+                )
             )
             print("index1", index1)
             fig, ax = subfigures(1, 3, gaps=gaps, size=size)
@@ -1579,7 +1613,7 @@ class Viz(BE_model_utils):
                     label=f"Raw {label[1]}",
                 )
 
-                ax_.set_xlabel("Frequency (Hz)",labelpad = 0)
+                ax_.set_xlabel("Frequency (Hz)", labelpad=0)
 
                 # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
                 text_position_in_inches = (
@@ -1587,7 +1621,7 @@ class Viz(BE_model_utils):
                     (gaps[1] + size[1]) * (1.25 - i // 3 - 1.25) - gaps[1],
                 )
                 text = f"Index: {index1[i]}, MSE: {error:0.4f}"
-               # text = f"MSE: {error:0.4f}"
+                # text = f"MSE: {error:0.4f}"
 
                 add_text_to_figure(
                     fig, text, text_position_in_inches, fontsize=6, ha="center"
@@ -1596,38 +1630,36 @@ class Viz(BE_model_utils):
                 if out_state is not None:
                     if "measurement state" in out_state.keys():
                         if out_state["raw_format"] == "magnitude spectrum":
-                            ax_.set_ylabel("Amplitude (Arb. U.)",labelpad=1)
-                            ax1.set_ylabel("Phase (rad)",labelpad=1)
+                            ax_.set_ylabel("Amplitude (Arb. U.)", labelpad=1)
+                            ax1.set_ylabel("Phase (rad)", labelpad=1)
                     else:
-                        ax_.set_ylabel("Real (Arb. U.)",labelpad=1)
-                        ax1.set_ylabel("Imag (Arb. U.)",labelpad=1)
-                        
-                self._scientific_notation_dual(ax_,ax1)
+                        ax_.set_ylabel("Real (Arb. U.)", labelpad=1)
+                        ax1.set_ylabel("Imag (Arb. U.)", labelpad=1)
+
+                self._scientific_notation_dual(ax_, ax1)
 
             # add a legend just for the last one
             lines, labels = ax_.get_legend_handles_labels()
             lines2, labels2 = ax1.get_legend_handles_labels()
             ax_.legend(lines + lines2, labels + labels2, loc="upper right")
-            
 
         elif fit_type == "hysteresis":
-            d1, d2, x1, x2, label, full_indices, index1, mse1 = self.get_best_median_worst(
-                true_state,
-                prediction=prediction,
-                n=n,
-                **kwargs,
-                fit_type = fit_type,
+            d1, d2, x1, x2, label, full_indices, index1, mse1 = (
+                self.get_best_median_worst(
+                    true_state,
+                    prediction=prediction,
+                    n=n,
+                    **kwargs,
+                    fit_type=fit_type,
+                )
             )
 
-
-            
-            
             fig, ax = subfigures(1, 3, gaps=gaps, size=size)
 
             for i, (true, prediction, error) in enumerate(zip(d1, d2, mse1)):
                 ax_ = ax[i]
-                
-                #unscale the hysteresis loops for plotting
+
+                # unscale the hysteresis loops for plotting
                 prediction = self.hysteresis_scaler.inverse_transform(prediction)
                 true = self.hysteresis_scaler.inverse_transform(true)
 
@@ -1664,22 +1696,20 @@ class Viz(BE_model_utils):
                 # add a legend just for the last one
                 lines, labels = ax_.get_legend_handles_labels()
                 ax_.legend(lines, labels, loc="upper right")
-                
-                set_sci_notation_label(ax_, axis = "y", corner = 'top left')
 
+                set_sci_notation_label(ax_, axis="y", corner="top left")
 
         else:
             raise ValueError("fit_type must be SHO or hysteresis")
 
         # prints the figure
-        if self.Printer is not None and filename is not None:
-            self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+        if self.printer is not None and filename is not None:
+            self.printer.savefig(fig, filename, label_figs=ax, style="b")
 
         if "returns" in kwargs.keys():
             if kwargs["returns"] == True:
                 return d1, d2, index1, mse1
-            
-            
+
     def get_best_median_worst(
         self,
         true_state,
@@ -1689,7 +1719,7 @@ class Viz(BE_model_utils):
         SHO_results=False,
         index=None,
         compare_state=None,
-        fit_type = "SHO",
+        fit_type="SHO",
         **kwargs,
     ):
         def data_converter(data):
@@ -1704,7 +1734,7 @@ class Viz(BE_model_utils):
 
             return data
 
-        if fit_type=="SHO":
+        if fit_type == "SHO":
             if type(true_state) is dict:
                 self.set_attributes(**true_state)
 
@@ -1712,11 +1742,15 @@ class Viz(BE_model_utils):
                 self.scaled = True
 
                 true, x1 = self.raw_spectra(frequency=True)
-                
+
             elif isinstance(true_state, (torch.Tensor, np.ndarray, list)):
-                true_state = true_state.numpy() if isinstance(true_state, torch.Tensor) else true_state
+                true_state = (
+                    true_state.numpy()
+                    if isinstance(true_state, torch.Tensor)
+                    else true_state
+                )
                 true = data_converter(true_state)
-                
+
                 # gets the frequency values
 
                 if true[0].ndim == 2:
@@ -1730,11 +1764,13 @@ class Viz(BE_model_utils):
             #     if true[0].ndim == 2:
             #         x1 = self.get_freq_values(true[0].shape[1])
             else:
-                raise ValueError("true_state must be a dictionary, torch.Tensor, np.ndarray, or list")
-        elif fit_type =="hysteresis":
-             # gets the true data
-             
-             # gets the x values
+                raise ValueError(
+                    "true_state must be a dictionary, torch.Tensor, np.ndarray, or list"
+                )
+        elif fit_type == "hysteresis":
+            # gets the true data
+
+            # gets the x values
             data, voltage = self.get_hysteresis(scaled=True, loop_interpolated=True)
 
             x1 = self.get_voltage
@@ -1747,38 +1783,37 @@ class Viz(BE_model_utils):
             fitter = "NN"
 
             if fit_type == "SHO":
-            
                 # sets the phase shift to zero for parameters
                 # This is important if doing the fits because the fits will be wrong if the phase is shifted.
                 self.NN_phase_shift = 0
-                self.LSQF_phase_shift = 0 #********
+                self.LSQF_phase_shift = 0  # ********
 
                 data = self.to_nn(true)
 
                 pred_data, scaled_params, params = prediction.predict(data)
-                
+
                 self.scaled = True
 
                 prediction, x2 = self.raw_spectra(
-                    fit_results=params, frequency=True, scaled = self.scaled
+                    fit_results=params, frequency=True, scaled=self.scaled
                 )
-            elif fit_type == "hysteresis":    
-                pred_data, scaled_params, params = prediction.predict(torch.tensor(data.reshape(-1,96,1)),is_SHO=False)
-                x2=self.get_voltage
-
+            elif fit_type == "hysteresis":
+                pred_data, scaled_params, params = prediction.predict(
+                    torch.tensor(data.reshape(-1, 96, 1)), is_SHO=False
+                )
+                x2 = self.get_voltage
 
                 self.scaled = True
 
             # prediction, x2 = self.dataset.raw_spectra(
             #     fit_results=params, voltage_step = self.get_voltage_step(), frequency=True
             # )
-            
-            # prediction, embedding = self.model(data) #or maybe true_state 
+
+            # prediction, embedding = self.model(data) #or maybe true_state
             # prediction = prediction.to(torch.float32)
             # prediction = prediction.reshape(prediction.shape[0],prediction.shape[1],1)
 
         elif isinstance(prediction, dict):
-
             fitter = prediction["fitter"]
 
             exec(f"self.{prediction['fitter']}_phase_shift =0")
@@ -1792,7 +1827,10 @@ class Viz(BE_model_utils):
             self.scaled = True
 
             prediction, x2 = self.raw_spectra(
-                fit_results=params, voltage_step = self.get_voltage_step(), frequency=True, scaled = self.scaled
+                fit_results=params,
+                voltage_step=self.get_voltage_step(),
+                frequency=True,
+                scaled=self.scaled,
             )
 
         if "x2" not in locals():
@@ -1813,16 +1851,19 @@ class Viz(BE_model_utils):
         else:
             # this must take the scaled data
             if fit_type == "SHO":
-                
                 full_indices, index1, mse1, d1, d2 = get_rankings(true, prediction, n=n)
 
             elif fit_type == "hysteresis":
-                full_indices, index1, mse1, d1, d2 = get_rankings(torch.tensor(data).reshape(-1,96,1), pred_data, n=n,fit_type='hysteresis')
-            #index1, mse1, d1, d2 = get_rankings(data, pred_data.reshape(60,60,4,96), n=n)
+                full_indices, index1, mse1, d1, d2 = get_rankings(
+                    torch.tensor(data).reshape(-1, 96, 1),
+                    pred_data,
+                    n=n,
+                    fit_type="hysteresis",
+                )
+            # index1, mse1, d1, d2 = get_rankings(data, pred_data.reshape(60,60,4,96), n=n)
 
         d1, labels = self.out_state(d1, out_state)
         d2, labels = self.out_state(d2, out_state)
-
 
         # saves just the parameters that are needed
         params = params[index1]
@@ -1843,9 +1884,8 @@ class Viz(BE_model_utils):
             return (d1, d2, x1, x2, labels, full_indices, index1, mse1, params)
         else:
             return (d1, d2, x1, x2, labels, full_indices, index1, mse1)
-        
-        
-   # TODO: add comments and docstring
+
+    # TODO: add comments and docstring
     def out_state(self, data, out_state):
         # holds the raw state
         current_state = self.get_state
@@ -1853,7 +1893,10 @@ class Viz(BE_model_utils):
         def convert_to_mag(data):
             data = to_complex(data, axis=1)
             data = self.raw_data_scaler.inverse_transform(data)
-            data = [np.abs(data), np.angle(data)] #this to_magnitude function was only one line so unnecessary to call it? self.to_magnitude(data)
+            data = [
+                np.abs(data),
+                np.angle(data),
+            ]  # this to_magnitude function was only one line so unnecessary to call it? self.to_magnitude(data)
             data = np.array(data)
             data = np.rollaxis(data, 0, data.ndim - 1)
             return data
@@ -1875,8 +1918,7 @@ class Viz(BE_model_utils):
 
         return data, labels
 
-
-    #@static_dataset_decorator
+    # @static_dataset_decorator
     @context_manager_decorator
     def SHO_switching_maps(
         self,
@@ -1899,7 +1941,7 @@ class Viz(BE_model_utils):
         cbar_gap=0.4,  # gap between colorbars in inches
         cbar_space=1.3,  # space reserved for colorbars on the right
         filename=None,  # optional filename to save the figure
-        labels = None,
+        labels=None,
     ):
         """
         Generates a plot of switching maps for SHO data (Amplitude, Resonance Frequency, Quality Factor, Phase)
@@ -1993,16 +2035,16 @@ class Viz(BE_model_utils):
         # # Select a specific cycle from the dataset, if applicable
         # if hasattr(self.dataset, "cycle") and self.dataset.cycle is not None:
         #     voltage = self.dataset.get_cycle(voltage)
-       
-       # JGoddy doesn't understand why the voltage came from hysteresis
-       # since this is for the SHO switching maps. I replaced with get_voltage
-       # since I think it has the correct shape and voltage values but 
-       # I'm not sure it's correct.
-       # also, see note in roll_hysteresis about how this is not the best 
-       # long term solution 
+
+        # JGoddy doesn't understand why the voltage came from hysteresis
+        # since this is for the SHO switching maps. I replaced with get_voltage
+        # since I think it has the correct shape and voltage values but
+        # I'm not sure it's correct.
+        # also, see note in roll_hysteresis about how this is not the best
+        # long term solution
         voltage = np.swapaxes(np.atleast_2d(self.get_voltage), 0, 1).astype(np.float64)
         voltage = self.roll_hysteresis(voltage)
-        
+
         # _,voltage = self.get_hysteresis()
         # voltage = self.roll_hysteresis(voltage)
 
@@ -2041,7 +2083,6 @@ class Viz(BE_model_utils):
 
         # Plot amplitude, resonant frequency, quality factor, and phase data
         for i, ind in enumerate(inds):
-            
             for j in range(4):
                 imagemap(
                     ax[i * 4 + j + 1],
@@ -2071,7 +2112,6 @@ class Viz(BE_model_utils):
                 loc="bl",
                 inset_fraction=(0.2, 0.2),
             )
-            
 
         # Add colorbars to the plots if enabled
         if colorbars:
@@ -2079,13 +2119,16 @@ class Viz(BE_model_utils):
             voltage_ax_pos = fig_scalar.to_inches(
                 np.array(ax[0].get_position()).flatten()
             )
-        
+
             for i in range(4):
                 # Calculate position and size of colorbars
                 cbar_h = (voltage_ax_pos[1] - inter_gap - 2 * intra_gap - 0.33) / 2
                 cbar_w = (cbar_space - inter_gap - 2 * cbar_gap) / 2
                 pos_inch = [
-                    voltage_ax_pos[2] - (2 - i % 2) * (cbar_gap + cbar_w) + inter_gap+ 0.1,
+                    voltage_ax_pos[2]
+                    - (2 - i % 2) * (cbar_gap + cbar_w)
+                    + inter_gap
+                    + 0.1,
                     voltage_ax_pos[1] - (i // 2) * (inter_gap + cbar_h) - 0.33 - cbar_h,
                     cbar_w - 0.02,
                     cbar_h - 0.1,
@@ -2093,26 +2136,24 @@ class Viz(BE_model_utils):
 
                 # Add colorbar to the figure
                 bar_ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
-                #cbar = plt.colorbar(ax[i + 1].images[0], cax=bar_ax[i], format="%.1e")
-                #cbar.set_label(names[i])  # Add label to the colorbar
+                # cbar = plt.colorbar(ax[i + 1].images[0], cax=bar_ax[i], format="%.1e")
+                # cbar.set_label(names[i])  # Add label to the colorbar
 
-                # adds the colorbars to the plots 
+                # adds the colorbars to the plots
                 fmt = ScalarFormatter(useMathText=True)
                 fmt.set_powerlimits((0, 0))
-                cbar = plt.colorbar(ax[i + 1].images[0],
-                                    cax=bar_ax[i], format=fmt)
+                cbar = plt.colorbar(ax[i + 1].images[0], cax=bar_ax[i], format=fmt)
                 cbar.set_label(names[i])  # Add a label to the colorbar
-                
-                
+
         # Save the figure if a filename is provided
-        if self.Printer is not None and filename is not None:
-            self.Printer.savefig(
+        if self.printer is not None and filename is not None:
+            self.printer.savefig(
                 fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
             )
-        
+
         return fig
-    
-    #@static_dataset_decorator
+
+    # @static_dataset_decorator
     @context_manager_decorator
     def SHO_switching_maps_test(
         self,
@@ -2227,10 +2268,10 @@ class Viz(BE_model_utils):
         # if hasattr(self.dataset, "cycle") and self.dataset.cycle is not None:
         #     # gets the cycle of interest
         #     voltage = self.dataset.get_cycle(voltage)
-        
+
         voltage = np.swapaxes(np.atleast_2d(self.get_voltage), 0, 1).astype(np.float64)
         voltage = self.roll_hysteresis(voltage)
-        
+
         # gets the index of the voltage steps to plot
         inds = np.linspace(0, len(voltage) - 1, number_of_steps, dtype=int)
 
@@ -2250,8 +2291,7 @@ class Viz(BE_model_utils):
                 vshift = -vshift / 2
 
             # adds the text to the graphs
-            ax[0].text(ind, voltage[ind] - vshift,
-                       str(i + 1), color="k", fontsize=12)
+            ax[0].text(ind, voltage[ind] - vshift, str(i + 1), color="k", fontsize=12)
 
         for k, _SHO in enumerate(SHO_):
             # converts the data to a numpy array
@@ -2259,13 +2299,12 @@ class Viz(BE_model_utils):
                 _SHO = _SHO.detach().numpy()
 
             print(_SHO.shape)
-            _SHO = _SHO.reshape(self.num_pix,
-                                self.voltage_steps, 4)
+            _SHO = _SHO.reshape(self.num_pix, self.voltage_steps, 4)
 
             # get the selected measurement cycle
             _SHO = self.get_measurement_cycle(_SHO, axis=1)
 
-            names = ["A", "\u03C9", "Q", "\u03C6"]
+            names = ["A", "\u03c9", "Q", "\u03c6"]
 
             for i, ind in enumerate(inds):
                 axis_start = int(
@@ -2316,22 +2355,19 @@ class Viz(BE_model_utils):
             voltage_ax_pos = fig_scalar.to_inches(
                 np.array(ax[0].get_position()).flatten()
             )
-            
+
             fmt = ScalarFormatter(useMathText=True)
             fmt.set_powerlimits((0, 0))
             # loops around the 4 axis
             for i in range(4):
                 # calculates the height and width of the colorbars
-                cbar_h = (voltage_ax_pos[1] -
-                          inter_gap - 2 * intra_gap - 0.33) / 2
+                cbar_h = (voltage_ax_pos[1] - inter_gap - 2 * intra_gap - 0.33) / 2
                 cbar_w = (cbar_space - inter_gap - 2 * cbar_gap) / 2
 
                 # sets the position of the axis in inches
                 pos_inch = [
-                    voltage_ax_pos[2] - (2 - i % 2) *
-                    (cbar_gap + cbar_w) + inter_gap,
-                    voltage_ax_pos[1] - (i // 2) *
-                    (inter_gap + cbar_h) - 0.33 - cbar_h,
+                    voltage_ax_pos[2] - (2 - i % 2) * (cbar_gap + cbar_w) + inter_gap,
+                    voltage_ax_pos[1] - (i // 2) * (inter_gap + cbar_h) - 0.33 - cbar_h,
                     cbar_w - 0.02,
                     cbar_h - 0.1,
                 ]
@@ -2339,23 +2375,21 @@ class Viz(BE_model_utils):
                 # adds the plot to the figure
                 bar_ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
 
-                # adds the colorbars to the plots 
+                # adds the colorbars to the plots
                 fmt = ScalarFormatter(useMathText=True)
                 fmt.set_powerlimits((0, 0))
-                cbar = plt.colorbar(ax[i + 1].images[0],
-                                    cax=bar_ax[i], format=fmt)
+                cbar = plt.colorbar(ax[i + 1].images[0], cax=bar_ax[i], format=fmt)
                 cbar.set_label(names[i])  # Add a label to the colorbar
 
         # prints the figure
-        if self.Printer is not None and filename is not None:
-            self.Printer.savefig(
+        if self.printer is not None and filename is not None:
+            self.printer.savefig(
                 fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
             )
-            
+
         return fig
-    
-    
-    #@static_dataset_decorator
+
+    # @static_dataset_decorator
     @context_manager_decorator
     def get_SHO_params(self, index, model, out_state):
         """
@@ -2379,9 +2413,7 @@ class Viz(BE_model_utils):
         """
 
         # Get pixel and voltage coordinates from the provided indices
-        pixel, voltage = np.unravel_index(
-            index, (self.num_pix, self.voltage_steps)
-        )
+        pixel, voltage = np.unravel_index(index, (self.num_pix, self.voltage_steps))
 
         # Case 1: The model is a neural network (nn.Module)
         if isinstance(model, nn.Module):
@@ -2443,9 +2475,8 @@ class Viz(BE_model_utils):
 
         # Return the predicted data, SHO parameters, and their corresponding labels
         return pred_data, params, labels
-    
-    
-    #@static_dataset_decorator
+
+    # @static_dataset_decorator
     @context_manager_decorator
     def get_mse_index(self, index, model):
         """
@@ -2519,9 +2550,7 @@ class Viz(BE_model_utils):
         # Compute and return the MSE between the raw data and the predicted data
         return MSE(data.detach().numpy(), predictions)
 
-    
-    
-    #@static_dataset_decorator
+    # @static_dataset_decorator
     @context_manager_decorator
     def SHO_Fit_comparison(
         self,
@@ -2586,7 +2615,7 @@ class Viz(BE_model_utils):
         # Loop through each fit and the associated data
         for step, (data, name) in enumerate(zip(data, names)):
             # Unpack the data (true, predicted values, indices, etc.)
-            d1, d2, x1, x2, label,full_labels, index1, mse1, params = data
+            d1, d2, x1, x2, label, full_labels, index1, mse1, params = data
 
             # Loop through datasets for comparison (true vs. predicted data)
             for bmw, (true, prediction, error, SHO, index1) in enumerate(
@@ -2671,8 +2700,8 @@ class Viz(BE_model_utils):
 
                         # Display detailed results if requested
                         if display_results == "all":
-                            #error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}\n AMP - LSQF: {SHOs['LSQF'][0]:0.2e} NN: {SHOs['NN'][0]:0.2e}\n\u03c9 - LSQF: {SHOs['LSQF'][1]/1000:0.1f} NN: {SHOs['NN'][1]/1000:0.1f} Hz\nQ - LSQF: {SHOs['LSQF'][2]:0.1f} NN: {SHOs['NN'][2]:0.1f}\n\u03c6 - LSQF: {SHOs['LSQF'][3]:0.2f} NN: {SHOs['NN'][3]:0.1f} rad"
-                            error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}\n AMP - LSQF: {format(SHOs['LSQF'][0],'0.2e').split('e')[0]}$\\times10^{'{'}{format(SHOs['LSQF'][0],'0.2e').split('e')[-1]}{'}'}$ NN: {format(SHOs['LSQF'][0],'0.2e').split('e')[0]}$\\times10^{'{'}{format(SHOs['NN'][0],'0.2e').split('e')[-1]}{'}'}$ \n\u03c9 - LSQF: {SHOs['LSQF'][1]/1000:0.1f} NN: {SHOs['NN'][1]/1000:0.1f} Hz\nQ - LSQF: {SHOs['LSQF'][2]:0.1f} NN: {SHOs['NN'][2]:0.1f}\n\u03c6 - LSQF: {SHOs['LSQF'][3]:0.2f} NN: {SHOs['NN'][3]:0.1f} rad"
+                            # error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}\n AMP - LSQF: {SHOs['LSQF'][0]:0.2e} NN: {SHOs['NN'][0]:0.2e}\n\u03c9 - LSQF: {SHOs['LSQF'][1]/1000:0.1f} NN: {SHOs['NN'][1]/1000:0.1f} Hz\nQ - LSQF: {SHOs['LSQF'][2]:0.1f} NN: {SHOs['NN'][2]:0.1f}\n\u03c6 - LSQF: {SHOs['LSQF'][3]:0.2f} NN: {SHOs['NN'][3]:0.1f} rad"
+                            error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}\n AMP - LSQF: {format(SHOs['LSQF'][0], '0.2e').split('e')[0]}$\\times10^{'{'}{format(SHOs['LSQF'][0], '0.2e').split('e')[-1]}{'}'}$ NN: {format(SHOs['LSQF'][0], '0.2e').split('e')[0]}$\\times10^{'{'}{format(SHOs['NN'][0], '0.2e').split('e')[-1]}{'}'}$ \n\u03c9 - LSQF: {SHOs['LSQF'][1] / 1000:0.1f} NN: {SHOs['NN'][1] / 1000:0.1f} Hz\nQ - LSQF: {SHOs['LSQF'][2]:0.1f} NN: {SHOs['NN'][2]:0.1f}\n\u03c6 - LSQF: {SHOs['LSQF'][3]:0.2f} NN: {SHOs['NN'][3]:0.1f} rad"
 
                         elif display_results == "MSE":
                             error_string = f"MSE - LSQF: {errors['LSQF']:0.4f} NN: {errors['NN']:0.4f}"
@@ -2714,18 +2743,16 @@ class Viz(BE_model_utils):
                     lines, labels = ax_.get_legend_handles_labels()
                     lines2, labels2 = ax1.get_legend_handles_labels()
                     ax_.legend(lines + lines2, labels + labels2, loc="upper right")
-                    
-                set_sci_notation_label(ax_,axis="x",corner = "bottom right")
 
+                set_sci_notation_label(ax_, axis="x", corner="bottom right")
 
         # Save the figure if filename is provided
-        if self.Printer is not None and filename is not None:
-            self.Printer.savefig(fig, filename, label_figs=ax, style="b")
-            
+        if self.printer is not None and filename is not None:
+            self.printer.savefig(fig, filename, label_figs=ax, style="b")
+
         return fig
-    
-    
-    #@static_dataset_decorator
+
+    # @static_dataset_decorator
     @context_manager_decorator
     def violin_plot_comparison_SHO(self, state, model, X_data, filename, label="NN"):
         """
@@ -2827,7 +2854,7 @@ class Viz(BE_model_utils):
         legend.set_title("")
 
         # Save the plot if a filename and Printer are provided
-        if self.Printer is not None and filename is not None:
-            self.Printer.savefig(fig, filename)
-            
+        if self.printer is not None and filename is not None:
+            self.printer.savefig(fig, filename)
+
         return fig

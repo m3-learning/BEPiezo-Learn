@@ -28,33 +28,10 @@ from belearn.filters.filters import clean_interpolate
 
 from belearn.dataset.Datafed import BE_DataFed
 
-# THIS IS OUTDATED
-# functions in BE_Dataset class:
-# get_tree
-# print_be_tree
-# get_original_data
-# num_pix
-# num_bins
-# voltage_steps
-# spectroscopic_length
-# set_raw_data
-
-# import time
-
-# #profiling decorator
-# def profile(func):
-#     def wrapper(self, *args, **kwargs):
-#         start_time = time.time()
-#         result = func(self, *args, **kwargs)
-#         end_time = time.time()
-#         print(f"{func.__name__} took {end_time - start_time:.4f} seconds")
-#         return result
-#     return wrapper
-
 
 @dataclass
 class BE_Dataset(BE_DataFed):
-    file: str = "/home/julian/Alibek_BEPFM/Rapid-Fitting-BEPFM-NN/notebooks/Data/data_raw.h5"  # TODO: make required
+    file: str = "./Data/data_raw.h5" 
     noise: int = 0
     resampled_bins: int = None
     resampled_data: dict = None
@@ -66,7 +43,7 @@ class BE_Dataset(BE_DataFed):
     SHO_fit_relative_base_path: str = "SHO_Fit_000"
     SHO_hysteresis_loop_fit_name: str = "Fit-Loop_Fit_000"
     SHO_hysteresis_loop_guess_name: str = "Guess-Loop_Fit_000"
-
+    noise_std_: float = None
     """
     A class to represent a h5 file.
 
@@ -78,6 +55,8 @@ class BE_Dataset(BE_DataFed):
 
     def __post_init__(self, datafed=None):
         # super().__init__(datafed)
+
+        # TODO: why does this inherit from BE_DataFed?
         self.datafed = datafed
         self.get_dataset(self.noise)
 
@@ -317,6 +296,22 @@ class BE_Dataset(BE_DataFed):
                 ]
             )
 
+    @property
+    def noise_std(self):
+        """Gets the noise standard deviation"""
+        return self.noise_std_
+
+    @noise_std.setter
+    def noise_std(self, value):
+        """Sets the noise standard deviation"""
+
+        if value is None:
+            self.noise_std_ = np.std(self.raw_SHO_data)
+        else:
+            self.noise_std_ = value
+
+        print(f"Noise standard deviation: {self.noise_std_}")
+
     # this function is very similar to get_spec_dims right below.
     # the only difference is "pos" vs "spec".
     # If I combine them it would make the code shorter but I would maybe need a way to select between the two
@@ -400,7 +395,6 @@ class BE_Dataset(BE_DataFed):
     def generate_noisy_data_records(
         self,
         noise_levels,
-        # basegroup="/Measurement_000/Channel_000", # now self.basegroup
         verbose=False,
         noise_STD=None,
     ):
@@ -413,8 +407,6 @@ class BE_Dataset(BE_DataFed):
 
         Args:
             noise_levels (list): A list of noise levels (multipliers) to apply to the dataset.
-            basegroup (str, optional): The HDF5 group where the noisy datasets will be saved.
-                                    Defaults to '/Measurement_000/Channel_000'.
             verbose (bool, optional): If True, the function will print additional information
                                     during execution. Defaults to False.
             noise_STD (float, optional): A manually provided standard deviation for the noise.
@@ -427,8 +419,7 @@ class BE_Dataset(BE_DataFed):
         """
 
         # Compute the noise standard deviation if it is not provided
-        if noise_STD is None:
-            noise_STD = np.std(self.raw_SHO_data)
+        self.noise_std = noise_STD
 
         if verbose:
             print(f"The STD of the data is: {noise_STD}")
@@ -437,7 +428,6 @@ class BE_Dataset(BE_DataFed):
         with h5py.File(self.file, "r+") as h5_f:
             # Iterate through each noise level provided in the list
             for noise_level in noise_levels:
-                
                 if (
                     usid.hdf_utils.find_dataset(h5_f, f"Noisy_Data_{noise_level}")
                     is not []
@@ -488,6 +478,20 @@ class BE_Dataset(BE_DataFed):
                     compression="gzip",
                 )  # Compression type for storage
 
+    def SHO_fit_all(self, *args, **kwargs):
+        max_mem = kwargs.get("max_mem", 1024 * 64)
+        max_cores = kwargs.get("max_cores", 48)
+
+        for data in args:
+            print(f"Fitting {data}")
+            self.SHO_Fitter(
+                dataset=data,
+                h5_sho_targ_grp=f"{data}_SHO_Fit",
+                max_mem=max_mem,
+                max_cores=max_cores,
+                **kwargs,
+            )
+
     # this should maybe go in a separate 'preprocessing' class
     def SHO_Fitter(
         self,
@@ -536,7 +540,6 @@ class BE_Dataset(BE_DataFed):
         """
 
         with h5py.File(self.file, "r+") as h5_file:
-            
             # Record the start time for the fitting process
             start_time_lsqf = time.time()
 
@@ -577,7 +580,7 @@ class BE_Dataset(BE_DataFed):
             # Handle non-BELineData types
             # if expt_type != "BELineData":
             #     vs_mode = usid.hdf_utils.get_attr(h5_meas_grp, "VS_mode")
-                
+
             #     try:
             #         field_mode = usid.hdf_utils.get_attr(
             #             h5_meas_grp, "VS_measure_in_field_loops"
@@ -585,8 +588,7 @@ class BE_Dataset(BE_DataFed):
             #     except KeyError:
             #         print("Field mode could not be found. Setting to default value.")
             #         field_mode = "out-of-field"
-                    
-                    
+
             #     try:
             #         vs_cycle_frac = usid.hdf_utils.get_attr(
             #             h5_meas_grp, "VS_cycle_fraction"
@@ -607,7 +609,9 @@ class BE_Dataset(BE_DataFed):
             h5_sho_file = self.upsert_to_file(h5_sho_file_path)
 
             # Set the target group for saving SHO results
-            h5_sho_targ_grp = self.get_target_group(h5_sho_targ_grp, h5_file, h5_sho_file)
+            h5_sho_targ_grp = self.get_target_group(
+                h5_sho_targ_grp, h5_file, h5_sho_file
+            )
 
             # Initialize the SHO fitter using the specified parameters
             sho_fitter = belib.analysis.BESHOfitter(
@@ -662,7 +666,7 @@ class BE_Dataset(BE_DataFed):
 
     def check_H5(self):
         if self.file.endswith(".h5"):
-                # If the file is an HDF5 file, set the HDF5 path
+            # If the file is an HDF5 file, set the HDF5 path
             h5_path = self.file
         else:
             raise ValueError("File is not an HDF5 file")

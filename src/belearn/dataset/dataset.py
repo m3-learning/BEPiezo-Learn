@@ -31,7 +31,7 @@ from belearn.dataset.Datafed import BE_DataFed
 
 @dataclass
 class BE_Dataset(BE_DataFed):
-    file: str = "/home/julian/Alibek_BEPFM/Rapid-Fitting-BEPFM-NN/notebooks/Data/data_raw.h5"  # TODO: make required
+    file: str = "./Data/data_raw.h5" 
     noise: int = 0
     resampled_bins: int = None
     resampled_data: dict = None

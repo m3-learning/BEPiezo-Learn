@@ -1,5 +1,5 @@
 from sklearn.model_selection import train_test_split
-from belearn.dataset.State import State
+from belearn.dataset.state import State
 from belearn.util.wrappers import context_manager_decorator
 import torch
 import numpy as np

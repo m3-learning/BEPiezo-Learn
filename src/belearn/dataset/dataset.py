@@ -621,7 +621,7 @@ class BE_Dataset(BE_DataFed):
                 h5_main, cores=max_cores, verbose=False, h5_target_group=h5_sho_targ_grp
             )
                 
-            if False:
+            if False and force is False:
                 
                 print("SHO fits already exist. Skipping.")
                 

@@ -428,12 +428,12 @@ class BE_Dataset(BE_DataFed):
         with h5py.File(self.file, "r+") as h5_f:
             # Iterate through each noise level provided in the list
             for noise_level in noise_levels:
-                if (
-                    usid.hdf_utils.find_dataset(h5_f, f"Noisy_Data_{noise_level}")
-                    is not []
-                ):
-                    print(f"Noisy_Data_{noise_level} already exists")
-                    continue
+                # if (
+                #     usid.hdf_utils.find_dataset(h5_f, f"Noisy_Data_{noise_level}")
+                #     is not []
+                # ):
+                #     print(f"Noisy_Data_{noise_level} already exists")
+                #     continue
 
                 if verbose:
                     print(f"Adding noise level {noise_level}")

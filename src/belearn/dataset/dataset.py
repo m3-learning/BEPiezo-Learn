@@ -542,6 +542,7 @@ class BE_Dataset(BE_DataFed):
         """
 
         with h5py.File(self.file, "r+") as h5_file:
+
             # Record the start time for the fitting process
             start_time_lsqf = time.time()
 
@@ -619,27 +620,32 @@ class BE_Dataset(BE_DataFed):
             sho_fitter = belib.analysis.BESHOfitter(
                 h5_main, cores=max_cores, verbose=False, h5_target_group=h5_sho_targ_grp
             )
+                
+            if False:
+                
+                print("SHO fits already exist. Skipping.")
+                
+            else:    
+                # Set up the initial guess for the SHO fitting
+                sho_fitter.set_up_guess(
+                    guess_func=belib.analysis.be_sho_fitter.SHOGuessFunc.complex_gaussian,
+                    num_points=SHO_fit_points,
+                )
 
-            # Set up the initial guess for the SHO fitting
-            sho_fitter.set_up_guess(
-                guess_func=belib.analysis.be_sho_fitter.SHOGuessFunc.complex_gaussian,
-                num_points=SHO_fit_points,
-            )
+                # Perform the initial guess fitting
+                sho_fitter.do_guess(override=force)
 
-            # Perform the initial guess fitting
-            sho_fitter.do_guess(override=force)
+                # Set up the actual fitting process
+                sho_fitter.set_up_fit()
 
-            # Set up the actual fitting process
-            sho_fitter.set_up_fit()
+                # Perform the SHO fitting
+                h5_sho_fit = sho_fitter.do_fit(override=force)
 
-            # Perform the SHO fitting
-            h5_sho_fit = sho_fitter.do_fit(override=force)
-
-            # Retrieve and print the fitting parameters
-            parms_dict = sidpy.hdf_utils.get_attributes(h5_main.parent.parent)
-            print(
-                f"LSQF method took {time.time() - start_time_lsqf} seconds to compute parameters"
-            )
+                # Retrieve and print the fitting parameters
+                parms_dict = sidpy.hdf_utils.get_attributes(h5_main.parent.parent)
+                print(
+                    f"LSQF method took {time.time() - start_time_lsqf} seconds to compute parameters"
+                )
 
             # Return the fitter and fit results if requested
             if return_data:

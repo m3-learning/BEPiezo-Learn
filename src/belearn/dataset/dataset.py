@@ -12,6 +12,7 @@ from m3util.util.h5 import (
     get_tree,
     find_measurement,
     make_group,
+    find_groups_with_string,
 )
 import pyUSID as usid
 
@@ -580,6 +581,7 @@ class BE_Dataset(BE_DataFed):
             # Check if the dataset is cKPFMData and set relevant parameters
             self.check_ckpfm(parm_dict, expt_type)
 
+            # TODO: JGoddy doesn't remember why this code in commented out
             # Handle non-BELineData types
             # if expt_type != "BELineData":
             #     vs_mode = usid.hdf_utils.get_attr(h5_meas_grp, "VS_mode")
@@ -620,10 +622,12 @@ class BE_Dataset(BE_DataFed):
             sho_fitter = belib.analysis.BESHOfitter(
                 h5_main, cores=max_cores, verbose=False, h5_target_group=h5_sho_targ_grp
             )
+            
+            # TODO: this check if the dataset is already fit could be earlier in the
+            # function to save some computation but that would require reorganization
+            if find_groups_with_string(h5_sho_file_path, dataset) != [] and force is False:
                 
-            if False and force is False:
-                
-                print("SHO fits already exist. Skipping.")
+                print(f"SHO fits for {dataset} already exist. Skipping....")
                 
             else:    
                 # Set up the initial guess for the SHO fitting

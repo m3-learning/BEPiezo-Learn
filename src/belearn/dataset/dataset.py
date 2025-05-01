@@ -625,7 +625,7 @@ class BE_Dataset(BE_DataFed):
             
             # TODO: this check if the dataset is already fit could be earlier in the
             # function to save some computation but that would require reorganization
-            if find_groups_with_string(h5_sho_file_path, dataset) != [] and force is False:
+            if find_groups_with_string(h5_sho_file_path, dataset) != [] and force is False and return_data is False:
                 
                 print(f"SHO fits for {dataset} already exist. Skipping....")
                 

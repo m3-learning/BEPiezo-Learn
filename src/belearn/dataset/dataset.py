@@ -25,6 +25,8 @@ from pathlib import Path
 from belearn.util.wrappers import static_state_decorator
 from belearn.filters.filters import clean_interpolate
 
+from typing import Dict, List, Tuple, Any
+
 @dataclass
 class BE_Dataset():
     """
@@ -884,16 +886,17 @@ class BE_Dataset():
             prefix = f"Noisy_Data_{self.noise}"
             return f"/Noisy_Data_{self.noise}_SHO_Fit/Noisy_Data_{self.noise}-{self.SHO_fit_relative_base_path}/{self.SHO_hysteresis_loop_guess_name}"
 
+    # TODO: Switch to context manager
     @static_state_decorator
     def get_hysteresis(
         self,
-        fits=False,
-        noise=None,
-        plotting_values=False,
-        output_shape=None,
-        scaled=None,
-        loop_interpolated=None,
-        measurement_state=None,
+        fits: Optional[bool] = False,
+        noise: Optional[int] = None,
+        plotting_values: Optional[bool] = False,
+        output_shape: Optional[str] = None,
+        scaled: Optional[Any] = None,
+        loop_interpolated: Optional[Any] = None,
+        measurement_state: Optional[Any] = None,
     ):
         """
         get_hysteresis function to get the hysteresis loops
@@ -1010,14 +1013,18 @@ class BE_Dataset():
     # but putting it here for now because it is used by the
     # LSQF_Loop_Fit function below
 
-    def measure_group(self):
+    def get_measure_group_name(self) -> str:
         """
-        measure_group gets the measurement group based on a noise level
+        Retrieves the measurement group name based on the current noise level.
+
+        This method determines the appropriate measurement group name for the dataset
+        by checking the noise level. If the noise level is zero, it returns the group
+        name for raw data. Otherwise, it returns the group name for noisy data
+        corresponding to the specified noise level.
 
         Returns:
-            str: string for the measurement group for the data
+            str: The measurement group name for the dataset.
         """
-
         if self.noise == 0:
             return "Raw_Data_SHO_Fit"
         else:
@@ -1077,7 +1084,7 @@ class BE_Dataset():
             expt_type = sidpy.hdf.hdf_utils.get_attr(h5_file, "data_type")
 
             # finds the dataset from the file
-            h5_meas_grp = usid.hdf_utils.find_dataset(h5_file, self.measure_group())
+            h5_meas_grp = usid.hdf_utils.find_dataset(h5_file, self.get_measure_group_name())
 
             # extract the voltage mode
             vs_mode = sidpy.hdf.hdf_utils.get_attr(

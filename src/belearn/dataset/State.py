@@ -1,8 +1,8 @@
-
+import os
 
 from typing import Optional, Dict, Any
 from dataclasses import field
-from belearn.util.wrappers import context_manager_decorator
+from belearn.util.wrappers import static_state_decorator, context_manager_decorator
 import h5py
 import numpy as np
 import torch
@@ -116,7 +116,10 @@ class State(Preprocessing):
         
         self.__dict__.update(kwargs)
         
-    def measurement_state_voltage(self, voltage_step: int) -> int:
+ 
+    
+    
+    def measurement_state_voltage(self, voltage_step):
         """
         Determines the voltage step index based on the measurement state.
 
@@ -299,13 +302,18 @@ class State(Preprocessing):
 
         return data
    
-        @context_manager_decorator
+    
+    #@static_state_decorator
+    @context_manager_decorator
     def raw_spectra(
         self,
         pixel=None,
         voltage_step=None,
         fit_results=None,
         frequency=False,
+        noise=None,
+        scaled=False,
+        state=None,
         **kwargs
     ):
         """
@@ -335,16 +343,27 @@ class State(Preprocessing):
             np.array:
                 The band excitation data. If `frequency=True`, returns a tuple of the data and frequency bins.
         """
-        
-        self.noise = kwargs.get("noise", None)
-        self.scaled = kwargs.get("scaled", False)
-        self.state = kwargs.get("state", None)
-        self.reshaper_ = True
+
+        # Set the noise level if provided
+        if noise is not None:
+            self.noise = noise
+
+        if scaled:
+            self.scaled = scaled
 
         # Set the extraction state attributes if provided
-        if self.state is not None:
-            self.set_attributes(**self.state)
+        if state is not None:
+            self.set_attributes(**state)
+
+        # Open the HDF5 file for reading and writing
+        # JGoddy commented out the h5py file opening because
+        # h5_f was not being used in the code
+        # consequently I also unindented the relevant code
+        #with h5py.File(self.file, "r+") as h5_f: 
         
+        # Flag to determine if data reshaping is needed
+        shaper_ = True
+
         # Determine the voltage step considering the current measurement state
         voltage_step = self.measurement_state_voltage(voltage_step)
 
@@ -580,6 +599,7 @@ class State(Preprocessing):
         # Return the computed number of voltage steps
         return voltage_step
     
+    #@static_state_decorator
     @context_manager_decorator
     def SHO_fit_results(self, state=None, model=None, phase_shift=None, X_data=None):
         """
@@ -673,7 +693,7 @@ class State(Preprocessing):
             print("data type", type(data))
             return data.reshape(self.num_pix, self.state_num_voltage_steps(), 4)
         
-    @context_manager_decorator
+    @static_state_decorator
     def get_raw_data_from_LSQF_SHO(self, model, index=None):
         """
         Extracts raw data from LSQF (Least Squares Fit) SHO (Simple Harmonic Oscillator) fits.
@@ -1085,13 +1105,9 @@ class State(Preprocessing):
             hysteresis_data = hysteresis_data
         if self.measurement_state == "off":
             if hysteresis_data.ndim < 5:
-                hysteresis_data = hysteresis_data[:, hysteresis_data.shape[2]//2:hysteresis_data.shape[2], :]
-            else:
-                hysteresis_data = hysteresis_data[:, :, hysteresis_data.shape[2]//2:hysteresis_data.shape[2], :]
+                hysteresis_data = hysteresis_data[""]
+            hysteresis_data = hysteresis_data[:, :, hysteresis_data.shape[2]//2:hysteresis_data.shape[2], :]
         if self.measurement_state == "on":
-            if hysteresis_data.ndim < 5:
-                hysteresis_data = hysteresis_data[:, 0:hysteresis_data.shape[2]//2, :]
-            else:
-                hysteresis_data = hysteresis_data[:, :, 0:hysteresis_data.shape[2]//2, :]
+            hysteresis_data = hysteresis_data[:, :, 0:hysteresis_data.shape[2]//2, :]
         
         return hysteresis_data

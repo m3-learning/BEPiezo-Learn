@@ -22,7 +22,7 @@ from pyUSID.io.hdf_utils import reshape_to_n_dims, get_auxiliary_datasets
 from dataclasses import dataclass
 from typing import Optional, Union
 from pathlib import Path
-from belearn.util.wrappers import static_state_decorator
+from belearn.util.wrappers import context_manager_decorator
 from belearn.filters.filters import clean_interpolate
 
 from typing import Dict, List, Tuple, Any
@@ -916,7 +916,7 @@ class BE_Dataset:
             return f"/Noisy_Data_{self.noise}_SHO_Fit/Noisy_Data_{self.noise}-{self.SHO_fit_relative_base_path}/{self.SHO_hysteresis_loop_guess_name}"
 
     # TODO: Switch to context manager
-    @static_state_decorator
+    @context_manager_decorator
     def get_hysteresis(
         self,
         fits: Optional[bool] = False,
@@ -1166,7 +1166,7 @@ class BE_Dataset:
             h5_main = usid.hdf_utils.find_dataset(h5_file, main_dataset)[0]
         return h5_main
 
-    @static_state_decorator
+    @context_manager_decorator
     def LSQF_hysteresis_params(
         self, output_shape=None, scaled=None, measurement_state=None
     ):

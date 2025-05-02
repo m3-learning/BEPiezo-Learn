@@ -24,15 +24,13 @@ from typing import Optional, Union
 from pathlib import Path
 from belearn.util.wrappers import context_manager_decorator
 from belearn.filters.filters import clean_interpolate
-from belearn.dataset.fitters.sho import SHOFitter
-from belearn.dataset.fitters.hysteresis import HysteresisFitter
 
 from typing import Dict, List, Tuple, Any
 
 
 # TODO: Move Fitting to a separate class, SHO and Hysteresis Loop
 @dataclass
-class BE_Dataset(SHOFitter, HysteresisFitter):
+class BE_Dataset:
     """
     A class to represent a BE (Band Excitation) dataset stored in an HDF5 file.
 

@@ -2,9 +2,10 @@ import time
 from belearn.dataset.fitters.base import BaseFitter
 import h5py
 import os
-import usid
+import pyUSID as usid
 import sidpy
-import belib
+from BGlib import be as belib
+
 
 class SHOFitter(BaseFitter):
     

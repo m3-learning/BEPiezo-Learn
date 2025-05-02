@@ -116,10 +116,7 @@ class State(Preprocessing):
         
         self.__dict__.update(kwargs)
         
- 
-    
-    
-    def measurement_state_voltage(self, voltage_step):
+    def measurement_state_voltage(self, voltage_step: int) -> int:
         """
         Determines the voltage step index based on the measurement state.
 
@@ -311,9 +308,6 @@ class State(Preprocessing):
         voltage_step=None,
         fit_results=None,
         frequency=False,
-        noise=None,
-        scaled=False,
-        state=None,
         **kwargs
     ):
         """
@@ -343,27 +337,16 @@ class State(Preprocessing):
             np.array:
                 The band excitation data. If `frequency=True`, returns a tuple of the data and frequency bins.
         """
-
-        # Set the noise level if provided
-        if noise is not None:
-            self.noise = noise
-
-        if scaled:
-            self.scaled = scaled
+        
+        self.noise = kwargs.get("noise", None)
+        self.scaled = kwargs.get("scaled", False)
+        self.state = kwargs.get("state", None)
+        self.reshaper_ = True
 
         # Set the extraction state attributes if provided
-        if state is not None:
-            self.set_attributes(**state)
-
-        # Open the HDF5 file for reading and writing
-        # JGoddy commented out the h5py file opening because
-        # h5_f was not being used in the code
-        # consequently I also unindented the relevant code
-        #with h5py.File(self.file, "r+") as h5_f: 
+        if self.state is not None:
+            self.set_attributes(**self.state)
         
-        # Flag to determine if data reshaping is needed
-        shaper_ = True
-
         # Determine the voltage step considering the current measurement state
         voltage_step = self.measurement_state_voltage(voltage_step)
 

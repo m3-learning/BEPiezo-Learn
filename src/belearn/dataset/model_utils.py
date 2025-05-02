@@ -4,24 +4,19 @@ from belearn.util.wrappers import context_manager_decorator
 import torch
 import numpy as np
 from dataclasses import dataclass
-#from belearn.viz.viz_new import Viz
-#from autophyslearn.spectroscopic.nn import Model
 
 
 @dataclass
 class BE_model_utils(State):
-##### Machine Learning Functions #####
+    ##### Machine Learning Functions #####
 
     def __init__(self):
         super().__init__()
-        #self.model = model
-       # self.set_model_utils(self)
-        
 
-
-    #@static_state_decorator
     @context_manager_decorator
-    def NN_data(self, resampled=None, noise = None,scaled=True):
+    def get_nn_data(
+        self, resampled: bool = None, noise: int = None, scaled: bool = True
+    ):
         """
         Utility function that retrieves and prepares the data for neural network training.
 
@@ -44,6 +39,7 @@ class BE_model_utils(State):
             self.resampled = resampled
 
         self.noise = noise
+        
         # Ensure the data is scaled if required, as scaling is often necessary for neural network training
         self.scaled = scaled
 
@@ -61,10 +57,15 @@ class BE_model_utils(State):
 
         # Return the neural network input data and corresponding fit parameters
         return x_data, y_data
-    
-    
+
     def test_train_split_(
-        self, test_size=0.2, random_state=42, resampled=None, noise = None, scaled=True, shuffle=True
+        self,
+        test_size=0.2,
+        random_state=42,
+        resampled=None,
+        noise=None,
+        scaled=True,
+        shuffle=True,
     ):
         """
         Utility function that performs the train-test split on the neural network data.
@@ -85,7 +86,7 @@ class BE_model_utils(State):
         """
 
         # Retrieve the neural network data based on resampling and scaling options
-        x_data, y_data = self.NN_data(resampled, noise, scaled)
+        x_data, y_data = self.get_nn_data(resampled, noise, scaled)
 
         # Perform the train-test split using the specified test size, random state, and shuffle options
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
@@ -100,8 +101,6 @@ class BE_model_utils(State):
 
         # Return the split datasets
         return self.X_train, self.X_test, self.y_train, self.y_test
-
-
 
     def to_nn(self, data):
         """
@@ -125,7 +124,7 @@ class BE_model_utils(State):
             return data
 
         # Determine the number of bins based on whether the data has been resampled or not.
-        if self.resampled: 
+        if self.resampled:
             bins = self.resampled_bins
         else:
             bins = self.num_bins

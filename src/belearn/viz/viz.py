@@ -78,6 +78,7 @@ color_palette = {
     "predict_imag": "#b37400",  # dark yellowish tan
 }
 
+
 class Viz(BE_model_utils):
     """
     A DataClass for handling various visualization settings and data.
@@ -2418,7 +2419,7 @@ class Viz(BE_model_utils):
         # Case 1: The model is a neural network (nn.Module)
         if isinstance(model, nn.Module):
             # Retrieve the input data for the neural network
-            X_data, Y_data = self.NN_data()
+            X_data, Y_data = self.get_nn_data()
 
             # Select the data based on the provided indices
             X_data = X_data[[index]]
@@ -2503,7 +2504,7 @@ class Viz(BE_model_utils):
         """
 
         # Retrieve the raw dataset (samples, voltage steps, real/imaginary)
-        data, _ = self.NN_data()
+        data, _ = self.get_nn_data()
 
         # Select the data for the given indices
         data = data[[index]]

@@ -769,7 +769,20 @@ class BE_Dataset():
             h5_sho_targ_grp = make_group(h5_file, h5_sho_targ_grp)
         return h5_sho_targ_grp
 
-    def upsert_to_file(self, h5_sho_file_path):
+    def upsert_to_file(self, h5_sho_file_path: str) -> h5py.File:
+        """
+        Opens an HDF5 file for reading and writing, creating it if it does not exist.
+
+        This method checks if the specified HDF5 file exists at the given path. If the file
+        does not exist, it opens the file in write mode to create it. If the file already exists,
+        it opens the file in read and write mode.
+
+        Args:
+            h5_sho_file_path (str): The file path to the HDF5 file to be opened or created.
+
+        Returns:
+            h5py.File: An HDF5 file object opened in the appropriate mode.
+        """
         f_open_mode = "w" if not os.path.exists(h5_sho_file_path) else "r+"
         h5_sho_file = h5py.File(h5_sho_file_path, mode=f_open_mode)
         return h5_sho_file

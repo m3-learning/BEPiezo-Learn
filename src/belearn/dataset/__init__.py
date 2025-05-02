@@ -1,6 +1,6 @@
 # Auto-generated __init__.py
 
-from belearn.dataset import Datafed
+from belearn.dataset import datafed
 from belearn.dataset import state
 from belearn.dataset import analytics
 from belearn.dataset import dataset
@@ -9,7 +9,7 @@ from belearn.dataset import preprocessing
 from belearn.dataset import scalers
 from belearn.dataset import transformers
 
-from belearn.dataset.Datafed import (BE_DataFed, instantiate_datafed,)
+from belearn.dataset.datafed import (BE_DataFed, instantiate_datafed,)
 from belearn.dataset.state import (State,)
 from belearn.dataset.analytics import (MSE, get_rankings, mse_rankings,
                                        print_mse,)
@@ -20,7 +20,7 @@ from belearn.dataset.scalers import (Raw_Data_Scaler,)
 from belearn.dataset.transformers import (is_complex, to_complex,
                                           to_real_imag,)
 
-__all__ = ['BE_DataFed', 'BE_Dataset', 'BE_model_utils', 'Datafed', 'MSE',
+__all__ = ['BE_DataFed', 'BE_Dataset', 'BE_model_utils', 'datafed', 'MSE',
            'Preprocessing', 'Raw_Data_Scaler', 'state', 'analytics', 'dataset',
            'get_rankings', 'instantiate_datafed', 'is_complex',
            'model_utils', 'mse_rankings', 'preprocessing', 'print_mse',

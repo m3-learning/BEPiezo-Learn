@@ -18,9 +18,8 @@ from belearn import functions
 from belearn import nn
 from belearn import util
 
-from belearn.dataset import (BE_DataFed, BE_Dataset, BE_model_utils, Datafed,
-                             MSE, Preprocessing, Raw_Data_Scaler, State,
-                             analytics, dataset, get_rankings,
+from belearn.dataset import (BE_DataFed, BE_Dataset, BE_model_utils, MSE, Preprocessing, Raw_Data_Scaler, State,
+                             analytics, datafed, dataset, get_rankings,
                              instantiate_datafed, is_complex, model_utils,
                              mse_rankings, preprocessing, print_mse, scalers,
                              to_complex, to_real_imag, transformers,)
@@ -35,7 +34,7 @@ from belearn.util import (context_manager_decorator, static_state_decorator,
                           temporary_state, wrappers,)
 
 __all__ = ['BEInference', 'BE_DataFed', 'BE_Dataset', 'BE_model_utils',
-           'BatchTrainer', 'Datafed', 'MSE', 'ModelAnalysis', 'Preprocessing',
+           'BatchTrainer', 'datafed', 'MSE', 'ModelAnalysis', 'Preprocessing',
            'Raw_Data_Scaler', 'SHO_nn', 'State', 'analysis', 'analytics',
            'clean_interpolate', 'clear_all_tensors',
            'context_manager_decorator', 'convert_csv_df', 'create_models',

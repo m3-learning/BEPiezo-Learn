@@ -299,7 +299,7 @@ class State(Preprocessing):
 
         return data
    
-        @context_manager_decorator
+    @context_manager_decorator
     def raw_spectra(
         self,
         pixel=None,

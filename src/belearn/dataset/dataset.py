@@ -124,17 +124,13 @@ class BE_Dataset():
     SHO_hysteresis_loop_guess_name: str = "Guess-Loop_Fit_000"
     noise_std_: float = None
 
-    def __post_init__(self, datafed=None):
+    def __post_init__(self):
         """
         Post-initialization method for the BE_Dataset class.
 
         This method is automatically called after the class is initialized. It sets the
         data federation attribute and determines the current dataset based on the noise level.
-
-        Args:
-            datafed (Optional[Union[None, str, Path]]): An optional path or identifier for data federation.
         """
-        self.datafed = datafed
         self.get_dataset(self.noise)
 
         # TODO: remove this
@@ -146,9 +142,17 @@ class BE_Dataset():
         # if self.resampled_bins is None:
         #     self.resampled_bins = self.num_bins
 
-    def get_dataset(self, noise):
-        """Property that returns the current dataset based on the noise state."""
+    def get_dataset(self, noise: int):
+        """
+        Determines the current dataset name based on the noise level.
 
+        This method sets the `dataset_name` attribute to either "Raw_Data" 
+        if the noise level is zero, or to a noise-specific dataset name 
+        formatted as "Noisy_Data_{noise}" for non-zero noise levels.
+
+        Args:
+            noise (int): The noise level used to determine the dataset name.
+        """
         if noise == 0:
             self.dataset_name = "Raw_Data"
         else:

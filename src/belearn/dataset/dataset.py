@@ -23,7 +23,7 @@ from pyUSID.io.hdf_utils import reshape_to_n_dims, get_auxiliary_datasets
 from dataclasses import dataclass
 from typing import Optional, Union
 from pathlib import Path
-from belearn.util.wrappers import static_state_decorator, context_manager_decorator
+from belearn.util.wrappers import static_state_decorator
 from belearn.filters.filters import clean_interpolate
 
 
@@ -254,7 +254,7 @@ class BE_Dataset(BE_DataFed):
         with h5py.File(self.file, "r+") as h5_f:
             try:
                 return h5_f[self.measurement].attrs["num_udvs_steps"]
-            except:
+            except:  # noqa: E722
                 # computes the number of voltage steps for datasets that do not contain the attribute
                 return (
                     h5_f[self.measurement].attrs["VS_steps_per_full_cycle"]
@@ -287,15 +287,14 @@ class BE_Dataset(BE_DataFed):
     @property
     def hysteresis_waveform(self, loop_number=2):
         """Gets the hysteresis waveform"""
-        with h5py.File(self.file, "r+") as h5_f:
-            return (
-                self.spectroscopic_values[1, :: len(self.frequency_bin)][
-                    int(self.voltage_steps / loop_number) :
-                ]
-                * self.spectroscopic_values[2, :: len(self.frequency_bin)][
-                    int(self.voltage_steps / loop_number) :
-                ]
-            )
+        return (
+            self.spectroscopic_values[1, :: len(self.frequency_bin)][
+                int(self.voltage_steps / loop_number) :
+            ]
+            * self.spectroscopic_values[2, :: len(self.frequency_bin)][
+                int(self.voltage_steps / loop_number) :
+            ]
+        )
 
     @property
     def noise_std(self):
@@ -423,7 +422,7 @@ class BE_Dataset(BE_DataFed):
         self.noise_std = noise_STD
 
         if verbose:
-            print(f"The STD of the data is: {noise_STD}")
+            print(f"The STD of the data is: {self.noise_std}")
 
         # Open the HDF5 file in read+write mode
         with h5py.File(self.file, "r+") as h5_f:
@@ -442,7 +441,7 @@ class BE_Dataset(BE_DataFed):
                     print(f"Adding noise level {noise_level}")
 
                 # Calculate the actual noise level to be applied
-                noise_level_ = noise_STD * noise_level
+                noise_level_ = self.noise_std * noise_level
 
                 # Generate random noise for the real and imaginary parts
                 noise_real = np.random.uniform(
@@ -564,7 +563,7 @@ class BE_Dataset(BE_DataFed):
             h5_main = usid.hdf_utils.find_dataset(h5_file, dataset)[0]
 
             # Extract useful parameters from the dataset
-            pos_ind = h5_main.h5_pos_inds
+            pos_ind = h5_main.h5_pos_inds  # noqa: F841
             pos_dims = h5_main.pos_dim_sizes
             pos_labels = h5_main.pos_dim_labels
             print(pos_labels, pos_dims)
@@ -646,7 +645,7 @@ class BE_Dataset(BE_DataFed):
                 h5_sho_fit = sho_fitter.do_fit(override=force)
 
                 # Retrieve and print the fitting parameters
-                parms_dict = sidpy.hdf_utils.get_attributes(h5_main.parent.parent)
+                parameter_dict = sidpy.hdf_utils.get_attributes(h5_main.parent.parent)  # noqa: F841
                 print(
                     f"LSQF method took {time.time() - start_time_lsqf} seconds to compute parameters"
                 )
@@ -670,11 +669,13 @@ class BE_Dataset(BE_DataFed):
         return h5_sho_file
 
     def check_ckpfm(self, parm_dict, expt_type):
+        
         is_ckpfm = expt_type == "cKPFMData"
+        
         if is_ckpfm:
-            num_write_steps = parm_dict["VS_num_DC_write_steps"]
-            num_read_steps = parm_dict["VS_num_read_steps"]
-            num_fields = 2
+            num_write_steps = parm_dict["VS_num_DC_write_steps"]  # noqa: F841
+            num_read_steps = parm_dict["VS_num_read_steps"]  # noqa: F841
+            num_fields = 2  # noqa: F841
 
     def check_H5(self):
         if self.file.endswith(".h5"):
@@ -1008,10 +1009,10 @@ class BE_Dataset(BE_DataFed):
                 guess_func=belib.analysis.be_sho_fitter.SHOGuessFunc.complex_gaussian,
                 num_points=sho_fit_points,
             )
-            h5_sho_guess = sho_fitter.do_guess(override=sho_override)
+            h5_sho_guess = sho_fitter.do_guess(override=sho_override)  # noqa: F841
             sho_fitter.set_up_fit()
-            h5_sho_fit = sho_fitter.do_fit(override=sho_override)
-            h5_sho_grp = h5_sho_fit.parent
+            h5_sho_fit = sho_fitter.do_fit(override=sho_override)  
+            h5_sho_grp = h5_sho_fit.parent  # noqa: F841
 
             # gets the experiment type from the file
             expt_type = sidpy.hdf.hdf_utils.get_attr(h5_file, "data_type")
@@ -1051,7 +1052,7 @@ class BE_Dataset(BE_DataFed):
             h5_loop_guess = loop_fitter.do_guess(override=force)
 
             # Calling explicitly here since Fitter won't do it automatically
-            h5_guess_loop_parms = loop_fitter.extract_loop_parameters(h5_loop_guess)
+            h5_guess_loop_parms = loop_fitter.extract_loop_parameters(h5_loop_guess)  # noqa: F841
             loop_fitter.set_up_fit()
             h5_loop_fit = loop_fitter.do_fit(override=force)
 

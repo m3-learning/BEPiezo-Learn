@@ -1,9 +1,9 @@
 import numpy as np
-#from autophyslearn.spectroscopic.nn import Multiscale1DFitter
 import torch
 from torch import nn
 
-def MSE(true, prediction):
+
+def MSE(true: np.ndarray, prediction: np.ndarray) -> np.ndarray | float:
     """
     Computes the Mean Squared Error (MSE) between the true and predicted values.
 
@@ -12,17 +12,19 @@ def MSE(true, prediction):
         prediction (numpy.ndarray): Predicted values. It should have the same shape as 'true'.
 
     Returns:
-        numpy.ndarray or float: The MSE for each batch if there are multiple samples, or 
+        numpy.ndarray or float: The MSE for each batch if there are multiple samples, or
                                 a scalar MSE value if there is only one sample.
 
     Notes:
-        The function flattens all dimensions except the batch dimension for both 'true' and 'prediction' 
+        The function flattens all dimensions except the batch dimension for both 'true' and 'prediction'
         arrays to compute the MSE per batch.
     """
     # Reshape the true and prediction arrays to 2D, preserving the batch size (first dimension)
-    # This operation flattens all other dimensions (channels, timesteps, etc.)
-    mse = np.mean((true.reshape(true.shape[0], -1) - prediction.reshape(true.shape[0], -1))**2, axis=1)
-
+    # This operation flattens all other dimensions (channels, time steps, etc.)
+    mse = np.mean(
+        (true.reshape(true.shape[0], -1) - prediction.reshape(true.shape[0], -1)) ** 2,
+        axis=1,
+    )
 
     # If there's only one batch (single sample), return MSE as a scalar
     if mse.shape[0] == 1:
@@ -32,17 +34,19 @@ def MSE(true, prediction):
     return mse
 
 
-def mse_rankings(true, prediction, curves=False):
+def mse_rankings(
+    true: np.ndarray, prediction: np.ndarray, curves: bool = False
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Calculates the mean squared error (MSE) for the given predictions relative to the true values, 
+    Calculates the mean squared error (MSE) for the given predictions relative to the true values,
     ranks them based on the error, and optionally returns the true and predicted values sorted by the ranked error.
 
     Args:
-        true (array-like): Ground truth values. 
-                          It should be convertible to a NumPy array, typically structured as [batch, channels, timesteps].
-        prediction (array-like): Predicted values. 
+        true (array-like): Ground truth values.
+                          It should be convertible to a NumPy array, typically structured as [batch, channels, time steps].
+        prediction (array-like): Predicted values.
                                  It should have the same structure as the 'true' values.
-        curves (bool, optional): If True, return the sorted true and predicted values 
+        curves (bool, optional): If True, return the sorted true and predicted values
                                  along with the ranked errors. Default is False.
 
     Returns:
@@ -52,7 +56,8 @@ def mse_rankings(true, prediction, curves=False):
         prediction (numpy.ndarray, optional): If 'curves' is True, returns the predicted values sorted by ranked MSE.
 
     """
-    def type_conversion(data):
+
+    def type_conversion(data: np.ndarray) -> np.ndarray:
         """
         Converts input data to a NumPy array and rearranges the axes so that
         the batch axis is moved to the end.
@@ -79,16 +84,23 @@ def mse_rankings(true, prediction, curves=False):
 
     # If curves is True, return ranked true and predicted values
     if curves:
-        # true will be in the form [ranked error, channel, timestep]
+        # true will be in the form [ranked error, channel, time step]
         return index, errors[index], true[index], prediction[index]
 
     # Otherwise, return the indices and ranked errors only
     return index, errors[index]
 
-def get_rankings(raw_data, pred, n=1, curves=True,fit_type="SHO"):
+
+def get_rankings(
+    raw_data: np.ndarray,
+    pred: np.ndarray,
+    n: int = 1,
+    curves: bool = True,
+    fit_type: str = "SHO",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     A simple function to get the best, median, and worst reconstructions based on MSE (mean squared error).
-    
+
     This function ranks the predictions (`pred`) compared to the true values (`raw_data`) based on their MSE.
     It returns the indices of the best, median, and worst reconstructions, along with their corresponding MSE values
     and optionally the reconstruction curves.
@@ -105,72 +117,98 @@ def get_rankings(raw_data, pred, n=1, curves=True,fit_type="SHO"):
         d1 (np.array): First set of reconstruction data for the selected indices (if `curves` is True).
         d2 (np.array): Second set of reconstruction data for the selected indices (if `curves` is True).
     """
-    
+
     # Compute the rankings based on MSE and get the corresponding indices and MSE values.
     # If curves=True, it will also return the associated reconstruction curves (d1, d2).
     index, mse, d1, d2 = mse_rankings(raw_data, pred, curves=curves)
-    
+
     # Calculate the index for the middle reconstruction (median).
     middle_index = len(index) // 2
-    
+
     # Determine the range of indices to select for the median values.
     start_index = middle_index - n // 2
     end_index = start_index + n
 
     # Combine the best (first n), median (middle n), and worst (last n) indices.
-    ind = np.hstack((index[:n], index[start_index:end_index], index[-n:])).flatten().astype(int)
-    
+    ind = (
+        np.hstack((index[:n], index[start_index:end_index], index[-n:]))
+        .flatten()
+        .astype(int)
+    )
+
     # Combine the corresponding MSE values for the best, median, and worst reconstructions.
     mse = np.hstack((mse[:n], mse[start_index:end_index], mse[-n:]))
-    
+
     # Combine the reconstruction curves (d1, d2) for the best, median, and worst reconstructions.
     # Use squeeze to remove unnecessary dimensions from the resulting arrays.
-    
-    # d1 = np.stack((d1[:n], d1[start_index:end_index], d1[-n:])).squeeze()
-    # d2 = np.stack((d2[:n], d2[start_index:end_index], d2[-n:])).squeeze()
-    
-    if fit_type == 'SHO':
-        d1 = np.stack((d1[:n], d1[start_index:end_index], d1[-n:])).squeeze()
-        d2 = np.stack((d2[:n], d2[start_index:end_index], d2[-n:])).squeeze()
+    if fit_type == "SHO":
+        d1, d2 = get_SHO_components(n, d1, d2, start_index, end_index)
     elif fit_type == "hysteresis":
-        d1 = np.stack((d1[:,:n], d1[:,start_index:end_index], d1[:,-n:])).squeeze()
-        d2 = np.stack((d2[:,:n], d2[:,start_index:end_index], d2[:,-n:])).squeeze()
-    
-    # if fit_type == "SHO":
-    #     d1=np.stack((d1[index[:n]], d1[index[start_index:end_index]], d1[index[-n:]])).squeeze()
-    #     d2=np.stack((d2[index[:n]], d2[index[start_index:end_index]], d2[index[-n:]])).squeeze()
-    # elif fit_type == "hysteresis":
-    #     d1=np.stack((d1[index[:,:n]], d1[index[:,start_index:end_index]], d1[index[:,-n:]])).squeeze()
-    #     d2=np.stack((d2[index[:,:n]], d2[index[:,start_index:end_index]], d2[index[:,-n:]])).squeeze()
+        d1, d2 = get_hysteresis_components(n, d1, d2, start_index, end_index)
 
     # Return the indices, MSE values, and optionally the reconstruction curves (d1, d2).
     return index, ind, mse, d1, d2
 
 
+def get_hysteresis_components(
+    n: int, d1: np.ndarray, d2: np.ndarray, start_index: int, end_index: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Extracts the best, median, and worst components of the hysteresis fit from the given data.
 
-def print_mse(model_obj, model_predictor, model_utils, data, labels,is_SHO=False):
+    Args:
+        n (int): Number of components to extract.
+        d1 (np.ndarray): First set of reconstruction data.
+    """
+    d1 = np.stack((d1[:, :n], d1[:, start_index:end_index], d1[:, -n:])).squeeze()
+    d2 = np.stack((d2[:, :n], d2[:, start_index:end_index], d2[:, -n:])).squeeze()
+    return d1, d2
+
+
+def get_SHO_components(
+    n: int, d1: np.ndarray, d2: np.ndarray, start_index: int, end_index: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Extracts the best, median, and worst components of the SHO fit from the given data.
+
+    Args:
+        n (int): Number of components to extract.
+        d1 (np.ndarray): First set of reconstruction data.
+    """
+    d1 = np.stack((d1[:n], d1[start_index:end_index], d1[-n:])).squeeze()
+    d2 = np.stack((d2[:n], d2[start_index:end_index], d2[-n:])).squeeze()
+    return d1, d2
+
+
+def print_mse(
+    model_obj: Any,
+    model_predictor: Any,
+    model_utils: Any,
+    data: Any,
+    labels: Any,
+    is_SHO: bool = False,
+) -> None:
     """
     Prints the Mean Squared Error (MSE) of the model's predictions for each dataset provided.
 
     Args:
         model_obj: The object containing the dataset and any necessary methods for data extraction.
         model_predictor: The object or model responsible for making predictions on the input data.
-        data (tuple): A tuple of datasets used to calculate the MSE. Each dataset can either be 
+        data (tuple): A tuple of datasets used to calculate the MSE. Each dataset can either be
                       a PyTorch tensor or a dictionary containing data for prediction.
         labels (list): A list of strings corresponding to the names of the datasets, used for labeling the output.
 
-    This function computes the MSE for each dataset in `data`, either by calling the `predict` method 
+    This function computes the MSE for each dataset in `data`, either by calling the `predict` method
     of the `model_predictor` on tensor data or by extracting raw data from the `model_obj` for dictionary data.
     The MSE is computed for each dataset and printed with the corresponding label.
     """
 
     # Loop through each dataset and its corresponding label
     for data, label in zip(data, labels):
-
         # If the data is a PyTorch tensor
         if isinstance(data, torch.Tensor):
             # Compute predictions using the model's predict method
-            pred_data, scaled_param, parm = model_predictor.predict(data,is_SHO=is_SHO)
+            pred_data, scaled_param, parm = model_predictor.predict(data, is_SHO=is_SHO)
 
         # If the data is a dictionary, use raw data extraction methods from model_obj
         elif isinstance(data, dict):

@@ -205,7 +205,6 @@ class BE_Dataset():
             for key in h5_f.file[self.measurement].attrs:
                 print("{} : {}".format(key, h5_f.file[self.measurement].attrs[key]))
 
-    # This function was called get_original_data in the old code
     @property
     def raw_SHO_data(self):
         """
@@ -316,6 +315,8 @@ class BE_Dataset():
     def dc_voltage(self):
         """Gets the DC voltage vector"""
         with h5py.File(self.file, "r+") as h5_f:
+            
+            
             return h5_f[f"{self.raw_data_path}/Spectroscopic_Values"][0, 1::2]
 
     @property
@@ -329,6 +330,8 @@ class BE_Dataset():
 
         # TODO: Look for a way to refactor and not hard code.
         with h5py.File(self.file, "r+") as h5_f:
+            
+            # TODO: Fix hardcoded values.
             return h5_f[self.basegroup]["UDVS"][::2][:, 1][24:120] * -1
 
     @property
@@ -395,10 +398,6 @@ class BE_Dataset():
 
         print(f"Noise standard deviation: {self.noise_std_}")
 
-    # this function is very similar to get_spec_dims right below.
-    # the only difference is "pos" vs "spec".
-    # If I combine them it would make the code shorter but I would maybe need a way to select between the two
-    # so it doesn't waste time getting the position/spectroscopic dimensions if I don't need them.
     @property
     def get_pos_dims(self):
         """
@@ -477,9 +476,9 @@ class BE_Dataset():
 
     def generate_noisy_data_records(
         self,
-        noise_levels,
-        verbose=False,
-        noise_STD=None,
+        noise_levels: list[float],
+        verbose: bool = False,
+        noise_STD: float | None = None,
     ):
         """
         Generates noisy data records and saves them to an HDF5 file.

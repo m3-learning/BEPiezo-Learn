@@ -811,68 +811,61 @@ class BE_Dataset():
             num_fields = 2  # noqa: F841
         return is_ckpfm
 
-    def check_H5(self):
+    def check_H5(self) -> str:
+        """
+        Validates if the file attribute is an HDF5 file and returns its path.
+
+        This method checks if the file associated with the BE_Dataset instance
+        has an '.h5' extension, indicating it is an HDF5 file. If the file is
+        valid, it returns the file path. Otherwise, it raises a ValueError.
+
+        Returns:
+            str: The path to the HDF5 file.
+
+        Raises:
+            ValueError: If the file does not have an '.h5' extension.
+        """
         if self.file.endswith(".h5"):
-            # If the file is an HDF5 file, set the HDF5 path
-            h5_path = self.file
+            return self.file
         else:
             raise ValueError("File is not an HDF5 file")
-        return h5_path
 
     def set_SHO_LSQF(self):
         """
-        set_SHO_LSQF Sets the SHO Scaler data to make accessible
+        Initializes and sets the Simple Harmonic Oscillator (SHO) Scaler data for accessibility.
+
+        This method prepares the SHO Scaler data by initializing necessary dictionaries
+        and reshaping raw data for further analysis. It reads the data from an HDF5 file
+        and stores it in a structured format for easy access.
+
+        The method performs the following actions:
+        - Initializes `SHO_LSQF_data` and `raw_data_reshaped` dictionaries.
+        - Reads and processes the SHO fit data from the HDF5 file.
+        - Reshapes the raw data for analysis.
+
+        Raises:
+            KeyError: If the specified dataset or path does not exist in the HDF5 file.
         """
 
-        # initializes the dictionary
+        # Initialize the dictionaries for storing data
         self.SHO_LSQF_data = {}
         self.raw_data_reshaped = {}
 
-        print(f"{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit")
+        print(f"Accessing data at: {self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit")
 
         with h5py.File(self.file, "r+") as h5_f:
-            self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(
-                h5_f[f"{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"][:]
-            )[:, :, :-1]
+            try:
+                # Extract and store the SHO fit data
+                self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(
+                    h5_f[f"{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"][:]
+                )[:, :, :-1]
 
-            self.raw_data_reshaped[self.dataset_name] = h5_f[
-                f"{self.basegroup}/{self.dataset_name}"
-            ][:].reshape(self.num_pix, self.voltage_steps, self.num_bins)
-
-        # for dataset in self.raw_datasets:
-        #     # data groups in file
-        #     try:
-        #         SHO_fits = find_groups_with_string(self.file, f"{dataset}-SHO_Fit_000")[0]
-
-        #         with h5py.File(self.file, "r+") as h5_f:
-        #             # extract the name of the fit
-        #             name = SHO_fits.split("/")[-1]
-
-        #             # create a list for parameters
-        #             SHO_LSQF_list = []
-        #             for sublist in np.array(h5_f[f"{SHO_fits}/Fit"]):
-        #                 for item in sublist:
-        #                     for i in item:
-        #                         SHO_LSQF_list.append(i)
-
-        #             data_ = np.array(SHO_LSQF_list).reshape(-1, 5)
-
-        #             # saves the SHO LSQF data as an attribute of the dataset object
-        #             self.SHO_LSQF_data[name] = data_.reshape(
-        #                 self.num_pix, self.voltage_steps, 5
-        #             )[:, :, :-1]
-        #     except Exception as e:
-        #         if isinstance(e, IndexError):
-        #             print("*"*20)
-        #             print(f"SHO_LSQF_data for {dataset} not found")
-        #             print("Skipping retrieval of SHO_LSQF_data for this dataset")
-        #             print("*"*20)
-        #         else:
-        #             print("set_SHO_LSQF failed with exception:")
-        #             print(e)
-        #             print("*"*20)
-        #             print("Traceback:")
-        #             print(traceback.format_exc())
+                # Reshape and store the raw data
+                self.raw_data_reshaped[self.dataset_name] = h5_f[
+                    f"{self.basegroup}/{self.dataset_name}"
+                ][:].reshape(self.num_pix, self.voltage_steps, self.num_bins)
+            except KeyError as e:
+                raise KeyError(f"Dataset or path not found in HDF5 file: {e}")
 
     # JGoddy put this function here because it relates the the h5 files
     # but it doesn't actually use the h5 file so maybe it should be elsewhere?

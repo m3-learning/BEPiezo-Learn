@@ -557,7 +557,23 @@ class BE_Dataset():
                     compression="gzip",
                 )  # Compression type for storage
 
-    def SHO_fit_all(self, *args, **kwargs):
+    def SHO_fit_all(self, *args: Any, **kwargs: Any):
+        """
+        Fits the Simple Harmonic Oscillator (SHO) model to all provided datasets.
+
+        This method iterates over each dataset provided in the arguments and applies
+        the SHO fitting process using the specified memory and core constraints.
+
+        Args:
+            *args: Variable length argument list containing datasets to be fitted.
+            **kwargs: Arbitrary keyword arguments. Supported keys include:
+                - max_mem (int): Maximum memory in MB to be used for fitting. Defaults to 65536 MB.
+                - max_cores (int): Maximum number of CPU cores to be used for fitting. Defaults to 48.
+
+        Example:
+            >>> obj.SHO_fit_all("dataset1", "dataset2", max_mem=32768, max_cores=24)
+
+        """
         max_mem = kwargs.get("max_mem", 1024 * 64)
         max_cores = kwargs.get("max_cores", 48)
 
@@ -571,16 +587,15 @@ class BE_Dataset():
                 **kwargs,
             )
 
-    # this should maybe go in a separate 'preprocessing' class
     def SHO_Fitter(
         self,
-        force=False,
-        max_cores=-1,
-        max_mem=1024 * 8,
-        dataset="Raw_Data",
-        h5_sho_targ_grp=None,
-        return_data=False,
-        SHO_fit_points=5,
+        force: bool = False,
+        max_cores: int = -1,
+        max_mem: int = 1024 * 8,
+        dataset: str = "Raw_Data",
+        h5_sho_targ_grp: h5py.Group | None = None,
+        return_data: bool = False,
+        SHO_fit_points: int = 5,
     ):
         """
         Computes the SHO (Simple Harmonic Oscillator) fit results for a given dataset.
@@ -622,12 +637,6 @@ class BE_Dataset():
             # Record the start time for the fitting process
             start_time_lsqf = time.time()
 
-            # Split the directory path and the file name from the full file path
-            # JGoddy commented out the line below because I don't think either
-            # data_dir or filename are used anywhere in the code.
-            # (data_dir, filename) = os.path.split(self.file)
-
-            # TODO: likely delete.
             h5_path = self.check_H5()
 
             # Split the path to get the folder and raw file name
@@ -679,8 +688,6 @@ class BE_Dataset():
             #         )
             #         vs_cycle_frac = "full"
 
-            # TODO: add a check here with a continue statement for existing SHO fits.
-
             # Determine the file path for saving the SHO fit results
             h5_sho_file_path = os.path.join(folder_path, h5_raw_file_name)
             print("\n\nSHO Fits will be written to:\n" + h5_sho_file_path + "\n\n")
@@ -698,8 +705,6 @@ class BE_Dataset():
                 h5_main, cores=max_cores, verbose=False, h5_target_group=h5_sho_targ_grp
             )
 
-            # TODO: this check if the dataset is already fit could be earlier in the
-            # function to save some computation but that would require reorganization
             if (
                 find_groups_with_string(h5_sho_file_path, dataset) != []
                 and force is False
@@ -735,7 +740,29 @@ class BE_Dataset():
             else:
                 return sho_fitter
 
-    def get_target_group(self, h5_sho_targ_grp, h5_file, h5_sho_file):
+    def get_target_group(
+        self,
+        h5_sho_targ_grp: h5py.Group | None,
+        h5_file: h5py.File,
+        h5_sho_file: h5py.File,
+    ):
+        """
+        Determines the target HDF5 group for saving SHO results.
+
+        This function checks if a target group is provided. If not, it defaults to using
+        the provided HDF5 file as the target group. If a target group is specified, it
+        ensures the group exists within the HDF5 file, creating it if necessary.
+
+        Args:
+            h5_sho_targ_grp (h5py.Group | None): The target group for saving SHO results.
+                If None, the function defaults to using the provided HDF5 file.
+            h5_file (h5py.File): The HDF5 file where the group should be located or created.
+            h5_sho_file (h5py.File): The HDF5 file to use as the default target group if
+                no specific group is provided.
+
+        Returns:
+            h5py.Group: The determined target group for saving SHO results.
+        """
         if h5_sho_targ_grp is None:
             h5_sho_targ_grp = h5_sho_file
         else:

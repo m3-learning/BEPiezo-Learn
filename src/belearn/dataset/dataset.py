@@ -27,8 +27,10 @@ from belearn.filters.filters import clean_interpolate
 
 from typing import Dict, List, Tuple, Any
 
+
+# TODO: Move Fitting to a separate class, SHO and Hysteresis Loop
 @dataclass
-class BE_Dataset():
+class BE_Dataset:
     """
     A class to represent a BE (Band Excitation) dataset stored in an HDF5 file.
 
@@ -50,7 +52,7 @@ class BE_Dataset():
         SHO_hysteresis_loop_fit_name (str): The name for the SHO hysteresis loop fit. Defaults to "Fit-Loop_Fit_000".
         SHO_hysteresis_loop_guess_name (str): The name for the SHO hysteresis loop guess. Defaults to "Guess-Loop_Fit_000".
         noise_std_ (float): The standard deviation of the noise. Defaults to None.
-        
+
     Methods:
         get_dataset(noise):
             Returns the current dataset based on the noise state.
@@ -112,6 +114,7 @@ class BE_Dataset():
         SHO_Fitter(force, max_cores, max_mem, dataset, h5_sho_targ_grp, return_data, SHO_fit_points):
             Computes the SHO fit results for a given dataset.
     """
+
     file: str = "./Data/data_raw.h5"
     noise: int = 0
     resampled_bins: int = None
@@ -148,8 +151,8 @@ class BE_Dataset():
         """
         Determines the current dataset name based on the noise level.
 
-        This method sets the `dataset_name` attribute to either "Raw_Data" 
-        if the noise level is zero, or to a noise-specific dataset name 
+        This method sets the `dataset_name` attribute to either "Raw_Data"
+        if the noise level is zero, or to a noise-specific dataset name
         formatted as "Noisy_Data_{noise}" for non-zero noise levels.
 
         Args:
@@ -317,8 +320,6 @@ class BE_Dataset():
     def dc_voltage(self):
         """Gets the DC voltage vector"""
         with h5py.File(self.file, "r+") as h5_f:
-            
-            
             return h5_f[f"{self.raw_data_path}/Spectroscopic_Values"][0, 1::2]
 
     @property
@@ -332,7 +333,6 @@ class BE_Dataset():
 
         # TODO: Look for a way to refactor and not hard code.
         with h5py.File(self.file, "r+") as h5_f:
-            
             # TODO: Fix hardcoded values.
             return h5_f[self.basegroup]["UDVS"][::2][:, 1][24:120] * -1
 
@@ -559,6 +559,7 @@ class BE_Dataset():
                     compression="gzip",
                 )  # Compression type for storage
 
+    # TODO: move to SHOFitter class
     def SHO_fit_all(self, *args: Any, **kwargs: Any):
         """
         Fits the Simple Harmonic Oscillator (SHO) model to all provided datasets.
@@ -708,7 +709,7 @@ class BE_Dataset():
             )
 
             if (
-                find_groups_with_string(h5_sho_file_path, dataset) != []
+                self.get_data_group_contents(search_string = dataset) is not None
                 and force is False
                 and return_data is False
             ):
@@ -741,6 +742,30 @@ class BE_Dataset():
                 return sho_fitter, h5_sho_fit
             else:
                 return sho_fitter
+
+    def get_data_group_contents(self, search_string: str="Raw_Data"):
+        """
+        Retrieves the contents of the first data group containing 'Raw_Data' in its name.
+
+        This method searches for groups within the HDF5 file that contain the string 'Raw_Data'
+        in their names. It then opens the file and retrieves the keys of the first matching group.
+        
+        Args:
+            search_string (str): The string to search for in the group names.
+
+        Returns:
+            list or None: A list of keys within the first matching data group if it exists,
+            otherwise None if the group is empty or not found.
+        """
+        datagroup = find_groups_with_string(self.file, search_string)
+
+        with h5py.File(self.file, "r+") as h5_f:
+            data_group_contents = h5_f[datagroup[0]].keys()
+
+            if not data_group_contents:
+                return None
+            else:
+                return data_group_contents
 
     def get_target_group(
         self,
@@ -853,13 +878,17 @@ class BE_Dataset():
         self.SHO_LSQF_data = {}
         self.raw_data_reshaped = {}
 
-        print(f"Accessing data at: {self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit")
+        print(
+            f"Accessing data at: {self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"
+        )
 
         with h5py.File(self.file, "r+") as h5_f:
             try:
                 # Extract and store the SHO fit data
                 self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(
-                    h5_f[f"{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"][:]
+                    h5_f[f"{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"][
+                        :
+                    ]
                 )[:, :, :-1]
 
                 # Reshape and store the raw data
@@ -1030,13 +1059,14 @@ class BE_Dataset():
         else:
             return f"Noisy_Data_{self.noise}"
 
+    # TODO: Refactor and update.
     def LSQF_Loop_Fit(
         self,
-        main_dataset=None,
-        h5_target_group=None,
-        max_cores=None,
-        force=False,
-        h5_sho_targ_grp=None,
+        main_dataset: Optional[str] = None,
+        h5_target_group: Optional[str] = None,
+        max_cores: Optional[int] = None,
+        force: Optional[bool] = False,
+        h5_sho_targ_grp: Optional[str] = None,
     ):
         """
         LSQF_Loop_Fit Function that conducts the hysteresis loop fits based on the LSQF results.
@@ -1084,7 +1114,9 @@ class BE_Dataset():
             expt_type = sidpy.hdf.hdf_utils.get_attr(h5_file, "data_type")
 
             # finds the dataset from the file
-            h5_meas_grp = usid.hdf_utils.find_dataset(h5_file, self.get_measure_group_name())
+            h5_meas_grp = usid.hdf_utils.find_dataset(
+                h5_file, self.get_measure_group_name()
+            )
 
             # extract the voltage mode
             vs_mode = sidpy.hdf.hdf_utils.get_attr(

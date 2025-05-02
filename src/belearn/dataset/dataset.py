@@ -24,13 +24,15 @@ from typing import Optional, Union
 from pathlib import Path
 from belearn.util.wrappers import context_manager_decorator
 from belearn.filters.filters import clean_interpolate
+from belearn.dataset.fitters.sho import SHOFitter
+from belearn.dataset.fitters.hysteresis import HysteresisFitter
 
 from typing import Dict, List, Tuple, Any
 
 
 # TODO: Move Fitting to a separate class, SHO and Hysteresis Loop
 @dataclass
-class BE_Dataset:
+class BE_Dataset(SHOFitter, HysteresisFitter):
     """
     A class to represent a BE (Band Excitation) dataset stored in an HDF5 file.
 
@@ -915,7 +917,6 @@ class BE_Dataset:
             prefix = f"Noisy_Data_{self.noise}"
             return f"/Noisy_Data_{self.noise}_SHO_Fit/Noisy_Data_{self.noise}-{self.SHO_fit_relative_base_path}/{self.SHO_hysteresis_loop_guess_name}"
 
-    # TODO: Switch to context manager
     @context_manager_decorator
     def get_hysteresis(
         self,
@@ -1067,6 +1068,7 @@ class BE_Dataset:
         max_cores: Optional[int] = None,
         force: Optional[bool] = False,
         h5_sho_targ_grp: Optional[str] = None,
+        SHO_fit_points: Optional[int] = 5,
     ):
         """
         LSQF_Loop_Fit Function that conducts the hysteresis loop fits based on the LSQF results.
@@ -1093,17 +1095,14 @@ class BE_Dataset:
             # gets the measurement group name
             h5_meas_grp = h5_main.parent.parent
 
-            # does the SHO_fit if it does not exist.
-            sho_fit_points = (
-                5  # The number of data points at each step to use when fitting
-            )
+            
             sho_override = False  # Force recompute if True
             sho_fitter = belib.analysis.BESHOfitter(
                 h5_main, cores=max_cores, verbose=False, h5_target_group=h5_meas_grp
             )
             sho_fitter.set_up_guess(
                 guess_func=belib.analysis.be_sho_fitter.SHOGuessFunc.complex_gaussian,
-                num_points=sho_fit_points,
+                num_points=SHO_fit_points,
             )
             h5_sho_guess = sho_fitter.do_guess(override=sho_override)  # noqa: F841
             sho_fitter.set_up_fit()

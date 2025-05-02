@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
+from belearn.dataset.dataset import BE_Dataset
 
 class BaseFitter(ABC):
     
-    def __init__(self, dataset: Dataset):
+    def __init__(self, dataset: BE_Dataset):
         self._dataset = dataset
     
     def __getattr__(self, name):

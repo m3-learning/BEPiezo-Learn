@@ -787,13 +787,29 @@ class BE_Dataset():
         h5_sho_file = h5py.File(h5_sho_file_path, mode=f_open_mode)
         return h5_sho_file
 
-    def check_ckpfm(self, parm_dict, expt_type):
+    def check_ckpfm(self, parm_dict: dict[str, Any], expt_type: str) -> bool:
+        """
+        Checks if the experiment type is cKPFMData and retrieves relevant parameters.
+
+        This function determines whether the provided experiment type corresponds to
+        cKPFMData. If it does, it extracts specific parameters from the provided
+        parameter dictionary, such as the number of DC write steps, read steps, and
+        fields, which are used in the cKPFM experiment.
+
+        Args:
+            parm_dict (dict[str, Any]): A dictionary containing parameters for the experiment.
+            expt_type (str): The type of experiment being conducted.
+
+        Returns:
+            bool: True if the experiment type is cKPFMData, False otherwise.
+        """
         is_ckpfm = expt_type == "cKPFMData"
 
         if is_ckpfm:
             num_write_steps = parm_dict["VS_num_DC_write_steps"]  # noqa: F841
             num_read_steps = parm_dict["VS_num_read_steps"]  # noqa: F841
             num_fields = 2  # noqa: F841
+        return is_ckpfm
 
     def check_H5(self):
         if self.file.endswith(".h5"):

@@ -7,7 +7,6 @@ import sidpy
 from BGlib import be as belib
 
 from m3util.util.h5 import (
-    # find_groups_with_string,
     print_tree,
     get_tree,
     find_measurement,
@@ -26,13 +25,92 @@ from pathlib import Path
 from belearn.util.wrappers import static_state_decorator
 from belearn.filters.filters import clean_interpolate
 
-
-from belearn.dataset.datafed import BE_DataFed
-
-
 @dataclass
-class BE_Dataset(BE_DataFed):
-    file: str = "./Data/data_raw.h5" 
+class BE_Dataset():
+    """
+    A class to represent a BE (Band Excitation) dataset stored in an HDF5 file.
+
+    This class provides attributes and methods to interact with and manipulate
+    the data stored in the HDF5 file, including handling noise levels and
+    resampling data.
+
+    Attributes:
+        file (str): The path to the HDF5 file.
+        noise (int): The noise level to be applied to the dataset. Defaults to 0.
+        resampled_bins (int): The number of bins to resample the data to. Defaults to None.
+        resampled_data (dict): A dictionary containing the resampled data. Defaults to None.
+        datafed (Optional[Union[None, str, Path]]): An optional path or identifier for data federation. Defaults to None.
+        basegroup (str): The base group path in the HDF5 file. Defaults to "/Measurement_000/Channel_000".
+        raw_data_path (str): The path to the raw data within the HDF5 file. Defaults to "Raw_Data_SHO_Fit/Raw_Data-SHO_Fit_000".
+        measurement_data_path (str): The path to the measurement data within the HDF5 file. Defaults to "Measurement_Data/Measurement_Data-000".
+        measurement (str): The measurement identifier within the HDF5 file. Defaults to "Measurement_000".
+        SHO_fit_relative_base_path (str): The relative path for SHO fit data. Defaults to "SHO_Fit_000".
+        SHO_hysteresis_loop_fit_name (str): The name for the SHO hysteresis loop fit. Defaults to "Fit-Loop_Fit_000".
+        SHO_hysteresis_loop_guess_name (str): The name for the SHO hysteresis loop guess. Defaults to "Guess-Loop_Fit_000".
+        noise_std_ (float): The standard deviation of the noise. Defaults to None.
+        
+    Methods:
+        get_dataset(noise):
+            Returns the current dataset based on the noise state.
+
+        tree:
+            Reads the tree from the H5 file and returns it as a list.
+
+        print_be_tree:
+            Prints the Band Excitation tree structure from the H5 file.
+
+        num_pix:
+            Returns the number of pixels in the data.
+
+        num_bins:
+            Returns the number of frequency bins in the data.
+
+        frequency_bin:
+            Returns the frequency bin vector in Hz.
+
+        be_center_frequency:
+            Returns the BE center frequency in Hz.
+
+        be_bandwidth:
+            Returns the BE bandwidth in Hz.
+
+        be_waveform:
+            Returns the BE excitation waveform.
+
+        be_repeats:
+            Returns the number of BE repeats.
+
+        num_cycles:
+            Retrieves the number of cycles in the dataset.
+
+        dc_voltage:
+            Gets the DC voltage vector.
+
+        get_voltage:
+            Gets the voltage vector.
+
+        voltage_steps:
+            Returns the number of voltage steps.
+
+        measure_group:
+            Gets the measurement group based on a noise level.
+
+        LSQF_Loop_Fit(main_dataset, h5_target_group, max_cores, force, h5_sho_targ_grp):
+            Conducts the hysteresis loop fits based on the LSQF results.
+
+        get_main_dataset(main_dataset, h5_file):
+            Finds the main dataset location in the file.
+
+        LSQF_hysteresis_params(output_shape, scaled, measurement_state):
+            Gets the LSQF hysteresis parameters.
+
+        SHO_fit_all(*args, **kwargs):
+            Fits the Simple Harmonic Oscillator (SHO) model to all provided datasets.
+
+        SHO_Fitter(force, max_cores, max_mem, dataset, h5_sho_targ_grp, return_data, SHO_fit_points):
+            Computes the SHO fit results for a given dataset.
+    """
+    file: str = "./Data/data_raw.h5"
     noise: int = 0
     resampled_bins: int = None
     resampled_data: dict = None
@@ -45,22 +123,23 @@ class BE_Dataset(BE_DataFed):
     SHO_hysteresis_loop_fit_name: str = "Fit-Loop_Fit_000"
     SHO_hysteresis_loop_guess_name: str = "Guess-Loop_Fit_000"
     noise_std_: float = None
-    """
-    A class to represent a h5 file.
-
-    Attributes:
-        file (str): The path to the h5 file.
-        resampled_bins (int): The number of bins to resample the data to.
-        resampled_data (dict): The data to resample.
-    """
 
     def __post_init__(self, datafed=None):
-        # super().__init__(datafed)
+        """
+        Post-initialization method for the BE_Dataset class.
 
-        # TODO: why does this inherit from BE_DataFed?
+        This method is automatically called after the class is initialized. It sets the
+        data federation attribute and determines the current dataset based on the noise level.
+
+        Args:
+            datafed (Optional[Union[None, str, Path]]): An optional path or identifier for data federation.
+        """
         self.datafed = datafed
         self.get_dataset(self.noise)
 
+        # TODO: remove this
+        # The following lines are commented out as they are not currently in use.
+        # They are intended for initializing resampled_bins and resampled_data attributes.
         # self.resampled_bins = self.resampled_bins
         # self.resampled_data = self.resampled_data
         # # Initialize resampled_bins if it's None
@@ -103,7 +182,7 @@ class BE_Dataset(BE_DataFed):
 
             # prints the structure and content of the file
             print(
-                "Datasets and datagroups within the file:\n------------------------------------"
+                "Datasets and data groups within the file:\n------------------------------------"
             )
             print_tree(h5_f.file)
 
@@ -116,7 +195,7 @@ class BE_Dataset(BE_DataFed):
             print(h5_f.file[f"{self.basegroup}/Spectroscopic_Values"])
 
             print(
-                "\nMetadata or attributes in a datagroup\n------------------------------------"
+                "\nMetadata or attributes in a data group\n------------------------------------"
             )
 
             for key in h5_f.file[self.measurement].attrs:
@@ -428,12 +507,7 @@ class BE_Dataset(BE_DataFed):
         with h5py.File(self.file, "r+") as h5_f:
             # Iterate through each noise level provided in the list
             for noise_level in noise_levels:
-                # JGoddy had to change "is not" to "!=" because of truthly/falsely logic in 
-                # python so [] is not [] evaluates to False in python but [] != [] evaluates to True
-                if (
-                    usid.hdf_utils.find_dataset(h5_f, f"Noisy_Data_{noise_level}")
-                    != [] 
-                ):
+                if usid.hdf_utils.find_dataset(h5_f, f"Noisy_Data_{noise_level}") != []:
                     print(f"Noisy_Data_{noise_level} already exists")
                     continue
 
@@ -542,7 +616,6 @@ class BE_Dataset(BE_DataFed):
         """
 
         with h5py.File(self.file, "r+") as h5_file:
-
             # Record the start time for the fitting process
             start_time_lsqf = time.time()
 
@@ -551,7 +624,7 @@ class BE_Dataset(BE_DataFed):
             # data_dir or filename are used anywhere in the code.
             # (data_dir, filename) = os.path.split(self.file)
 
-            # TODO: likeley delete.
+            # TODO: likely delete.
             h5_path = self.check_H5()
 
             # Split the path to get the folder and raw file name
@@ -621,14 +694,17 @@ class BE_Dataset(BE_DataFed):
             sho_fitter = belib.analysis.BESHOfitter(
                 h5_main, cores=max_cores, verbose=False, h5_target_group=h5_sho_targ_grp
             )
-            
+
             # TODO: this check if the dataset is already fit could be earlier in the
             # function to save some computation but that would require reorganization
-            if find_groups_with_string(h5_sho_file_path, dataset) != [] and force is False and return_data is False:
-                
+            if (
+                find_groups_with_string(h5_sho_file_path, dataset) != []
+                and force is False
+                and return_data is False
+            ):
                 print(f"SHO fits for {dataset} already exist. Skipping....")
-                
-            else:    
+
+            else:
                 # Set up the initial guess for the SHO fitting
                 sho_fitter.set_up_guess(
                     guess_func=belib.analysis.be_sho_fitter.SHOGuessFunc.complex_gaussian,
@@ -669,9 +745,8 @@ class BE_Dataset(BE_DataFed):
         return h5_sho_file
 
     def check_ckpfm(self, parm_dict, expt_type):
-        
         is_ckpfm = expt_type == "cKPFMData"
-        
+
         if is_ckpfm:
             num_write_steps = parm_dict["VS_num_DC_write_steps"]  # noqa: F841
             num_read_steps = parm_dict["VS_num_read_steps"]  # noqa: F841
@@ -761,7 +836,7 @@ class BE_Dataset(BE_DataFed):
         # initializes the dictionary
         self.SHO_LSQF_data = {}
         self.raw_data_reshaped = {}
-        
+
         print(f"{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit")
 
         with h5py.File(self.file, "r+") as h5_f:
@@ -1011,7 +1086,7 @@ class BE_Dataset(BE_DataFed):
             )
             h5_sho_guess = sho_fitter.do_guess(override=sho_override)  # noqa: F841
             sho_fitter.set_up_fit()
-            h5_sho_fit = sho_fitter.do_fit(override=sho_override)  
+            h5_sho_fit = sho_fitter.do_fit(override=sho_override)
             h5_sho_grp = h5_sho_fit.parent  # noqa: F841
 
             # gets the experiment type from the file

@@ -484,3 +484,34 @@ class Preprocessing(BE_Dataset):
         data = self.LSQF_hysteresis_params().reshape(-1, 9)
 
         self.loop_param_scaler.fit(data)
+
+
+    def get_LSQF_hysteresis_fits(self, compare=False, index=True):
+        """
+        Retrieves the least squares quadratic fit hysteresis loops.
+        Args:
+            compare (bool, optional): If True, returns the fitted loops, raw hysteresis loops, and voltage values.
+                                     If False, returns only the fitted loops. Defaults to False.
+        Returns:
+            numpy.ndarray or tuple: If compare is True, returns a tuple containing the fitted loops,
+                                    raw hysteresis loops, and voltage values.
+                                    If compare is False, returns only the fitted loops.
+        """
+        raw_hysteresis_loops, voltage = self.get_hysteresis(scaled=True, loop_interpolated = True)
+
+        if index is True:
+            raw_hysteresis_loops = raw_hysteresis_loops.reshape(-1,self.voltage_steps_per_cycle)
+
+        # TODO: Update so not hard coded
+        params = self.LSQF_hysteresis_params().reshape(-1, 9)
+
+        loops = self.hysteresis_function(params, voltage[:,0].squeeze()).to(
+                'cpu').detach().numpy().squeeze()
+
+        if index is False:
+            loops = loops.reshape(raw_hysteresis_loops.shape)
+
+        if compare:
+            return loops, raw_hysteresis_loops, voltage
+
+        return loops

@@ -24,8 +24,9 @@ from typing import Optional, Union
 from pathlib import Path
 from belearn.util.wrappers import context_manager_decorator
 from belearn.filters.filters import clean_interpolate
+from belearn.functions.hysteresis import hysteresis_nn
 
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Callable
 
 
 # TODO: Move Fitting to a separate class, SHO and Hysteresis Loop
@@ -128,6 +129,8 @@ class BE_Dataset:
     SHO_hysteresis_loop_fit_name: str = "Fit-Loop_Fit_000"
     SHO_hysteresis_loop_guess_name: str = "Guess-Loop_Fit_000"
     noise_std_: float = None
+    hysteresis_function: Optional[Callable] = hysteresis_nn
+
 
     def __post_init__(self):
         """
@@ -357,6 +360,18 @@ class BE_Dataset:
                         else 1
                     )
                 )
+    @property
+    def voltage_steps_per_cycle(self):
+        """
+        Retrieves the number of voltage steps per cycle.
+
+        This function determines the number of voltage steps per cycle.
+
+        Returns:
+            int: The number of voltage steps per cycle corresponding to the current measurement state.
+        """
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f[self.measurement].attrs["VS_steps_per_full_cycle"]
 
     @property
     def spectroscopic_length(self):

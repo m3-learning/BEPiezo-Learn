@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any, Type
+from typing import List, Dict, Optional, Any, Type, Callable
 
 from belearn.dataset.dataset import BE_Dataset
 from belearn.dataset.model_utils import BE_model_utils
@@ -92,6 +92,8 @@ class Viz(BE_model_utils):
         image_scalebar (Optional[Any], optional): Scalebar settings for images. Defaults to None.
         SHO_labels (List[Dict[str, str]], optional): Labels for SHO data. Defaults to predefined list.
         color_palette (Optional[Any], optional): Color palette settings. Defaults to None.
+        hysteresis_function (Callable, optional): The hysteresis function for processing. Defaults to hysteresis_nn.
+
 
     """
 
@@ -114,6 +116,7 @@ class Viz(BE_model_utils):
         color_palette: Optional[Any] = None,
         SHO_ranges: Optional[Any] = None,
         SHO_labels: Optional[List[Dict[str, str]]] = None,
+
     ):
         self.dataset = dataset
         self.printer = printer
@@ -2753,6 +2756,172 @@ class Viz(BE_model_utils):
 
         return fig
 
+    def hysteresis_comparison(self,
+                             data,
+                             row=None,
+                             col=None,
+                             cycle=None,
+                             size=(1.25, 1.25),
+                             gaps=(1, 0.66),
+                             nn_model=None,
+                             measurement_state=None,
+                             filename="hysteresis_comparison"):
+        """
+        Plot a comparison of the hysteresis loop.
+
+        Args:
+            data (list): List of data types to plot.
+            row (int, optional): Row to plot. Defaults to None.
+            col (int, optional): Column to plot. Defaults to None.
+            cycle (int, optional): Cycle to plot. Defaults to None.
+            size (tuple, optional): Size of the image to plot. Defaults to (1.25, 1.25).
+            gaps (tuple, optional): Gaps between subplots. Defaults to (1, 0.66).
+            nn_model (object, optional): Neural network model for comparison. Defaults to None.
+            measurement_state (str, optional): Measurement state to plot. Defaults to None.
+            filename (str, optional): Filename to save the plot. Defaults to "hysteresis_comparison".
+        """
+
+        # sets the measurement state
+        if self.measurement_state is not None:
+            self.measurement_state = measurement_state
+
+        # if only the LSQF is to be plotted
+        if 'LSQF' in data and 'NN' not in data:
+            # gets the LSQF Hysteresis Loops from the Dataset
+            loops, raw_hysteresis_loop_scaled, voltage = self.get_LSQF_hysteresis_fits(compare=True, index=False)
+
+            raw_hysteresis_loop = self.hysteresis_scaler.inverse_transform(raw_hysteresis_loop_scaled)
+
+            # selects a point to plot
+            row, col, cycle = self.get_selected_hysteresis(
+                raw_hysteresis_loop, row, col, cycle)
+
+            self.random_hysteresis(raw_hysteresis_loop,
+                                   loops,
+                                   voltage,
+                                   filename,
+                                   size,
+                                   row, col, cycle)
+            return
+
+        # gets the LSQF Hysteresis Loops from the Dataset
+        loops, raw_hysteresis_loop_scaled, voltage = self.get_LSQF_hysteresis_fits(compare=True)
+
+        # scales the loops for comparison
+        loops_scaled = self.hysteresis_scaler.transform(loops)
+        raw_hysteresis_loop = self.hysteresis_scaler.inverse_transform(raw_hysteresis_loop_scaled)
+
+        # gets the NN data for comparison
+        if nn_model is not None:
+            # gets the data for model prediction with the NN
+            _data, voltage = self.get_hysteresis(scaled=True, loop_interpolated=True)
+            _data = torch.atleast_3d(torch.tensor(_data.reshape(-1, self.voltage_steps_per_cycle))).float()
+
+            NN_pred_data, NN_scaled_params, NN_params = nn_model.predict(
+                _data, translate_params=False, is_SHO=False)
+            NN_loops = self.loop_fitting_function_torch(y=NN_params, V=voltage[:, 0].squeeze()).to(
+                'cpu').detach().numpy().squeeze()
+            NN_loops_scaled = self.hysteresis_scaler.transform(NN_loops)
+
+        # if we are plotting the NN and LSQF results
+        fig, ax = subfigures(3, len(data), gaps=gaps, size=size)
+
+        # loops around the models provided
+        for j, model in enumerate(data):
+
+            if model == 'LSQF':
+                out = self.ranked_mse(raw_hysteresis_loop_scaled,
+                                      {'LSQF': loops_scaled},
+                                      {'NN': NN_loops_scaled})
+
+            elif model == 'NN':
+                out = self.ranked_mse(raw_hysteresis_loop_scaled,
+                                      {'NN': NN_loops_scaled},
+                                      {'LSQF': loops_scaled})
+
+            for i, results in enumerate(out):
+
+                # sets the index for the plots
+                plot_idx = i * 2 + j
+
+                index = int(results['Original Index'])
+
+                ax[plot_idx].plot(voltage,
+                                  raw_hysteresis_loop[index], 'o', label="Raw Data")
+
+                ax[plot_idx].plot(voltage,
+                                  loops[index], 'r', label='LSQF')
+
+                ax[plot_idx].plot(voltage,
+                                  NN_loops[index], 'g', label='NN')
+
+                #ax[plot_idx].ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+                
+                set_sci_notation_label(ax[plot_idx], axis = "y", corner = 'top left')
+
+
+                # Position text at (1 inch, 2 inches) from the bottom left corner of the figure
+                text_position_in_inches = (
+                    -1 * (gaps[0] + size[0]) * ((2 - i) % 3) + size[0] / 2,
+                    (gaps[1] + size[1]) * (1.25 - i // 3 - 1.25) - gaps[1],
+                )
+
+                # gets the axis position in inches - gets the bottom center
+                center = get_axis_pos_inches(fig, ax[plot_idx])
+
+                # selects the text position as an offset from the bottom center
+                text_position_in_inches = (center[0], center[1] - 0.32 + .125)
+
+                error = results['MSE_LSQF']
+
+                error_string = f"LSQF MSE: {error:0.4f}"
+
+                add_text_to_figure(
+                    fig,
+                    error_string,
+                    text_position_in_inches,
+                    fontsize=6,
+                    ha="center",
+                )
+
+                # selects the text position as an offset from the bottom center
+                text_position_in_inches = (center[0], center[1] - 0.3)
+
+                error = results['MSE_NN']
+
+                error_string = f"NN MSE: {error:0.4f}"
+
+                add_text_to_figure(
+                    fig,
+                    error_string,
+                    text_position_in_inches,
+                    fontsize=6,
+                    ha="center",
+                )
+
+                ax[plot_idx - 1].set_ylabel("(Arb. U.)")
+                ax[plot_idx].set_ylabel("(Arb. U.)")
+
+        # add a legend just for the last one
+        lines, labels = ax[plot_idx - 1].get_legend_handles_labels()
+        ax[plot_idx - 1].legend(lines, labels, loc="upper right")
+        lines, labels = ax[plot_idx].get_legend_handles_labels()
+        ax[plot_idx].legend(lines, labels, loc="upper right")
+
+        ax[plot_idx - 1].set_xlabel("Voltage (V)")
+        ax[plot_idx].set_xlabel("Voltage (V)")
+        ax[plot_idx - 1].xaxis.set_label_coords(0.5, -0.28)
+        ax[plot_idx].xaxis.set_label_coords(0.5, -0.28)
+        
+
+        # prints the figure
+        if self.Printer is not None and filename is not None:
+            self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+            
+        return fig
+
+
+
     # @static_dataset_decorator
     @context_manager_decorator
     def violin_plot_comparison_SHO(self, state, model, X_data, filename, label="NN"):
@@ -2859,3 +3028,6 @@ class Viz(BE_model_utils):
             self.printer.savefig(fig, filename)
 
         return fig
+
+
+

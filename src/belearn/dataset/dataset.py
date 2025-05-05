@@ -303,6 +303,9 @@ class BE_Dataset:
             cycles = h5_f[self.measurement].attrs["VS_number_of_cycles"]
 
             # JGODDY comments this out for now
+            # I need the number of cycles to be 4 not 2 (so the stuff below) 
+            # for the hysteresis model not I need it to be 2 for the SHO model
+            # so I think I will just change it elsewhere (see LSQF_hysteresis_params)
 
             # Check if the measurement was performed 'in and out-of-field'
             # If so, double the number of cycles to account for both directions
@@ -1208,7 +1211,7 @@ class BE_Dataset:
             data = h5_f[
                 f"/{self.measurement}/{self.dataset_name}-{self.SHO_fit_relative_base_path}/{self.SHO_hysteresis_loop_fit_name}/Fit"
             ][:]
-            data = data.reshape(self.num_rows, self.num_cols, self.num_cycles)
+            data = data.reshape(self.num_rows, self.num_cols, 2*self.num_cycles)
             data = np.array(
                 [
                     data["a_0"],

@@ -283,9 +283,14 @@ class Preprocessing(BE_Dataset):
 
         try:
             self.LoopParmScaler()
-        except:
-            pass
-        
+        except Exception as e:
+            print("*"*20)
+            print("LoopParmScaler failed with exception:")
+            print(e)
+            print("*"*10)
+            print("Traceback:")
+            print(traceback.format_exc())
+            print("*"*20)        
                 
     def raw_data(self, pixel=None, voltage_step=None):
         """

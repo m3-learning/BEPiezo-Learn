@@ -385,6 +385,18 @@ class BE_Dataset:
         )
 
     @property
+    def num_cols(self):
+        """Number of columns in the data"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f['Measurement_000'].attrs["grid_num_cols"]
+
+    @property
+    def num_rows(self):
+        """Number of rows in the data"""
+        with h5py.File(self.file, "r+") as h5_f:
+            return h5_f['Measurement_000'].attrs["grid_num_rows"]
+        
+    @property
     def noise_std(self):
         """Gets the noise standard deviation"""
         return self.noise_std_
@@ -1194,7 +1206,7 @@ class BE_Dataset:
         with h5py.File(self.file, "r+") as h5_f:
             # data = h5_f[f"/Measurement_000/{self.dataset}-SHO_Fit_000/Fit-Loop_Fit_000/Fit"][:]
             data = h5_f[
-                f"/{self.measurement}/{self.dataset_name}-{self.SHO_fit_relative_base_path}/{self.SHO_hysteresis_relative_base_path}/Fit"
+                f"/{self.measurement}/{self.dataset_name}-{self.SHO_fit_relative_base_path}/{self.SHO_hysteresis_loop_fit_name}/Fit"
             ][:]
             data = data.reshape(self.num_rows, self.num_cols, self.num_cycles)
             data = np.array(

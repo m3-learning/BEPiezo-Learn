@@ -505,6 +505,8 @@ class Preprocessing(BE_Dataset):
         # TODO: Update so not hard coded
         params = self.LSQF_hysteresis_params().reshape(-1, 9)
 
+        # TODO: hysteresis_function uses cuda, so I need to be able to 
+        # define a device to specify which one to use. 
         loops = self.hysteresis_function(params, voltage[:,0].squeeze()).to(
                 'cpu').detach().numpy().squeeze()
 

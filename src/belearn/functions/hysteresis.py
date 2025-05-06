@@ -1,5 +1,7 @@
 import torch
 
+
+@staticmethod
 def hysteresis_nn(y, V, type='9 parameters', device='cuda'):
     """Hysteresis loop fitting function using torch tensors
 

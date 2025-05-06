@@ -6,6 +6,7 @@ from belearn.util.wrappers import context_manager_decorator
 import h5py
 import numpy as np
 import torch
+import pandas as pd
 from belearn.functions.sho import SHO_nn
 from belearn.dataset.dataset import BE_Dataset
 from belearn.dataset.preprocessing import Preprocessing
@@ -1095,3 +1096,54 @@ class State(Preprocessing):
                 hysteresis_data = hysteresis_data[:, :, 0:hysteresis_data.shape[2]//2, :]
         
         return hysteresis_data
+
+    def ranked_mse(self, true, sample_a, other_samples=None):
+        """
+        Compute Mean Squared Error (MSE) between two datasets of samples.
+
+        Args:
+            true (array-like): First dataset of samples.
+            sample_a (dict): Dictionary with key as sample name and value as dataset of samples.
+            other_samples (dict, optional): Dictionary with key as sample name and value as dataset of samples. Defaults to None.
+
+        Returns:
+            DataFrame: DataFrame with original index and computed MSE for each sample.
+        """
+
+        # Extract the key and value
+        sample_a_key, sample_a_value = list(sample_a.items())[0]
+
+        # Ensure inputs are numpy arrays
+        true = np.array(true)
+        sample_a_value = np.array(sample_a_value)
+
+        # Calculate MSE for each sample
+        mse = np.mean((true - sample_a_value) ** 2, axis=1)
+
+        # Create a DataFrame with original index and MSE
+        df = pd.DataFrame({
+            'Original Index': np.arange(len(mse), dtype=int),
+            f'MSE_{sample_a_key}': mse
+        })
+
+        if other_samples is not None:
+            other_sample_key, other_sample_value = list(other_samples.items())[0]
+            # Calculate MSE for each sample
+            mse_other_sample = np.mean((true - other_sample_value) ** 2, axis=1)
+            # Add the new column to the DataFrame
+            df[f'MSE_{other_sample_key}'] = mse_other_sample
+
+        # Sort the DataFrame by MSE to find best, worst, and middle examples
+        sorted_df = df.sort_values(f'MSE_{sample_a_key}').reset_index(drop=True)
+
+        # Identify best, worst, and middle examples and ensure index remains int
+        best_example = sorted_df.iloc[0]
+        best_example['Original Index'] = int(best_example['Original Index'])
+
+        worst_example = sorted_df.iloc[-1]
+        worst_example['Original Index'] = int(worst_example['Original Index'])
+
+        middle_example = sorted_df.iloc[len(sorted_df) // 2]
+        middle_example['Original Index'] = int(middle_example['Original Index'])
+
+        return best_example, middle_example, worst_example

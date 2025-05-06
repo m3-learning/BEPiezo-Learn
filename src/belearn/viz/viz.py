@@ -12,6 +12,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 from matplotlib.ticker import ScalarFormatter
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 
 import pandas as pd
 import seaborn as sns
@@ -85,7 +87,7 @@ class Viz(BE_model_utils):
 
     Attributes:
         dataset (Any): The dataset to visualize. Replace `Any` with the specific type.
-        Printer (Optional[Type], optional): Printer for output. Defaults to None.
+        printer (Optional[Type], optional): printer for output. Defaults to None.
         verbose (bool, optional): Verbosity flag. Defaults to False.
         labelfigs_ (bool, optional): Flag to label figures. Defaults to True.
         SHO_ranges (Optional[Any], optional): Ranges for SHO data. Defaults to None.
@@ -142,8 +144,8 @@ class Viz(BE_model_utils):
         super().__init__()
 
     # dataset: Any  # Specify the type based on what you expect
-    # # You can also define the type of Printer if you know it
-    # Printer: Optional[Type] = None
+    # # You can also define the type of printer if you know it
+    # printer: Optional[Type] = None
     # verbose: bool = False
     # labelfigs_: bool = True
     # # Specify the type based on what you expect
@@ -800,7 +802,7 @@ class Viz(BE_model_utils):
                 borderaxespad=0.1,
             )
 
-        # Save the figure if a Printer object and filename are provided
+        # Save the figure if a printer object and filename are provided
         if self.printer is not None and filename is not None:
             self.printer.savefig(
                 fig, filename, label_figs=[ax_phase, ax_imag], style="bw", loc="bl"
@@ -984,7 +986,7 @@ class Viz(BE_model_utils):
         set_sci_notation_label(ax[3], axis="x", corner="bottom right")
         set_sci_notation_label(ax[4], axis="x", corner="bottom right")
 
-        # Save the figure if a Printer object is available
+        # Save the figure if a printer object is available
         if self.printer is not None:
             self.printer.savefig(fig, filename, label_figs=ax, style="b")
 
@@ -1066,7 +1068,7 @@ class Viz(BE_model_utils):
         This function selects a pixel either randomly or based on the provided data and
         plots the SHO (Simple Harmonic Oscillator) loop fit results across various
         parameters (defined in self.SHO_labels). The resulting plot is saved using
-        the specified filename if a Printer object is available.
+        the specified filename if a printer object is available.
         """
 
         if data is None:
@@ -1094,7 +1096,7 @@ class Viz(BE_model_utils):
         if self.verbose:
             self.extraction_state
 
-        # If a Printer object is defined, save the figure with the specified filename and style
+        # If a printer object is defined, save the figure with the specified filename and style
         if self.printer is not None:
             self.printer.savefig(fig, filename, label_figs=axs, style="b")
 
@@ -1309,7 +1311,7 @@ class Viz(BE_model_utils):
             if self.image_scalebar is not None:
                 scalebar(ax[-1], *self.image_scalebar)
 
-            # Save the figure if a Printer object and filename are provided
+            # Save the figure if a printer object and filename are provided
             if self.printer is not None and filename is not None:
                 self.printer.savefig(
                     fig,
@@ -2601,7 +2603,7 @@ class Viz(BE_model_utils):
         Notes:
             - This function plots the raw and predicted amplitude and phase data for each model.
             - It supports displaying detailed error metrics for amplitude, phase, frequency, and quality factor.
-            - The function supports saving the generated figure to a file using the `Printer` object.
+            - The function supports saving the generated figure to a file using the `printer` object.
         """
 
         # Get the number of fits from the length of the data list
@@ -2819,7 +2821,7 @@ class Viz(BE_model_utils):
 
             NN_pred_data, NN_scaled_params, NN_params = nn_model.predict(
                 _data, translate_params=False, is_SHO=False)
-            NN_loops = self.loop_fitting_function_torch(y=NN_params, V=voltage[:, 0].squeeze()).to(
+            NN_loops = self.hysteresis_function(y=NN_params, V=voltage[:, 0].squeeze()).to(
                 'cpu').detach().numpy().squeeze()
             NN_loops_scaled = self.hysteresis_scaler.transform(NN_loops)
 
@@ -2915,8 +2917,8 @@ class Viz(BE_model_utils):
         
 
         # prints the figure
-        if self.Printer is not None and filename is not None:
-            self.Printer.savefig(fig, filename, label_figs=ax, style="b")
+        if self.printer is not None and filename is not None:
+            self.printer.savefig(fig, filename, label_figs=ax, style="b")
             
         return fig
 
@@ -3023,11 +3025,237 @@ class Viz(BE_model_utils):
         legend = ax.get_legend()
         legend.set_title("")
 
-        # Save the plot if a filename and Printer are provided
+        # Save the plot if a filename and printer are provided
         if self.printer is not None and filename is not None:
             self.printer.savefig(fig, filename)
 
         return fig
 
+
+    def violin_plot_comparison_hysteresis(self, model, X_data, filename):
+        """
+        Generates a violin plot comparing hysteresis parameters from a neural network model
+        prediction and the least squares fitting (LSQF) results.
+
+        Args:
+            model: Object
+                Trained model with a `predict` method to generate predictions for the input data.
+            X_data: array-like
+                Input data for which the model will generate predictions.
+            filename: str
+                The filename where the figure will be saved if a Printer object is defined.
+
+        Returns:
+            None
+        """
+
+        # Initialize an empty DataFrame to store the results
+        df = pd.DataFrame()
+
+        # Use the model to predict the hysteresis parameters for the provided input data
+        pred_data, scaled_param, params = model.predict(X_data, is_SHO=False)
+
+        # Get the true parameters from the least squares fit (LSQF) for hysteresis
+        # The hysteresis parameters are reshaped to a format of (-1, 9)
+        true = self.LSQF_hysteresis_params().reshape(-1, 9)
+
+        # Scale the true parameters using the same scaler applied during the model training
+        true_scaled = self.loop_param_scaler.transform(true)
+
+        # Create DataFrames for true and predicted parameters with appropriate column labels
+        true_df = pd.DataFrame(
+            true, columns=["a0", "a1", "a2", "a3", "a4", "b0", "b1", "b2", "b3"]
+        )
+        predicted_df = pd.DataFrame(
+            scaled_param, columns=["a0", "a1", "a2", "a3", "a4", "b0", "b1", "b2", "b3"]
+        )
+
+        # Concatenate true and predicted DataFrames
+        df = pd.concat((predicted_df, true_df))
+
+        # Prepare labels and dataset names for the plot
+        names = [true_scaled, scaled_param]
+        names_str = ["NN", "LSQF"]
+        labels = ["a0", "a1", "a2", "a3", "a4", "b0", "b1", "b2", "b3"]
+
+        # Add each parameter and corresponding label to the DataFrame
+        for j, name in enumerate(names):
+            for i, label in enumerate(labels):
+                dict_ = {
+                    "value": name[:, i],  # Scaled parameter values
+                    "parameter": np.repeat(
+                        label, name.shape[0]
+                    ),  # Label for the parameter
+                    "dataset": np.repeat(
+                        names_str[j], name.shape[0]
+                    ),  # Label for dataset type (NN or LSQF)
+                }
+                df = pd.concat((df, pd.DataFrame(dict_)))
+
+        # Create the figure for plotting
+        fig, ax = plt.subplots(figsize=(4, 4))
+
+        # Reset index to handle potential duplicated columns or indices
+        df = df.reset_index(drop=False)
+
+        # Plot the violin plot with split view for comparing true and predicted values
+        sns.violinplot(
+            data=df,
+            x="parameter",
+            y="value",
+            hue="dataset",
+            split=True,
+            ax=ax,
+            linewidth=0.1,
+        )
+
+        # Style the plot with labels
+        labelfigs(ax, 0, style="b",inset_fraction = (0.4,0.15))
+        ax.set_ylabel("Scaled SHO Results")
+        ax.set_xlabel("")
+
+        # Remove the legend title
+        legend = ax.get_legend()
+        legend.set_title("")
+
+        # Save the figure if a printer object and filename are provided
+        if self.printer is not None and filename is not None:
+            self.printer.savefig(fig, filename)
+            
+        return fig
+    
+    def hysteresis_maps(
+        self,
+        parms_pred,
+        colorbars=True,
+        cycle=3,
+        fig_width=10.5,  # figure width in inches
+        filename=None,
+    ):
+        # # reshape data:
+        # if data.shape != 3:
+
+        # calculates the size of the embedding image
+        embedding_image_size = 60
+
+        fig, axs = plt.subplots(
+            2,
+            9,
+            figsize=(fig_width, 4),
+            gridspec_kw={"height_ratios": [1, 1]},
+        )
+
+        parms_lsqf = self.LSQF_hysteresis_params()[:, :, cycle, :].reshape(-1, 9)
+        parms_pred = parms_pred.reshape(embedding_image_size, embedding_image_size, 4, 9)[:, :, cycle, :].reshape(-1, 9)
+
+        clims = []
+
+        colorbar_labels = [
+            'a0', 'a1', 'a2', 'a3', 'a4', 'b0', 'b1', 'b2', 'b3'
+        ]
+
+        # Titles for each row
+        row_titles = ['Predicted Parameters', 'LSQF Parameters']
+
+        string_add = 'a'
+
+        for i in range(9):
+            clims.append(
+                (
+                    np.min(
+                        [
+                            parms_pred[:, i].min(),
+                            parms_lsqf[:, i].min(),
+                        ]
+                    ),
+                    np.max(
+                        [
+                            parms_pred[:, i].max(),
+                            parms_lsqf[:, i].max(),
+                        ]
+                    ),
+                )
+            )
+
+            axs[0, i].imshow(
+                parms_pred[:, i].reshape(
+                    embedding_image_size, embedding_image_size),
+                cmap="viridis",
+                vmin=clims[i][0],
+                vmax=clims[i][1],
+            )
+            axs[0,i].set_xticklabels('')
+            axs[0,i].set_yticklabels('')
+            axs[1, i].imshow(
+                parms_lsqf[:, i].reshape(
+                    embedding_image_size, embedding_image_size),
+                cmap="viridis",
+                vmin=clims[i][0],
+                vmax=clims[i][1],
+            )
+            axs[1,i].set_xticklabels('')
+            axs[1,i].set_yticklabels('')
+
+            if colorbars:
+                
+                # Create an axis divider for each subplot
+                divider = make_axes_locatable(axs[1, i])
+                # Append axes to the bottom of the divider with appropriate padding
+                cax = divider.append_axes("bottom", size="5%", pad=0.25) 
+                
+                
+                fmt = ScalarFormatter(useMathText=True)
+                fmt.set_powerlimits((0, 0))
+                cbar = plt.colorbar(axs[1,i].images[0],
+                                    cax=cax, format=fmt,orientation = 'horizontal')
+                cbar.set_label(colorbar_labels[i])  # Add a label to the colorbar
+
+                
+                
+                # cbar = plt.colorbar(
+                #     axs[1, i].images[0], cax=cax, format="%.1e", orientation='horizontal')
+                # # Set the label for each colorbar
+                # cbar.set_label(colorbar_labels[i])
+
+            labelfigs(axs[0,i],
+                    string_add=colorbar_labels[i],
+                    loc ='ct',
+                    size=8,
+                    inset_fraction=(0.2, 0.2)
+                    )
+             # Update the char to the next order
+            ascii_value = ord(string_add)+1
+            string_add = chr(ascii_value)
+
+        labelfigs(axs[0,0],
+        string_add='a',
+        loc ='tl',
+        size=8,
+        inset_fraction=(0.2, 0.2)
+        )
+        labelfigs(axs[1,0],
+        string_add='b',
+        loc ='tl',
+        size=8,
+        inset_fraction=(0.2, 0.2)
+        )
+
+        # Calculate the vertical position for the row titles
+        title_y_positions = [0.85, 0.5]  # You may need to adjust these values
+
+        # Set the titles for each row using fig.text
+        for i, title in enumerate(row_titles):
+            fig.text(0.5, title_y_positions[i], title, ha='center',
+                     va='center', fontsize=10, transform=fig.transFigure)
+
+
+        # prints the figure
+        if self.printer is not None and filename is not None:
+            print('use printing function')
+            self.printer.savefig(
+                fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
+            )
+        
+        return fig
 
 

@@ -3092,11 +3092,11 @@ class Viz(BE_model_utils):
                 }
                 df = pd.concat((df, pd.DataFrame(dict_)))
 
-        # Create the figure for plotting
-        fig, ax = plt.subplots(figsize=(4, 4))
-
         # Reset index to handle potential duplicated columns or indices
         df = df.reset_index(drop=False)
+        
+        # Create the figure for plotting
+        fig, ax = plt.subplots(figsize=(4, 4))
 
         # Plot the violin plot with split view for comparing true and predicted values
         sns.violinplot(
@@ -3110,7 +3110,7 @@ class Viz(BE_model_utils):
         )
 
         # Style the plot with labels
-        labelfigs(ax, 0, style="b",inset_fraction = (0.4,0.15))
+        labelfigs(ax, 0, style="b",inset_fraction = (0.05,0.95))
         ax.set_ylabel("Scaled SHO Results")
         ax.set_xlabel("")
 
@@ -3217,15 +3217,15 @@ class Viz(BE_model_utils):
                 # # Set the label for each colorbar
                 # cbar.set_label(colorbar_labels[i])
 
-            labelfigs(axs[0,i],
-                    string_add=colorbar_labels[i],
-                    loc ='ct',
-                    size=8,
-                    inset_fraction=(0.2, 0.2)
-                    )
+            # labelfigs(axs[0,i],
+            #         string_add=colorbar_labels[i],
+            #         loc ='ct',
+            #         size=8,
+            #         inset_fraction=(0.2, 0.2)
+            #         )
              # Update the char to the next order
-            ascii_value = ord(string_add)+1
-            string_add = chr(ascii_value)
+            # ascii_value = ord(string_add)+1
+            # string_add = chr(ascii_value)
 
         labelfigs(axs[0,0],
         string_add='a',
@@ -3246,7 +3246,7 @@ class Viz(BE_model_utils):
         # Set the titles for each row using fig.text
         for i, title in enumerate(row_titles):
             fig.text(0.5, title_y_positions[i], title, ha='center',
-                     va='center', fontsize=10, transform=fig.transFigure)
+                     va='center', fontsize=20, transform=fig.transFigure)
 
 
         # prints the figure

@@ -2859,7 +2859,7 @@ class Viz(BE_model_utils):
 
                 #ax[plot_idx].ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
                 
-                set_sci_notation_label(ax[plot_idx], axis = "y", corner = 'top left')
+                set_sci_notation_label(ax[plot_idx], axis = "y", corner = 'top left',textsize = 6)
 
 
                 # Position text at (1 inch, 2 inches) from the bottom left corner of the figure

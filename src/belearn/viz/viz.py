@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 from matplotlib.ticker import ScalarFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-
+from matplotlib.ticker import FuncFormatter
+from matplotlib.gridspec import GridSpec
 
 import pandas as pd
 import seaborn as sns
@@ -3032,7 +3033,7 @@ class Viz(BE_model_utils):
         return fig
 
 
-    def violin_plot_comparison_hysteresis(self, model, X_data, filename):
+    def violin_plot_comparison_hysteresis(self, model, X_data, filename,ax=None):
         """
         Generates a violin plot comparing hysteresis parameters from a neural network model
         prediction and the least squares fitting (LSQF) results.
@@ -3096,7 +3097,10 @@ class Viz(BE_model_utils):
         df = df.reset_index(drop=False)
         
         # Create the figure for plotting
-        fig, ax = plt.subplots(figsize=(4, 4))
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(4, 4))
+        else:
+            fig = ax.figure
 
         # Plot the violin plot with split view for comparing true and predicted values
         sns.violinplot(
@@ -3110,7 +3114,8 @@ class Viz(BE_model_utils):
         )
 
         # Style the plot with labels
-        labelfigs(ax, 0, style="b",inset_fraction = (0.05,0.95))
+        #TODO: why does the plot have the label 'a' (from labelfigs) when it is a stand alone plot?
+        #labelfigs(ax, 0, style="b",inset_fraction = (0.05,0.95))
         ax.set_ylabel("Scaled SHO Results")
         ax.set_xlabel("")
 
@@ -3122,7 +3127,7 @@ class Viz(BE_model_utils):
         if self.printer is not None and filename is not None:
             self.printer.savefig(fig, filename)
             
-        return fig
+        return ax
     
     def hysteresis_maps(
         self,
@@ -3145,22 +3150,25 @@ class Viz(BE_model_utils):
             gridspec_kw={"height_ratios": [1, 1]},
         )
 
-        parms_lsqf = self.LSQF_hysteresis_params()[:, :, cycle, :].reshape(-1, 9)
-        parms_pred = parms_pred.reshape(embedding_image_size, embedding_image_size, 4, 9)[:, :, cycle, :].reshape(-1, 9)
-
-        clims = []
-
-        colorbar_labels = [
+        self.hysteresis_maps_colorbar_labels = [
             'a0', 'a1', 'a2', 'a3', 'a4', 'b0', 'b1', 'b2', 'b3'
         ]
 
         # Titles for each row
         row_titles = ['Predicted Parameters', 'LSQF Parameters']
 
+
+        parms_lsqf = self.LSQF_hysteresis_params()[:, :, cycle, :].reshape(-1, 9)
+        parms_pred = parms_pred.reshape(embedding_image_size, embedding_image_size, 4, 9)[:, :, cycle, :].reshape(-1, 9)
+
+        self.hysteresis_maps_clims = []
+
+       
+
         string_add = 'a'
 
         for i in range(9):
-            clims.append(
+            self.hysteresis_maps_clims.append(
                 (
                     np.min(
                         [
@@ -3181,8 +3189,8 @@ class Viz(BE_model_utils):
                 parms_pred[:, i].reshape(
                     embedding_image_size, embedding_image_size),
                 cmap="viridis",
-                vmin=clims[i][0],
-                vmax=clims[i][1],
+                vmin=self.hysteresis_maps_clims[i][0],
+                vmax=self.hysteresis_maps_clims[i][1],
             )
             axs[0,i].set_xticklabels('')
             axs[0,i].set_yticklabels('')
@@ -3190,8 +3198,8 @@ class Viz(BE_model_utils):
                 parms_lsqf[:, i].reshape(
                     embedding_image_size, embedding_image_size),
                 cmap="viridis",
-                vmin=clims[i][0],
-                vmax=clims[i][1],
+                vmin=self.hysteresis_maps_clims[i][0],
+                vmax=self.hysteresis_maps_clims[i][1],
             )
             axs[1,i].set_xticklabels('')
             axs[1,i].set_yticklabels('')
@@ -3204,29 +3212,14 @@ class Viz(BE_model_utils):
                 cax = divider.append_axes("bottom", size="5%", pad=0.25) 
                 
                 
-                fmt = ScalarFormatter(useMathText=True)
-                fmt.set_powerlimits((0, 0))
+                self.hysteresis_maps_fmt = ScalarFormatter(useMathText=True)
+                self.hysteresis_maps_fmt.set_powerlimits((0, 0))
                 cbar = plt.colorbar(axs[1,i].images[0],
-                                    cax=cax, format=fmt,orientation = 'horizontal')
-                cbar.set_label(colorbar_labels[i])  # Add a label to the colorbar
+                                    cax=cax, format=self.hysteresis_maps_fmt,orientation = 'horizontal')
+                cbar.set_label(self.hysteresis_maps_colorbar_labels[i])  # Add a label to the colorbar
 
                 
-                
-                # cbar = plt.colorbar(
-                #     axs[1, i].images[0], cax=cax, format="%.1e", orientation='horizontal')
-                # # Set the label for each colorbar
-                # cbar.set_label(colorbar_labels[i])
-
-            # labelfigs(axs[0,i],
-            #         string_add=colorbar_labels[i],
-            #         loc ='ct',
-            #         size=8,
-            #         inset_fraction=(0.2, 0.2)
-            #         )
-             # Update the char to the next order
-            # ascii_value = ord(string_add)+1
-            # string_add = chr(ascii_value)
-
+             
         labelfigs(axs[0,0],
         string_add='a',
         loc ='tl',
@@ -3259,3 +3252,246 @@ class Viz(BE_model_utils):
         return fig
 
 
+
+    def plot_figure_4(self,model,pred_params,filename):
+        """
+        Plots the figure 4 of the paper.
+        """
+        data, voltage = self.get_hysteresis(scaled=True, loop_interpolated = True)
+        data = torch.atleast_3d(torch.tensor(data.reshape(-1, 96)))
+
+        data_names = ("LSQF", "NN")
+
+        fig = plt.figure(figsize=(24, 24))
+
+
+        # Define the GridSpec layout
+        gs = GridSpec(60, 40, figure=fig)
+
+
+        order = [['NN_fit_comp'],
+                ['violin'],
+                ['switching_maps']
+                ]
+
+        subplot_specs = [(0, 30, 0, 20 ), # top left: NN fit comparisons 
+                        (0, 29, 20, 40), # g
+                        (30, 46, 0, 60), #bottom 
+                        (30, 36, 0, 6), #bottom row 1 col 1
+                        (30, 36, 8, 14), #bottom row 1 col 2
+                        (30, 36, 16, 22), #bottom row 1 col 3
+                        (30, 36, 24, 30), #bottom row 1 col 4
+                        (30, 36, 32, 38), #bottom row 1 col 5
+                        (30, 36, 40, 46), #bottom row 1 col 6
+                        (30, 36, 48, 54), #bottom row 1 col 7
+                        (30, 36, 56, 62), #bottom row 1 col 8
+                        (30, 36, 64, 70), #bottom row 1 col 9
+                        
+                        (40, 46, 0, 6), #bottom row 2 col 1
+                        (40, 46, 8, 14), #bottom row 2 col 2
+                        (40, 46, 16, 22), #bottom row 2 col 3
+                        (40, 46, 24, 30), #bottom row 2 col 4
+                        (40, 46, 32, 38), #bottom row 2 col 5
+                        (40, 46, 40, 46), #bottom row 2 col 6
+                        (40, 46, 48, 54), #bottom row 2 col 7
+                        (40, 46, 56, 62), #bottom row 2 col 8
+                        (40, 46, 64, 70), #bottom row 2 col 9
+                        ]
+                
+        
+        for i, (r_start, r_end, c_start, c_end) in enumerate(subplot_specs):
+            try: 
+                idx = order[i]
+            except: 
+                break
+            ax = fig.add_subplot(gs[r_start:r_end, c_start:c_end])
+
+            if idx[0] == 'violin':
+                self.violin_plot_comparison_hysteresis(model,
+                                            torch.atleast_3d(torch.tensor(data.reshape(-1, 96))),
+                                            filename=None,ax=ax) 
+
+                # labels the figure and does some styling
+                labelfigs(ax, string_add = 'g', loc ='tl',size=20, style="b", inset_fraction=(0.05,0.95))
+                ax.set_ylabel("Scaled Hysteresis Results",fontsize=25)
+                ax.set_xlabel("")
+                
+                ax.tick_params(axis='x',labelsize=20)
+                ax.tick_params(axis='y',labelsize=20)
+
+                # Get the legend associated with the plot
+                legend = ax.get_legend()
+                legend.set_title("")
+                plt.setp(legend.get_texts(), fontsize=20) # Set the label size
+            
+            elif idx[0] == "switching_maps": 
+                    
+                fig_hysteresis = self.hysteresis_maps(pred_params, cycle=0, filename=None);
+                fig_scalar = FigDimConverter((1/2.5, 1/2.5))
+
+                
+                for row in range(2):
+                    for col in range(9):
+                        inset_ax = ax.inset_axes([-0.153+(col/8.99),1-(row+1.2)/2.4-row/12,1/2.4,1/2.4])
+                        inset_ax.imshow(fig_hysteresis.get_axes()[col+9*row].get_images()[0].get_array().data,cmap = 'viridis',
+                                            vmin = self.hysteresis_maps_clims[col][0], vmax = self.hysteresis_maps_clims[col][1])
+                        inset_ax.axis("off")
+                        
+                        if row == 1:
+                            bar_ax = []
+                            
+                            pos_inch = [(col/22.5), -0.008, 1/23, 1/300  ] #fills axes
+                            bar_ax.append(ax.inset_axes(fig_scalar.to_relative(pos_inch)))
+
+                            cbar = plt.colorbar(inset_ax.images[0],      
+                                                cax=bar_ax[0], format=FuncFormatter(self.hysteresis_maps_fmt),orientation = 'horizontal',
+                                                ticks = [self.hysteresis_maps_clims[col][0], self.hysteresis_maps_clims[col][1]])
+                            
+                            cbar.ax.get_xticklabels()[0].set_horizontalalignment('left')
+                            cbar.ax.get_xticklabels()[1].set_horizontalalignment('right')
+
+                            cbar.ax.tick_params(labelsize = 11)
+
+                            
+                            cbar.set_label(self.hysteresis_maps_colorbar_labels[col],size=15,loc='center')  # Add a label to the colorbar
+                            
+                                
+                        if row == 0: 
+                            labelfigs(ax,
+                                    string_add="Least Squares Fit Method",
+                                    loc='tl',size=25,inset_fraction = (0.05,0.5),style='b',
+                                    horizontalalignment = 'center',verticalalignment='center')
+                            labelfigs(ax,
+                                    string_add="h",
+                                    loc='tl',size=25,inset_fraction = (0.05,0.05),style='b',
+                                    horizontalalignment = 'left',verticalalignment='center')
+                        else:
+                            labelfigs(ax,
+                                    string_add="Neural Network with Trust Region CG",
+                                    loc='tl',size=25,inset_fraction = (0.55,0.5),style='b',
+                                    horizontalalignment = 'center',verticalalignment='center')
+                            labelfigs(ax,
+                                    string_add="i",
+                                    loc='tl',size=25,inset_fraction = (0.55,0.05),style='b',
+                                    horizontalalignment = 'left',verticalalignment='center')
+                            
+                    ax.axis("off")         
+            else:
+                ax.axis("off")
+                size=(1.25, 1.25)
+                gaps=(1, 0.66)
+                fig_BMW = self.hysteresis_comparison(data_names, nn_model=model, filename=None)
+
+                
+                #   list_ax.append(axs)
+                axes_index = [5,4,3,2,1,0]
+
+                
+                for row in range(3):
+                    for col in range(2):
+                        inset_ax = ax.inset_axes([(col/2)-col*0.05,1-(row+1)/3.2,1/3.2,1/3.2])
+                                                
+                        #inset_ax.set_xlim([-16,16])
+                        inset_ax.set_xticks([-16,0,16])
+                        if row == 2: 
+                            inset_ax.set_xlabel('Voltage(V)', fontsize=20)
+                        else:
+                            inset_ax.set_xlabel("")
+                            inset_ax.xaxis.set_ticklabels([])
+                        if row == 0: 
+                            inset_ax.set_ylim([-1.7e-4,1.5e-4])
+                            inset_ax.set_yticks(np.linspace(-1.5e-4,1.5e-4,5))
+                            if col == 1:
+                                inset_ax.set_yticklabels("")
+                        elif row == 1: 
+                            inset_ax.set_ylim([-1.5e-4,1.2e-4])
+                            inset_ax.set_yticks(np.linspace(-1.5e-4,1e-4,6))
+                            if col == 1:
+                                inset_ax.set_yticklabels("")
+                        else:
+                            inset_ax.set_ylim([-6e-4, 1e-4])
+                            if col == 1:
+                                inset_ax.set_yticklabels("")
+                        
+                        
+                            
+                        for line in fig_BMW.get_axes()[axes_index[2*row+col]].get_lines():
+                        #for line in ax_hyst_comp[2*row+col].get_lines():
+                            label = line.get_label() if line.get_label() != '_nolegend_' else None
+                            # Copying line properties like color, linestyle, marker, etc.
+                            inset_ax.plot(line.get_xdata(), line.get_ydata(), color=line.get_color(),
+                                        linestyle=line.get_linestyle(), marker=line.get_marker(), label=label)
+                            
+                        if col==0:   
+                            set_sci_notation_label(
+                                inset_ax, corner="top left", axis="y", stroke_color="w", linewidth=0.5,
+                                textsize = 10, offset_points = (0,30)
+                            )
+                        
+                        
+                        
+                        inset_ax.tick_params(axis='x',labelsize=20)
+                        inset_ax.tick_params(axis='y',labelsize=20)
+                                    
+                        plt.tight_layout()    
+                        
+                        
+                        
+                        if row == 0:
+                        
+                            labelfigs(inset_ax,
+                                    string_add="Best",
+                                    loc ='tl',
+                                    size=15,
+                                    inset_fraction=(0.05,0.37),
+                                    style = 'b',
+                                    horizontalalignment = "center"
+                                    )
+                            
+                        # get legend handles and their corresponding labels
+                            handles, labels = inset_ax.get_legend_handles_labels()
+                            
+
+                            inset_ax.legend(handles,labels, loc=(0.4,0.65),fontsize = 15)
+                            
+
+                        elif row == 1:
+                            labelfigs(inset_ax,
+                                    string_add="Median",
+                                    loc ='tl',
+                                    size=15,
+                                    inset_fraction=(0.05,0.37),
+                                    style = 'b',
+                                    horizontalalignment = "center"
+                                    )
+                            
+                        elif row == 2:
+                            labelfigs(inset_ax,
+                                    string_add="Worst",
+                                    loc ='tl',
+                                    size=15,
+                                    inset_fraction=(0.05,0.37),
+                                    style = 'b',
+                                    horizontalalignment="center"
+                                    )
+                            ax.set_xticks([1.2,1.3,1.4])
+                            
+                        
+                        labelfigs(inset_ax,
+                            number=2*row+col,
+                            loc ='tl',
+                            size=15,
+                            inset_fraction=(0.05,0.19),
+                            style = 'b'
+                            )
+
+
+        # Adjust the spacing between the plots as needed
+        plt.tight_layout()
+                        
+        # Show the layout
+        plt.show()
+
+        self.printer.savefig(
+                        ax.figure, filename
+                    )

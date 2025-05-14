@@ -239,7 +239,9 @@ class Viz(BE_model_utils):
 
         # Get the raw spectral data for the selected pixel and voltage step
         # with State.temporary_state(self, **true):
-        data, x = self.raw_spectra(pixel, voltage_step, frequency=True)
+        # JGoddy added scaled on May 14 without testing it
+        # if 'scaled' should always be False here, then remove it from the function call
+        data, x = self.raw_spectra(pixel, voltage_step, frequency=True, scaled = self.scaled) 
 
         # Get the valid parameters for the plot method
         plot_params = mlines.Line2D([], []).properties().keys()
@@ -319,8 +321,10 @@ class Viz(BE_model_utils):
         # (amplitude and phase) or (real and imaginary components) etc.
         if predict is not None:
             self.set_attributes(**predict)
+            # JGoddy added scaled on May 14 without testing it
+            # if 'scaled' should always be False here, then remove it from the function call
             data_predict, x = self.raw_spectra(
-                pixel, voltage_step, frequency=True, **kwargs
+                pixel, voltage_step, frequency=True, scaled = self.scaled, **kwargs
             )
             ax1.plot(
                 x,
@@ -391,7 +395,9 @@ class Viz(BE_model_utils):
         self.raw_format = "magnitude spectrum"
 
         # Get the raw spectral data for the selected pixel and voltage step
-        data, x = self.raw_spectra(pixel, voltage_step, frequency=True)
+        # JGoddy added scaled on May 14 without testing it
+        # if 'scaled' should always be False here, then remove it from the function call
+        data, x = self.raw_spectra(pixel, voltage_step, frequency=True, scaled = self.scaled)
 
         # Plot amplitude and phase for the true dataset
         ax1.plot(
@@ -419,7 +425,9 @@ class Viz(BE_model_utils):
         # If a predicted dataset is provided, plot its amplitude and phase
         if predict is not None:
             self.set_attributes(**predict)
-            data, x = self.raw_spectra(pixel, voltage_step, frequency=True, **kwargs)
+            # JGoddy added scaled on May 14 without testing it
+            # if 'scaled' should always be False here, then remove it from the function call
+            data, x = self.raw_spectra(pixel, voltage_step, frequency=True, scaled = self.scaled, **kwargs)
             ax1.plot(x, data[0].flatten(), "bo", label=self.label + " Amplitude")
             ax2.plot(x, data[1].flatten(), "ro", label=self.label + " Phase")
             self.set_attributes(**true)
@@ -534,7 +542,9 @@ class Viz(BE_model_utils):
         self.raw_format = "complex"
 
         # Get the complex raw spectral data for the selected pixel and voltage step
-        data, x = self.raw_spectra(pixel, voltage_step, frequency=True)
+        # JGoddy added scaled on May 14 without testing it
+        # if 'scaled' should always be False here, then remove it from the function call
+        data, x = self.raw_spectra(pixel, voltage_step, frequency=True, scaled = self.scaled)
 
         # Plot real and imaginary components for the true dataset
         ax1.plot(
@@ -565,7 +575,9 @@ class Viz(BE_model_utils):
         # If a predicted dataset is provided, plot its real and imaginary components
         if predict is not None:
             self.set_attributes(**predict)
-            data, x = self.raw_spectra(pixel, voltage_step, frequency=True, **kwargs)
+            # JGoddy added scaled on May 14 without testing it
+            # if 'scaled' should always be False here, then remove it from the function call
+            data, x = self.raw_spectra(pixel, voltage_step, frequency=True, scaled = self.scaled, **kwargs)
             ax1.plot(x, data[0].flatten(), "ko", label=self.label + " Real")
             ax2.plot(x, data[1].flatten(), "gs", label=self.label + " Imag")
             self.set_attributes(**true)
@@ -950,7 +962,9 @@ class Viz(BE_model_utils):
         self.resampled = False
 
         # Get the magnitude spectrum for the selected pixel and voltage step
-        data_ = self.raw_spectra(pixel, voltagestep)
+        # JGoddy added scaled on May 14 without testing it
+        # if 'scaled' should always be False here, then remove it from the function call
+        data_ = self.raw_spectra(pixel, voltagestep, scaled = self.scaled)
 
         # Plot the magnitude spectrum
         ax[3].plot(
@@ -973,7 +987,9 @@ class Viz(BE_model_utils):
 
         # Switch the dataset back to complex format
         self.raw_format = "complex"
-        data_ = self.raw_spectra(pixel, voltagestep)
+        # JGoddy added scaled on May 14 without testing it
+        # if 'scaled' should always be False here, then remove it from the function call
+        data_ = self.raw_spectra(pixel, voltagestep, scaled = self.scaled)
 
         # Plot the real and imaginary components of the spectra
         ax[4].plot(self.frequency_bin, data_[0].flatten(), label="Real")
@@ -1517,7 +1533,9 @@ class Viz(BE_model_utils):
 
         self.set_attributes(**state)
 
-        data = self.raw_spectra(pixel=pixel, voltage_step=voltage_step)
+        # JGoddy added scaled on May 14 without testing it
+        # if 'scaled' should always be False here, then remove it from the function call
+        data = self.raw_spectra(pixel=pixel, voltage_step=voltage_step, scaled = self.scaled)
 
         # plot real and imaginary components of resampled data
         fig = plt.figure(figsize=(3, 1.25), layout="compressed")
@@ -1525,7 +1543,9 @@ class Viz(BE_model_utils):
 
         self.raw_format = "complex"
 
-        data, x = self.raw_spectra(pixel, voltage_step, frequency=True, **kwargs)
+        # JGoddy added scaled on May 14 without testing it
+        # if 'scaled' should always be False here, then remove it from the function call
+        data, x = self.raw_spectra(pixel, voltage_step, frequency=True, scaled = self.scaled, **kwargs)
 
         axs.plot(x, data[0].flatten(), "k", label=self.label + " Real")
         axs.set_xlabel("Frequency (Hz)")
@@ -2248,7 +2268,10 @@ class Viz(BE_model_utils):
             self.scaled = True
 
             # Generate raw spectra from the fit results
-            pred_data = self.raw_spectra(fit_results=params)
+            pred_data = self.raw_spectra(fit_results=params,
+                                         voltage_step=self.get_voltage_step(),
+                                        frequency=False,
+                                        scaled=self.scaled)
 
             # Reshape the predicted data for correct dimensionality (samples, channels, voltage steps)
             pred_data = np.array(
@@ -2335,7 +2358,9 @@ class Viz(BE_model_utils):
             self.raw_format = "complex"
 
             # Generate raw spectra using the retrieved SHO parameters
-            pred_data = self.raw_spectra(fit_results=params)
+            # JGoddy added scaled on May 14 without testing it
+            # if 'scaled' should always be False here, then remove it from the function call
+            pred_data = self.raw_spectra(fit_results=params, scaled = self.scaled)
 
             # Convert the predicted data to a NumPy array
             pred_data = np.array(
@@ -2723,7 +2748,7 @@ class Viz(BE_model_utils):
 
     # @static_dataset_decorator
     @context_manager_decorator
-    def violin_plot_comparison_SHO(self, state, model, X_data, filename, label="NN"):
+    def violin_plot_comparison_SHO(self, state, model, X_data, filename, label="NN",figlabel = 0):
         """
         Generates a violin plot to compare true parameter values obtained from the SHO LSQF fit
         and predicted parameter values from a machine learning model.
@@ -2797,10 +2822,10 @@ class Viz(BE_model_utils):
                 }
                 df = pd.concat((df, pd.DataFrame(dict_)))
 
+        df = df.reset_index(drop=False)
+
         # Initialize a figure for plotting
         fig, ax = plt.subplots(figsize=(2, 2))
-
-        df = df.reset_index(drop=False)
 
         # Generate the violin plot, comparing true and predicted parameter distributions
         sns.violinplot(
@@ -2814,7 +2839,7 @@ class Viz(BE_model_utils):
         )
 
         # Customize the appearance of the plot
-        labelfigs(ax, 0, style="b")  # Apply custom labeling style to the plot
+        labelfigs(ax, figlabel, style="b")  # Apply custom labeling style to the plot
         ax.set_ylabel("Scaled SHO Results")  # Set the y-axis label
         ax.set_xlabel("")  # No label for x-axis
 

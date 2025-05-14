@@ -472,7 +472,7 @@ class State(Preprocessing):
                 # the data must be scaled to rank the results
                 self.scaled = True
 
-                true, x1 = self.raw_spectra(frequency=True)
+                true, x1 = self.raw_spectra(frequency=True,scaled=self.scaled)
 
             elif isinstance(true_state, (torch.Tensor, np.ndarray, list)):
                 true_state = (
@@ -549,13 +549,16 @@ class State(Preprocessing):
 
             exec(f"self.{prediction['fitter']}_phase_shift =0")
 
-           # self.scaled = False
+            self.scaled = False
 
-            params = self.SHO_fit_results()
+            if 'model' in kwargs.keys():
+                params = self.SHO_fit_results(model = kwargs['model'])
+            else:
+                params = self.SHO_fit_results()
 
             params = params.reshape(-1, 4)
 
-           # self.scaled = True
+            self.scaled = True
 
             prediction, x2 = self.raw_spectra(
                 fit_results=params,
@@ -864,7 +867,7 @@ class State(Preprocessing):
 
             # If X_data is not provided, generate the necessary input data (X_data, Y_data) from the dataset
             if X_data is None:
-                X_data, Y_data = self.NN_data()
+                X_data, Y_data = self.get_nn_data(resampled=self.resampled)
      
             # Predict the SHO parameters using the model
             pred_data, scaled_param, data = model.predict(X_data)
@@ -926,7 +929,7 @@ class State(Preprocessing):
         self.scaled = True
 
         # Reconstruct the raw spectra based on the SHO fit parameters (scaled values).
-        pred_data = self.raw_spectra(fit_results=params)
+        pred_data = self.raw_spectra(fit_results=params,scaled=self.scaled)
 
         # Construct an array containing amplitude and phase, formatted as [amplitude, phase].
         pred_data = np.array([pred_data[0], pred_data[1]])

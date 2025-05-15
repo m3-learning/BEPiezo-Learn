@@ -50,6 +50,7 @@ from m3util.viz.text import (
     add_text_to_figure,
     set_sci_notation_label,
     labelfigs,
+    number_to_letters,
     # obj_offset,
 )
 
@@ -1998,6 +1999,10 @@ class Viz(BE_model_utils):
         cbar_space=1.3,  # space on the right where the cbar is not
         filename=None,
         labels=None,
+        label_marker_symbols_for_plt = ["o", "v", "^", ">", "<", "s","P", "D","*"],
+        label_marker_size = 8,
+        label_marker_starting_index = 1,
+        label_letter_text_size=12,
     ):
         if type(SHO_) is not list:
             SHO_ = [SHO_]
@@ -2097,14 +2102,16 @@ class Viz(BE_model_utils):
         inds = np.linspace(0, len(voltage) - 1, number_of_steps, dtype=int)
 
         # plots the voltage
-        ax[0].plot(voltage, "k")
+        ax[0].plot(voltage, "k", linewidth=0.5)
         ax[0].set_ylabel("Voltage (V)")
         ax[0].set_xlabel("Step")
+
+        #label_marker_symbols_for_plt = ["o", "v", "^", ">", "<", "s","P", "D","*"]
 
         # Plot the data with different markers
         for i, ind in enumerate(inds):
             # this adds the labels to the graphs
-            ax[0].plot(ind, voltage[ind], "o", color="k", markersize=10)
+            ax[0].plot(ind, voltage[ind], label_marker_symbols_for_plt[i], color="k", markersize=label_marker_size)
             vshift = (ax[0].get_ylim()[1] - ax[0].get_ylim()[0]) * 0.25
 
             # positions the location of the labels
@@ -2112,7 +2119,7 @@ class Viz(BE_model_utils):
                 vshift = -vshift / 2
 
             # adds the text to the graphs
-            ax[0].text(ind, voltage[ind] - vshift, str(i + 1), color="k", fontsize=12)
+            ax[0].text(ind, voltage[ind] - vshift, number_to_letters(i + label_marker_starting_index), color="k", fontsize=label_letter_text_size)
 
         for k, _SHO in enumerate(SHO_):
             # converts the data to a numpy array
@@ -2437,6 +2444,8 @@ class Viz(BE_model_utils):
 
         # Create subplots for the comparison
         fig, ax = subfigures(3, num_fits, gaps=gaps, size=size)
+        list_ax_ = []
+        list_ax1_ = [] 
 
         # Loop through each fit and the associated data
         for step, (data, name) in enumerate(zip(data, names)):
@@ -2571,14 +2580,17 @@ class Viz(BE_model_utils):
                     ax_.legend(lines + lines2, labels + labels2, loc="upper right")
 
                 set_sci_notation_label(ax_, axis="x", corner="bottom right")
-                set_sci_notation_label(ax1, axis="y", corner="top left")
+                set_sci_notation_label(ax_, axis="y", corner="top left")
+                
+                list_ax_.append(ax_)
+                list_ax1_.append(ax1)
 
 
         # Save the figure if filename is provided
         if self.printer is not None and filename is not None:
             self.printer.savefig(fig, filename, label_figs=ax, style="b")
 
-        return fig
+        return fig,list_ax_,list_ax1_
 
     def hysteresis_comparison(self,
                              data,
@@ -2748,7 +2760,7 @@ class Viz(BE_model_utils):
 
     # @static_dataset_decorator
     @context_manager_decorator
-    def violin_plot_comparison_SHO(self, state, model, X_data, filename, label="NN",figlabel = 0):
+    def violin_plot_comparison_SHO(self, state, model, X_data, filename, label="NN",figlabel = 'a',inset_fraction = (0.075,0.95), ax=None):
         """
         Generates a violin plot to compare true parameter values obtained from the SHO LSQF fit
         and predicted parameter values from a machine learning model.
@@ -2825,7 +2837,10 @@ class Viz(BE_model_utils):
         df = df.reset_index(drop=False)
 
         # Initialize a figure for plotting
-        fig, ax = plt.subplots(figsize=(2, 2))
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(2, 2))
+        else:
+            fig = ax.figure
 
         # Generate the violin plot, comparing true and predicted parameter distributions
         sns.violinplot(
@@ -2839,7 +2854,8 @@ class Viz(BE_model_utils):
         )
 
         # Customize the appearance of the plot
-        labelfigs(ax, figlabel, style="b")  # Apply custom labeling style to the plot
+        if figlabel is not None:
+            labelfigs(ax, string_add = figlabel, style="b",inset_fraction = inset_fraction)  # Apply custom labeling style to the plot
         ax.set_ylabel("Scaled SHO Results")  # Set the y-axis label
         ax.set_xlabel("")  # No label for x-axis
 

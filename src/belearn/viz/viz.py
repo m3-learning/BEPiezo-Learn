@@ -2001,7 +2001,7 @@ class Viz(BE_model_utils):
         labels=None,
         label_marker_symbols_for_plt = ["o", "v", "^", ">", "<", "s","P", "D","*"],
         label_marker_size = 8,
-        label_marker_starting_index = 1,
+        label_marker_starting_index = 0,
         label_letter_text_size=12,
     ):
         if type(SHO_) is not list:
@@ -2045,7 +2045,7 @@ class Viz(BE_model_utils):
         pos_inch = [
             0.33,
             fig_height - voltage_plot_height,
-            6.5 - 0.33,
+            fig_width - 0.33,
             voltage_plot_height,
         ]
 
@@ -2119,7 +2119,7 @@ class Viz(BE_model_utils):
                 vshift = -vshift / 2
 
             # adds the text to the graphs
-            ax[0].text(ind, voltage[ind] - vshift, number_to_letters(i + label_marker_starting_index), color="k", fontsize=label_letter_text_size)
+            ax[0].text(ind, voltage[ind] - 0.75*vshift, number_to_letters(i + label_marker_starting_index), color="k", fontsize=label_letter_text_size)
 
         for k, _SHO in enumerate(SHO_):
             # converts the data to a numpy array

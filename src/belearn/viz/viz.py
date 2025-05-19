@@ -2760,7 +2760,7 @@ class Viz(BE_model_utils):
 
     # @static_dataset_decorator
     @context_manager_decorator
-    def violin_plot_comparison_SHO(self, state, model, X_data, filename, label="NN",figlabel = 'a',inset_fraction = (0.075,0.95), ax=None):
+    def violin_plot_comparison_SHO(self, state, model, X_data, filename, label="NN",figlabel = 'a',inset_fraction = (0.075,0.95), ax=None,fig_label_size=8):
         """
         Generates a violin plot to compare true parameter values obtained from the SHO LSQF fit
         and predicted parameter values from a machine learning model.
@@ -2855,7 +2855,7 @@ class Viz(BE_model_utils):
 
         # Customize the appearance of the plot
         if figlabel is not None:
-            labelfigs(ax, string_add = figlabel, style="b",inset_fraction = inset_fraction)  # Apply custom labeling style to the plot
+            labelfigs(ax, string_add = figlabel, style="b",inset_fraction = inset_fraction,size=fig_label_size)  # Apply custom labeling style to the plot
         ax.set_ylabel("Scaled SHO Results")  # Set the y-axis label
         ax.set_xlabel("")  # No label for x-axis
 

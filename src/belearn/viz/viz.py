@@ -2054,7 +2054,7 @@ class Viz(BE_model_utils):
 
         # resets the x0 position for the embedding plots
         pos_inch[0] = 0
-        pos_inch[1] -= embedding_image_size + 0.33
+        pos_inch[1] -= embedding_image_size + 0.33+0.1
 
         # sets the embedding size of the image
         pos_inch[2] = embedding_image_size
@@ -2103,8 +2103,12 @@ class Viz(BE_model_utils):
 
         # plots the voltage
         ax[0].plot(voltage, "k", linewidth=0.5)
-        ax[0].set_ylabel("Voltage (V)")
-        ax[0].set_xlabel("Step")
+        ax[0].set_ylabel("Voltage (V)",fontsize=12)
+        ax[0].set_xlabel("Step",fontsize=12)
+        ax[0].tick_params(axis='x',labelsize=8)
+        ax[0].tick_params(axis='y',labelsize=8)
+        ax[0].set_xticks(np.linspace(0,100,11))
+        ax[0].set_yticks([-15,0,15])
 
         #label_marker_symbols_for_plt = ["o", "v", "^", ">", "<", "s","P", "D","*"]
 
@@ -2208,6 +2212,7 @@ class Viz(BE_model_utils):
                 fmt.set_powerlimits((0, 0))
                 cbar = plt.colorbar(ax[i + 1].images[0], cax=bar_ax[i], format=fmt)
                 cbar.set_label(names[i])  # Add a label to the colorbar
+                
 
         # prints the figure
         if self.printer is not None and filename is not None:
@@ -3089,6 +3094,192 @@ class Viz(BE_model_utils):
         return fig
 
 
+    def fmt(x, pos):
+        a, b = '{:.1e}'.format(x).split('e')
+        b = int(b)
+        if abs(b) >2: 
+            return r'${} \times 10^{{{}}}$'.format(a, b)
+        else: 
+            return float(a)*10**b
+
+                                    
+    def plot_figure_3(self):
+        """
+        Plots the figure 3 of the paper.
+        """
+        fig = plt.figure(figsize=(24, 24))
+
+
+        # Define the GridSpec layout
+        gs = GridSpec(60, 40, figure=fig)
+
+        order = [['SHO_fit_comp'],
+                ['violin'],
+                ['voltage_curve'],
+                ['switching_maps']
+                ]
+
+
+
+        subplot_specs = [(0, 30, 0, 20 ), # top left: SHO fit comparisons 
+                        (0, 15, 20, 40), # g
+                        (17, 27, 20, 40), # h
+                        (30, 80, 0, 60), #bottom 
+                        ]
+
+        for i, (r_start, r_end, c_start, c_end) in enumerate(subplot_specs):
+            ax = fig.add_subplot(gs[r_start:r_end, c_start:c_end])
+            idx = order[i]
+            if idx[0] == 'violin':
+                self.violin_plot_comparison_SHO(
+                    true_state,
+                    model,
+                    X_data,
+                    filename=None,
+                    label="NN",
+                    ax=ax,
+                    figlabel='g',
+                    fig_label_size=20
+                )
+                
+                ax.set_ylabel("Scaled SHO Results",fontsize=20)
+                ax.set_xlabel("")
+                
+                ax.tick_params(axis='x',labelsize=20)
+                ax.tick_params(axis='y',labelsize=20)
+                ax.set_yticks(np.linspace(-6,6,7))
+
+
+                # Get the legend associated with the plot
+                legend = ax.get_legend()
+                legend.set_title("")
+                plt.setp(legend.get_texts(), fontsize=20) # Set the label size
+                
+            elif idx[0] == 'voltage_curve':
+                voltage_and_switching_maps_fig = self.SHO_switching_maps_test(SHO_ = [LSQF_Params,parm],
+                                               labels = ["LSQF", "NN"], 
+                                               filename=None,
+                                               label_marker_starting_index=8,
+                                               label_marker_size=16,
+                                               label_letter_text_size=18,
+                                               colorbars=False,
+                                               )
+                copy_axis_to(voltage_and_switching_maps_fig.axes[0], ax)  
+                
+                ax.set_ylabel("Voltage (V)",fontsize=20)
+                ax.set_xlabel("Step",fontsize=20)
+                ax.set_xticks(np.linspace(0,100,11))
+                ax.set_xlim([-4,100])
+                ax.set_ylim([-20,20])
+                ax.set_yticks([-15,0,15])
+                ax.tick_params(axis='x',labelsize=20)
+                ax.tick_params(axis='y',labelsize=20)
+                
+                labelfigs(ax,
+                    string_add='h',
+                    loc ='tl',
+                    size=20, #22
+                    inset_fraction=(0.12,0.96),
+                    style = 'b'
+                    )
+
+                plt.tight_layout()
+
+            elif idx[0] == 'switching_maps':
+                ax2 = voltage_and_switching_maps_fig.axes[1:]
+                
+                label_marker_symbols = ["\u25CF", "\u25BC", "\u25B2", "\u25BA", "\u25C0", "\u25A0","\u271A", "\u25C6","\u2605"]
+                label_marker_symbols_counter = 0
+                
+                
+                labels = ['i','j','k','l','m','n','o','p','q']
+                label_counter = 0
+                names = ['Amplitude', "Resonance","Quality Factor","Phase"]
+                clims=[
+                        (0, 1.4e-4),  # amplitude
+                        (1.31e6, 1.33e6),  # resonance frequency
+                        (-240, -160),  # quality factor
+                        (-np.pi, np.pi),  # phase
+                    ],  # phase limits
+                fmt = ScalarFormatter(useMathText=True)
+                fmt.set_powerlimits((0, 0))
+                # defines a scalar to convert inches to relative coordinates
+                fig_scalar = FigDimConverter((1/6, 1/6))
+                
+                for row in range(6):
+                    for col in range(12):
+                        inset_ax = ax.inset_axes([-0.06+(col/11.8)+np.floor(col/4)/256,1-(row+1)/6.1-row/192-np.floor(row/2)/96,1/6.1,1/6.1])
+
+                        inset_ax.imshow(ax2[(12*row)+col].get_images()[0].get_array().data,clim = clims[0][int(np.floor(col % 4))])
+                        if col == 0:
+                            if row % 2 == 0: 
+                                inset_ax.text(35,10,ax2[0].get_ylabel(),color = "white",size=20,ha = "center", va = "center")
+                            
+                            else:
+                                inset_ax.text(35,10,ax2[12].get_ylabel(),color = "white", size=20,ha = "center", va = "center")
+                        
+                        if row % 2 == 0 and col % 4 == 0: 
+                                inset_ax.text(10,10, label_marker_symbols[label_marker_symbols_counter], color = "white", size = 24, ha = "center", va = "center")
+                                label_marker_symbols_counter+=1
+                        elif row % 2 == 1 and (col + 1) % 4 == 0:
+                            inset_ax.text(50,50, labels[label_counter], color = "white", weight = 'bold', size = 20,ha = "center", va = "center")
+                            label_counter+=1 
+                            
+                        if row == 5:
+                            fmt = ScalarFormatter(useMathText=True)
+                            fmt.set_powerlimits((0, 0))
+                                        
+                            bar_ax = []
+                            pos_inch = [-3.2e-3 + (col/70.5)+np.floor(col/4)/1800, -0.008, 1/73.5, 1/500  ] #fills axes
+                          
+                            bar_ax.append(ax.inset_axes(fig_scalar.to_relative(pos_inch)))
+                                          
+                            if int(np.floor(col % 4)) == 0:
+                                                  
+                                cbar = plt.colorbar(inset_ax.images[0],location = 'bottom', cax = bar_ax[0], 
+                                                    format = FuncFormatter(fmt), 
+                                                    ticks = np.linspace(np.min(clims[0][int(np.floor(col % 4))]),
+                                                                        np.max(clims[0][int(np.floor(col % 4))]),2), #5
+                                                  
+                                                    )
+                                cbar.ax.get_xticklabels()[0].set_horizontalalignment('left')
+                                cbar.ax.get_xticklabels()[1].set_horizontalalignment('right')
+
+                            elif int(np.floor(col % 4)) == 1:
+                                
+                                def fmt_Resonance(x, pos): #need to display more digits to differentiate the resonance values
+                                    a, b = '{:.2e}'.format(x).split('e')
+                                    b = int(b)
+                                    return r'${} \times 10^{{{}}}$'.format(a, b)
+                                    
+                                
+                                cbar = plt.colorbar(inset_ax.images[0],location = 'bottom', cax = bar_ax[0], 
+                                                    format = FuncFormatter(fmt), #fmt, 
+                                                    ticks = np.linspace(np.min(clims[0][int(np.floor(col % 4))]),
+                                                                        np.max(clims[0][int(np.floor(col % 4))]),2) #5
+                                                    )
+                            elif int(np.floor(col % 4)) == 2:
+                                cbar = plt.colorbar(inset_ax.images[0],location = 'bottom', cax = bar_ax[0], 
+                                                    format = FuncFormatter(fmt), 
+                                                    ticks = np.linspace(np.min(clims[0][int(np.floor(col % 4))]),
+                                                                        np.max(clims[0][int(np.floor(col % 4))]),2) # 5
+                                                    )
+                            else:
+                                cbar = plt.colorbar(inset_ax.images[0],location = 'bottom', cax = bar_ax[0], 
+                                                    format = FuncFormatter(fmt), 
+                                                    ticks = np.linspace(-3,3,2)
+                                                    ) 
+                            
+                            cbar.ax.get_xticklabels()[0].set_horizontalalignment('left')
+                            cbar.ax.get_xticklabels()[1].set_horizontalalignment('right')
+                            cbar.ax.tick_params(labelsize = 12)
+                            cbar.set_label(names[int(np.floor(col % 4))],size=15)  # Add a label to the colorbar
+
+                        inset_ax.axis("off")
+                            
+                            
+                            
+                
 
     def plot_figure_4(self,model,pred_params,filename):
         """

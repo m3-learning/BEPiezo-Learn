@@ -908,18 +908,31 @@ class BE_Dataset:
         self.SHO_LSQF_data = {}
         self.raw_data_reshaped = {}
 
-        print(
-            f"Accessing data at: {self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"
-        )
+        # adding a workaround for the noisy data for now. TODO: fix this
+        if self.dataset_name == "Raw_Data":
+            print(
+                f"Accessing data at: {self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"
+            )
+        else:
+            print(
+                f"Accessing data at: {self.dataset_name}_{self.SHO_fit_relative_base_path[:-4]}/{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"
+            )
 
         with h5py.File(self.file, "r+") as h5_f:
             try:
                 # Extract and store the SHO fit data
-                self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(
-                    h5_f[f"{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"][
-                        :
-                    ]
-                )[:, :, :-1]
+                if self.dataset_name == "Raw_Data":
+                    self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(
+                        h5_f[f"{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"][
+                            :
+                        ]
+                    )[:, :, :-1]
+                else:
+                    self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(
+                        h5_f[f"{self.dataset_name}_{self.SHO_fit_relative_base_path[:-4]}/{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"][
+                            :
+                        ]
+                    )[:, :, :-1]
 
                 # Reshape and store the raw data
                 self.raw_data_reshaped[self.dataset_name] = h5_f[

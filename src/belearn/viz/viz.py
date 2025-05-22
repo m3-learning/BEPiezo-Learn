@@ -2765,7 +2765,7 @@ class Viz(BE_model_utils):
 
     # @static_dataset_decorator
     @context_manager_decorator
-    def violin_plot_comparison_SHO(self, state, model, X_data, filename, label="NN",figlabel = 'a',inset_fraction = (0.075,0.95), ax=None,fig_label_size=8):
+    def violin_plot_comparison_SHO(self, state, model, X_data, params=None, filename=None, label="NN",figlabel = 'a',inset_fraction = (0.075,0.95), ax=None,fig_label_size=8):
         """
         Generates a violin plot to compare true parameter values obtained from the SHO LSQF fit
         and predicted parameter values from a machine learning model.
@@ -2779,6 +2779,8 @@ class Viz(BE_model_utils):
             from input data.
         X_data : array-like
             Input data for the model to generate predictions.
+        params : array-like
+            Parameters for the model to generate predictions.
         filename : str
             Filename to save the generated plot. If None, the plot is not saved.
         label : str
@@ -2795,8 +2797,9 @@ class Viz(BE_model_utils):
         # Initialize an empty dataframe to store the data for plotting
         df = pd.DataFrame()
 
-        # Use the model to get predicted parameter values and other outputs
-        pred_data, scaled_param, params = model.predict(X_data)
+        if params is None:
+            # Use the model to get predicted parameter values and other outputs
+            pred_data, scaled_param, params = model.predict(X_data)
 
         # Scale the predicted parameters using the SHO scaler
         scaled_param = self.SHO_scaler.transform(params)
@@ -2855,6 +2858,7 @@ class Viz(BE_model_utils):
             hue="dataset",
             split=True,
             ax=ax,
+            inner ='quartile',
             linewidth=0.1,
         )
 

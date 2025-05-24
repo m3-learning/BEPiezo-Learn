@@ -905,8 +905,16 @@ class BE_Dataset:
         """
 
         # Initialize the dictionaries for storing data
-        self.SHO_LSQF_data = {}
-        self.raw_data_reshaped = {}
+        # TODO: there is probably a better way to check if the dictionaries are initialized
+        try:
+            self.SHO_LSQF_data  
+        except:
+            self.SHO_LSQF_data = {}
+            
+        try: # maybe combine with other try except block since self.SHO_data and self.raw_data_reshaped are initialized together
+            self.raw_data_reshaped
+        except:
+            self.raw_data_reshaped = {}
 
         # adding a workaround for the noisy data for now. TODO: fix this
         if self.dataset_name == "Raw_Data":

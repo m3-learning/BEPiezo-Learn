@@ -216,7 +216,7 @@ def print_mse(
             # Extract raw data from LSQF SHO fits in the dataset
             pred_data, _ = model_predictor.dataset.get_raw_data_from_LSQF_SHO(data)
             # Get true data in NN format from the dataset
-            data, _ = model_utils.NN_data()
+            data, _ = model_utils.get_nn_data()
             # Convert predictions to a PyTorch tensor
             pred_data = torch.from_numpy(pred_data)
 

@@ -221,7 +221,7 @@ class Preprocessing(BE_Dataset):
         self.raw_data_scaler = Raw_Data_Scaler(self.raw_data())
         
         # computes the SHO scaler
-        self.SHO_Scaler()
+        self.SHO_Scaler(noise=self.noise)
 
         # try:
         #     # gets the LSQF results

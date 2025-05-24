@@ -3095,6 +3095,7 @@ class Viz(BE_model_utils):
         
         return fig
 
+#### IGNORE THIS BELOW HERE. IT DOES NOT WORK YET. 
 
     def fmt(x, pos):
         a, b = '{:.1e}'.format(x).split('e')

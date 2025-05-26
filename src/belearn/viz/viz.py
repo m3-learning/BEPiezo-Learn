@@ -6,7 +6,11 @@ from belearn.dataset.dataset import BE_Dataset
 from belearn.dataset.model_utils import BE_model_utils
 from belearn.util.wrappers import context_manager_decorator
 from belearn.dataset.analytics import MSE
+from belearn.dataset.fitters.sho import SHO_fit_func_nn
 #from belearn.dataset.transformers import to_real_imag, to_complex
+
+from autophyslearn.spectroscopic.nn import Multiscale1DFitter, Model
+from autophyslearn.postprocessing.complex import ComplexPostProcessor
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -27,6 +31,8 @@ from torch import nn
 
 from contextlib import contextmanager
 import inspect
+
+from m3util.ml.rand import set_seeds
 
 from m3util.viz.layout import (
     layout_fig,
@@ -2128,7 +2134,7 @@ class Viz(BE_model_utils):
             if isinstance(_SHO, torch.Tensor):
                 _SHO = _SHO.detach().numpy()
 
-            print(_SHO.shape)
+            #print(_SHO.shape)
             _SHO = _SHO.reshape(self.num_pix, self.voltage_steps, 4)
 
             # get the selected measurement cycle
@@ -3097,19 +3103,275 @@ class Viz(BE_model_utils):
 
 #### IGNORE THIS BELOW HERE. IT DOES NOT WORK YET. 
 
-    def fmt(x, pos):
+    @property
+    def clims(self):
+        clims_ = [
+                (0, 1.4e-4),  # amplitude
+                (1.31e6, 1.33e6),  # resonance frequency
+                (-240, -160),  # quality factor
+                (-np.pi, np.pi),  # phase
+                    ],  # phase limits
+        return clims_
+
+    def instantiate_model(self,
+                          noise = 0,
+                          Train = False, 
+                          model_basename = "SHO_Fitter_original_data_noise_0", 
+                          datafed_path = '2024_SHO_Fitting/Noisy_NN',
+                          script_path = './Paper_Figures.ipynb',
+                          seed=42, 
+                          device = 'cuda:0'
+                          ):
+        if noise != 0: 
+            self.noise = noise
+            self.get_dataset(noise = self.noise)
+            self.SHO_preprocessing() 
+            
+        set_seeds(seed)
+        postprocessor = ComplexPostProcessor(self,device=device)
+
+        model_ = Multiscale1DFitter(SHO_fit_func_nn, # function 
+                            self.frequency_bin, # x data
+                            2, # input channels
+                            4, # output channels
+                            self.SHO_scaler, 
+                            postprocessor,
+                            device = device)
+        
+        #TODO: I am able to load the weights just fine instead of training with training=True
+        # so maybe I don't need to be able to set training=False?  
+        
+        model = Model(model_, self, training=True,
+               model_basename=model_basename,
+               datafed_path=datafed_path,
+               script_path = script_path,
+               device = device)
+        
+        X_train, X_test, y_train, y_test = self.test_train_split_(shuffle=True)
+
+        Train = False
+
+        if Train: 
+            model.fit(
+            X_train,
+            500,
+            optimizer="Adam",
+            epochs = 5,
+            )
+
+        else:
+            if noise == 0:
+                model.load(
+                    "./Trained Models/SHO Fitter/2024-09-23_14-36-21_nn_benchmarks_noise/SHO_Fitter_model_optimizer_Adam_epoch_4_train_loss_0.040321211942850994.pth",
+                    device=device
+                )
+            elif noise == 2:
+                model.load(
+                    "./Trained Models/SHO Fitter/SHO_Fitter_original_data_noise_2_model_optimizer_Adam_epoch_4_train_loss_2.672502815257758.pth",
+                    device=device
+                )
+            elif noise == 4:
+                model.load(
+                    "./Trained Models/SHO Fitter/SHO_Fitter_original_data_noise_4_model_optimizer_Adam_epoch_4_train_loss_0.03404734210730735.pth",
+                    device = device
+                )
+            elif noise == 7:
+                model.load(
+                    "./Trained Models/SHO Fitter/SHO_Fitter_original_data_noise_7_model_optimizer_Adam_epoch_4_train_loss_0.03404734210730735.pth",
+                    device = device
+                )
+            else: 
+                raise ValueError(f"Noise level {noise} has not been trained yet. \n Please train the model before loading it.")
+        return model
+
+    def instantiate_model_params(self,model):
+        
+        X_data, Y_data = self.get_nn_data()
+        pred_data, scaled_param, NN_params = model.predict(X_data)
+
+        return X_data, Y_data, pred_data, scaled_param, NN_params
+
+
+    def copy_axis_to(self,source_ax, target_ax):
+        """
+        Copies the plot content from source_ax into target_ax, including lines, markers,
+        bar plots, annotations, and text.
+
+        Args:
+            source_ax (matplotlib.axes.Axes): The axis to copy from.
+            target_ax (matplotlib.axes.Axes): The axis to copy into.
+        """
+        # Copy lines and markers
+        for line in source_ax.get_lines():
+            target_ax.plot(
+                line.get_xdata(),
+                line.get_ydata(),
+                linestyle=line.get_linestyle(),
+                marker=line.get_marker(),
+                color=line.get_color(),
+                label=line.get_label(),
+                markersize=line.get_markersize()
+            )
+
+        # Copy bar containers
+        for container in source_ax.containers:
+            for patch in container:
+                target_ax.add_patch(patch)
+
+        # Copy text and annotations
+        for txt in source_ax.texts:
+            if isinstance(txt, plt.Annotation):
+                # Copy annotation with arrows (from annotate)
+                target_ax.annotate(
+                    text=txt.get_text(), 
+                    xy=txt.xy,
+                    xytext=txt.get_position(),
+                    arrowprops=txt.arrowprops if hasattr(txt, 'arrowprops') else None
+                )
+            else:
+                # Copy plain text (from text)
+                target_ax.text(
+                    x=txt.get_position()[0],
+                    y=txt.get_position()[1],
+                    s=txt.get_text(),
+                    fontsize=txt.get_fontsize(),
+                    color=txt.get_color(),
+                    ha=txt.get_ha(),
+                    va=txt.get_va(),
+                    rotation=txt.get_rotation()
+                )
+
+    
+    def fmt(self,x, pos):
         a, b = '{:.1e}'.format(x).split('e')
         b = int(b)
         if abs(b) >2: 
             return r'${} \times 10^{{{}}}$'.format(a, b)
         else: 
             return float(a)*10**b
+        
+    def fmt_resonance(self,x, pos): 
+        #need to display more digits to differentiate the resonance values
+        # for the resonance, b=6 so we don't need to worry about abs(b)<2
+        a, b = '{:.2e}'.format(x).split('e')
+        b = int(b)
+        return rf'$\hspace{{{-1.1}}} {a} \hspace{{{-0.4}}} \times \hspace{{{-0.4}}} 10^{{{b}}}$'
+                                
+
+    def y_formatter(self,y, pos):
+        return f"{y * 1e3:.1f}"  # Multiply by 1e3 to show scaled values
+
+    def copy_axes_properties(self,row,col,source_ax, target_ax, secondary_ax, ax_lims):
+        """Copy properties and data from source_ax to target_ax."""
+        # Copy basic properties
+        target_ax.set_xlim([1.2,1.4])
+        target_ax.set_xticks([1.2,1.3,1.4])
+        target_ax.get_xticklabels()[0].set_horizontalalignment('left')
+        target_ax.get_xticklabels()[-1].set_horizontalalignment('right')
+
+        if row == 2: # if i in [4,5]:
+            target_ax.set_xlabel('Frequency (MHz)',fontsize=20)
+        else:
+            target_ax.set_xlabel("")
+            #target_ax.set_xticks([])
+            target_ax.xaxis.set_ticklabels([])
+
+        if col == 0:    
+            target_ax.set_ylabel(source_ax.get_ylabel(),fontsize=20)
+        else:
+            target_ax.set_ylabel("")
+            target_ax.yaxis.set_ticklabels([])
+
+            
+        if row == 0:
+            target_ax.set_ylim([-0.5e-3,8.0e-3])
+        elif row == 1: 
+            target_ax.set_ylim([-0.1e-2,2.1e-2])
+        elif row == 2: 
+            target_ax.set_ylim([-0.1e-2,2.1e-2])    
+        
+        target_ax.set_title(source_ax.get_title())
+
+        # Copy lines from the primary axis
+        for line in source_ax.get_lines():
+            label = line.get_label() if line.get_label() != '_nolegend_' else None
+            # Copying line properties like color, linestyle, marker, etc.
+            target_ax.plot(line.get_xdata()/1e6, line.get_ydata(), color=line.get_color(),
+                        linestyle=line.get_linestyle(), marker=line.get_marker(), label=label)
+            
+        # Handle twin axes if present
+        #if secondary_ax:
+        ax_twin = target_ax.twinx()
+        ax_twin.set_ylim(secondary_ax.get_ylim())
+
+        if col == 0: #if i % 2 == 0: 
+            ax_twin.set_ylabel("")
+            ax_twin.yaxis.set_ticklabels([])
+            
+            set_sci_notation_label(
+                    target_ax, corner="top left", axis="y", stroke_color="w", linewidth=0.5,
+                    textsize = 20, offset_points = (0,50)
+                )
+        else:
+            ax_twin.set_ylabel(secondary_ax.get_ylabel(),fontsize = 20)
+            ax_twin.set_yticks([-3,-2,-1,0,1,2,3])
+
+
+        for line in secondary_ax.get_lines():
+            label = line.get_label() if line.get_label() != '_nolegend_' else None
+            # Copying line properties for the twin axis
+            ax_twin.plot(line.get_xdata()/1e6, line.get_ydata(), color=line.get_color(),
+                            linestyle=line.get_linestyle(), marker=line.get_marker(), label=label)
+        
+        
+        target_ax.tick_params(axis='x',labelsize=18)
+        target_ax.tick_params(axis='y',labelsize=18)
+        if row == 0 and col == 0: 
+            target_ax.yaxis.set_major_formatter(FuncFormatter(self.y_formatter))
+
+        ax_twin.tick_params(axis='x',labelsize=18)
+
+        ax_twin.tick_params(axis='y',labelsize=18)
+        
+        plt.tight_layout()
 
                                     
-    def plot_figure_3(self):
+    def plot_figure_3(self, filename = None):
         """
         Plots the figure 3 of the paper.
         """
+        
+        
+        # # define the hysteresis_scaler for the YYY 
+        # # NOTE: must be called before scaled is set to True
+        # self.loop_fit_preprocessing()
+        
+        # true state for the violin plot and BWM fit comparison
+        true_state = {
+            "fitter": "LSQF",
+            "raw_format": "complex",
+            "resampled": True,
+            "scaled": True,
+            "output_shape": "index",
+            "measurement_state": "all",
+            "LSQF_phase_shift": np.pi/2,
+            "NN_phase_shift": np.pi/2,
+            "noise": 0
+        }
+        
+        LSQF_state = {'resampled': True,
+                'raw_format': 'complex',
+                'fitter': 'LSQF',
+                'scaled': False,
+                'output_shape': 'index',
+                'measurement_state': 'all',
+                'resampled_bins': 165,
+                'LSQF_phase_shift': 1.5707963267948966,
+                'NN_phase_shift': 1.5707963267948966,
+                'noise': 0}
+
+        LSQF_params = self.SHO_fit_results(state = LSQF_state)
+        
         fig = plt.figure(figsize=(24, 24))
 
 
@@ -3125,15 +3387,112 @@ class Viz(BE_model_utils):
 
 
         subplot_specs = [(0, 30, 0, 20 ), # top left: SHO fit comparisons 
-                        (0, 15, 20, 40), # g
-                        (17, 27, 20, 40), # h
-                        (30, 80, 0, 60), #bottom 
+                        (0, 15, 20, 40), # g: violin plot
+                        (17, 27, 20, 40), # h: voltage curve
+                        (30, 80, 0, 60), #bottom: switching maps
                         ]
 
         for i, (r_start, r_end, c_start, c_end) in enumerate(subplot_specs):
             ax = fig.add_subplot(gs[r_start:r_end, c_start:c_end])
             idx = order[i]
-            if idx[0] == 'violin':
+            
+            if idx[0] == 'SHO_fit_comp':
+                ax.axis("off")
+                
+                model = self.instantiate_model(Train = False)
+                # sets the state of the output data
+                out_state = {"scaled": True, "raw_format": "magnitude spectrum"}
+                
+                LSQF_data = self.get_best_median_worst(
+                true_state,
+                prediction={"fitter": "LSQF"},
+                #model = model,
+                out_state=out_state,
+                SHO_results=True,
+                n=1,
+                )
+                NN_data = self.get_best_median_worst(
+                    true_state, prediction=model, out_state=out_state, SHO_results=True, n=1
+                )
+
+                data = (LSQF_data, NN_data)
+                model_names = ["LSQF", "NN"]
+        
+                
+                BMW_comp_fig,list_ax_,list_ax1 = self.SHO_Fit_comparison(
+                    data=data,
+                    names=model_names,
+                    model_comparison=[model, {"fitter": "LSQF"}],
+                    out_state=out_state,
+                    filename = None,
+                    SHO_results=True,
+                    n=1,
+                )
+                
+                # the order of the plots in the paper seem to be different 
+                # from the order of the plots in the code.
+                # To make them match, put the plots in the following order: 
+                axes_index = [0,3,1,4,2,5]
+                        
+                for row in range(3):
+                    for col in range(2):
+                        inset_ax = ax.inset_axes([(col/2)-col*0.18,1-(row+1)/3.25,1/3.25,1/3.25])
+                        if col == 0: 
+                            self.copy_axes_properties(row,col,list_ax_[axes_index[2*row+col]], inset_ax, list_ax1[axes_index[2*row+col]],list_ax_[axes_index[2*row+col+1]])
+                        else:
+                            self.copy_axes_properties(row,col,list_ax_[axes_index[2*row+col]], inset_ax, list_ax1[axes_index[2*row+col]],list_ax_[axes_index[2*row+col-1]])
+                    
+                        if row == 0:
+                            labelfigs(inset_ax,
+                                    string_add="Best",
+                                    loc ='tl',
+                                    size=20,
+                                    inset_fraction=(0.05,0.5),
+                                    style = 'b',
+                                    horizontalalignment = "center"
+                                    )
+                            if col == 1:
+                                # get legend handles and their corresponding labels
+                                handles1, labels1 = inset_ax.get_legend_handles_labels()
+                                handles2, labels2 = list_ax1[axes_index[2*row+col]].get_legend_handles_labels()
+                                
+                                inset_ax.legend(handles1 + handles2,labels1+labels2, loc=(1.25,0.45),fontsize = 14)
+
+                        elif row == 1:
+                            labelfigs(inset_ax,
+                                    string_add="Median",
+                                    loc ='tl',
+                                    size=20,
+                                    inset_fraction=(0.05,0.5),
+                                    style = 'b',
+                                    horizontalalignment = "center"
+                                    )
+                            
+                        elif row == 2:
+                            labelfigs(inset_ax,
+                                    string_add="Worst",
+                                    loc ='tl',
+                                    size=20,
+                                    inset_fraction=(0.05,0.5),
+                                    style = 'b',
+                                    horizontalalignment="center"
+                                    )
+                            ax.set_xticks([1.2,1.3,1.4])
+                            
+                        
+                        labelfigs(inset_ax,
+                            number=2*row+col,
+                            loc ='tl',
+                            size=20,
+                            inset_fraction=(0.05,0.95),
+                            style = 'b'
+                            )
+                plt.close(BMW_comp_fig)
+            
+            elif idx[0] == 'violin':
+                X_data, Y_data = self.get_nn_data()
+                pred_data, scaled_param, NN_params = model.predict(X_data)
+                
                 self.violin_plot_comparison_SHO(
                     true_state,
                     model,
@@ -3159,7 +3518,7 @@ class Viz(BE_model_utils):
                 plt.setp(legend.get_texts(), fontsize=20) # Set the label size
                 
             elif idx[0] == 'voltage_curve':
-                voltage_and_switching_maps_fig = self.SHO_switching_maps_test(SHO_ = [LSQF_Params,parm],
+                voltage_and_switching_maps_fig = self.SHO_switching_maps_test(SHO_ = [LSQF_params,NN_params],
                                                labels = ["LSQF", "NN"], 
                                                filename=None,
                                                label_marker_starting_index=8,
@@ -3167,7 +3526,7 @@ class Viz(BE_model_utils):
                                                label_letter_text_size=18,
                                                colorbars=False,
                                                )
-                copy_axis_to(voltage_and_switching_maps_fig.axes[0], ax)  
+                self.copy_axis_to(voltage_and_switching_maps_fig.axes[0], ax)  
                 
                 ax.set_ylabel("Voltage (V)",fontsize=20)
                 ax.set_xlabel("Step",fontsize=20)
@@ -3188,7 +3547,7 @@ class Viz(BE_model_utils):
 
                 plt.tight_layout()
 
-            elif idx[0] == 'switching_maps':
+            else: # idx[0] == 'switching_maps':
                 ax2 = voltage_and_switching_maps_fig.axes[1:]
                 
                 label_marker_symbols = ["\u25CF", "\u25BC", "\u25B2", "\u25BA", "\u25C0", "\u25A0","\u271A", "\u25C6","\u2605"]
@@ -3198,14 +3557,7 @@ class Viz(BE_model_utils):
                 labels = ['i','j','k','l','m','n','o','p','q']
                 label_counter = 0
                 names = ['Amplitude', "Resonance","Quality Factor","Phase"]
-                clims=[
-                        (0, 1.4e-4),  # amplitude
-                        (1.31e6, 1.33e6),  # resonance frequency
-                        (-240, -160),  # quality factor
-                        (-np.pi, np.pi),  # phase
-                    ],  # phase limits
-                fmt = ScalarFormatter(useMathText=True)
-                fmt.set_powerlimits((0, 0))
+                
                 # defines a scalar to convert inches to relative coordinates
                 fig_scalar = FigDimConverter((1/6, 1/6))
                 
@@ -3213,7 +3565,7 @@ class Viz(BE_model_utils):
                     for col in range(12):
                         inset_ax = ax.inset_axes([-0.06+(col/11.8)+np.floor(col/4)/256,1-(row+1)/6.1-row/192-np.floor(row/2)/96,1/6.1,1/6.1])
 
-                        inset_ax.imshow(ax2[(12*row)+col].get_images()[0].get_array().data,clim = clims[0][int(np.floor(col % 4))])
+                        inset_ax.imshow(ax2[(12*row)+col].get_images()[0].get_array().data,clim = self.clims[0][int(np.floor(col % 4))])
                         if col == 0:
                             if row % 2 == 0: 
                                 inset_ax.text(35,10,ax2[0].get_ylabel(),color = "white",size=20,ha = "center", va = "center")
@@ -3228,10 +3580,7 @@ class Viz(BE_model_utils):
                             inset_ax.text(50,50, labels[label_counter], color = "white", weight = 'bold', size = 20,ha = "center", va = "center")
                             label_counter+=1 
                             
-                        if row == 5:
-                            fmt = ScalarFormatter(useMathText=True)
-                            fmt.set_powerlimits((0, 0))
-                                        
+                        if row == 5:    
                             bar_ax = []
                             pos_inch = [-3.2e-3 + (col/70.5)+np.floor(col/4)/1800, -0.008, 1/73.5, 1/500  ] #fills axes
                           
@@ -3240,37 +3589,30 @@ class Viz(BE_model_utils):
                             if int(np.floor(col % 4)) == 0:
                                                   
                                 cbar = plt.colorbar(inset_ax.images[0],location = 'bottom', cax = bar_ax[0], 
-                                                    format = FuncFormatter(fmt), 
-                                                    ticks = np.linspace(np.min(clims[0][int(np.floor(col % 4))]),
-                                                                        np.max(clims[0][int(np.floor(col % 4))]),2), #5
+                                                    format = FuncFormatter(self.fmt), 
+                                                    ticks = np.linspace(np.min(self.clims[0][int(np.floor(col % 4))]),
+                                                                        np.max(self.clims[0][int(np.floor(col % 4))]),2), #5
                                                   
                                                     )
                                 cbar.ax.get_xticklabels()[0].set_horizontalalignment('left')
                                 cbar.ax.get_xticklabels()[1].set_horizontalalignment('right')
 
                             elif int(np.floor(col % 4)) == 1:
-                                
-                                def fmt_Resonance(x, pos): #need to display more digits to differentiate the resonance values
-                                    a, b = '{:.2e}'.format(x).split('e')
-                                    b = int(b)
-                                    return r'${} \times 10^{{{}}}$'.format(a, b)
-                                    
-                                
                                 cbar = plt.colorbar(inset_ax.images[0],location = 'bottom', cax = bar_ax[0], 
-                                                    format = FuncFormatter(fmt), #fmt, 
-                                                    ticks = np.linspace(np.min(clims[0][int(np.floor(col % 4))]),
-                                                                        np.max(clims[0][int(np.floor(col % 4))]),2) #5
+                                                    format = FuncFormatter(self.fmt_resonance), #fmt, 
+                                                    ticks = np.linspace(np.min(self.clims[0][int(np.floor(col % 4))]),
+                                                                        np.max(self.clims[0][int(np.floor(col % 4))]),2) #5
                                                     )
                             elif int(np.floor(col % 4)) == 2:
                                 cbar = plt.colorbar(inset_ax.images[0],location = 'bottom', cax = bar_ax[0], 
-                                                    format = FuncFormatter(fmt), 
-                                                    ticks = np.linspace(np.min(clims[0][int(np.floor(col % 4))]),
-                                                                        np.max(clims[0][int(np.floor(col % 4))]),2) # 5
+                                                    format = FuncFormatter(self.fmt), 
+                                                    ticks = np.linspace(np.min(self.clims[0][int(np.floor(col % 4))]),
+                                                                        np.max(self.clims[0][int(np.floor(col % 4))]),2) # 5
                                                     )
                             else:
                                 cbar = plt.colorbar(inset_ax.images[0],location = 'bottom', cax = bar_ax[0], 
-                                                    format = FuncFormatter(fmt), 
-                                                    ticks = np.linspace(-3,3,2)
+                                                    format = FuncFormatter(self.fmt), 
+                                                    ticks = np.linspace(-3.14,3.14,2)
                                                     ) 
                             
                             cbar.ax.get_xticklabels()[0].set_horizontalalignment('left')
@@ -3279,7 +3621,22 @@ class Viz(BE_model_utils):
                             cbar.set_label(names[int(np.floor(col % 4))],size=15)  # Add a label to the colorbar
 
                         inset_ax.axis("off")
-                            
+                ax.axis("off")
+                plt.close(voltage_and_switching_maps_fig)
+
+
+        # Adjust the spacing between the plots as needed
+        plt.tight_layout()
+
+        # Show the layout
+        plt.show()
+        
+        if filename is not None:
+            self.printer.savefig(
+                        ax.figure, filename
+                    )
+
+                                    
                             
                             
                 
@@ -3308,25 +3665,6 @@ class Viz(BE_model_utils):
         subplot_specs = [(0, 30, 0, 20 ), # top left: NN fit comparisons 
                         (0, 29, 20, 40), # g
                         (30, 46, 0, 60), #bottom 
-                        (30, 36, 0, 6), #bottom row 1 col 1
-                        (30, 36, 8, 14), #bottom row 1 col 2
-                        (30, 36, 16, 22), #bottom row 1 col 3
-                        (30, 36, 24, 30), #bottom row 1 col 4
-                        (30, 36, 32, 38), #bottom row 1 col 5
-                        (30, 36, 40, 46), #bottom row 1 col 6
-                        (30, 36, 48, 54), #bottom row 1 col 7
-                        (30, 36, 56, 62), #bottom row 1 col 8
-                        (30, 36, 64, 70), #bottom row 1 col 9
-                        
-                        (40, 46, 0, 6), #bottom row 2 col 1
-                        (40, 46, 8, 14), #bottom row 2 col 2
-                        (40, 46, 16, 22), #bottom row 2 col 3
-                        (40, 46, 24, 30), #bottom row 2 col 4
-                        (40, 46, 32, 38), #bottom row 2 col 5
-                        (40, 46, 40, 46), #bottom row 2 col 6
-                        (40, 46, 48, 54), #bottom row 2 col 7
-                        (40, 46, 56, 62), #bottom row 2 col 8
-                        (40, 46, 64, 70), #bottom row 2 col 9
                         ]
                 
         
@@ -3336,78 +3674,8 @@ class Viz(BE_model_utils):
             except: 
                 break
             ax = fig.add_subplot(gs[r_start:r_end, c_start:c_end])
-
-            if idx[0] == 'violin':
-                self.violin_plot_comparison_hysteresis(model,
-                                            torch.atleast_3d(torch.tensor(data.reshape(-1, 96))),
-                                            filename=None,ax=ax) 
-
-                # labels the figure and does some styling
-                labelfigs(ax, string_add = 'g', loc ='tl',size=20, style="b", inset_fraction=(0.05,0.95))
-                ax.set_ylabel("Scaled Hysteresis Results",fontsize=25)
-                ax.set_xlabel("")
-                
-                ax.tick_params(axis='x',labelsize=20)
-                ax.tick_params(axis='y',labelsize=20)
-
-                # Get the legend associated with the plot
-                legend = ax.get_legend()
-                legend.set_title("")
-                plt.setp(legend.get_texts(), fontsize=20) # Set the label size
             
-            elif idx[0] == "switching_maps": 
-                    
-                fig_hysteresis = self.hysteresis_maps(pred_params, cycle=0, filename=None);
-                fig_scalar = FigDimConverter((1/2.5, 1/2.5))
-
-                
-                for row in range(2):
-                    for col in range(9):
-                        inset_ax = ax.inset_axes([-0.153+(col/8.99),1-(row+1.2)/2.4-row/12,1/2.4,1/2.4])
-                        inset_ax.imshow(fig_hysteresis.get_axes()[col+9*row].get_images()[0].get_array().data,cmap = 'viridis',
-                                            vmin = self.hysteresis_maps_clims[col][0], vmax = self.hysteresis_maps_clims[col][1])
-                        inset_ax.axis("off")
-                        
-                        if row == 1:
-                            bar_ax = []
-                            
-                            pos_inch = [(col/22.5), -0.008, 1/23, 1/300  ] #fills axes
-                            bar_ax.append(ax.inset_axes(fig_scalar.to_relative(pos_inch)))
-
-                            cbar = plt.colorbar(inset_ax.images[0],      
-                                                cax=bar_ax[0], format=FuncFormatter(self.hysteresis_maps_fmt),orientation = 'horizontal',
-                                                ticks = [self.hysteresis_maps_clims[col][0], self.hysteresis_maps_clims[col][1]])
-                            
-                            cbar.ax.get_xticklabels()[0].set_horizontalalignment('left')
-                            cbar.ax.get_xticklabels()[1].set_horizontalalignment('right')
-
-                            cbar.ax.tick_params(labelsize = 11)
-
-                            
-                            cbar.set_label(self.hysteresis_maps_colorbar_labels[col],size=15,loc='center')  # Add a label to the colorbar
-                            
-                                
-                        
-                labelfigs(ax,
-                        string_add="Least Squares Fit Method",
-                        loc='tl',size=25,inset_fraction = (0.05,0.5),style='b',
-                        horizontalalignment = 'center',verticalalignment='center')
-                labelfigs(ax,
-                        string_add="h",
-                        loc='tl',size=25,inset_fraction = (0.05,0.05),style='b',
-                        horizontalalignment = 'left',verticalalignment='center')
-            
-                labelfigs(ax,
-                        string_add="Neural Network with Trust Region CG",
-                        loc='tl',size=25,inset_fraction = (0.55,0.5),style='b',
-                        horizontalalignment = 'center',verticalalignment='center')
-                labelfigs(ax,
-                        string_add="i",
-                        loc='tl',size=25,inset_fraction = (0.55,0.05),style='b',
-                        horizontalalignment = 'left',verticalalignment='center')
-                            
-                ax.axis("off")         
-            else:
+            if idx[0] == 'NN_fit_comp':
                 ax.axis("off")
                 size=(1.25, 1.25)
                 gaps=(1, 0.66)
@@ -3515,7 +3783,78 @@ class Viz(BE_model_utils):
                             inset_fraction=(0.05,0.19),
                             style = 'b'
                             )
+                plt.close(fig_BMW)
+            elif idx[0] == 'violin':
+                self.violin_plot_comparison_hysteresis(model,
+                                            torch.atleast_3d(torch.tensor(data.reshape(-1, 96))),
+                                            filename=None,ax=ax) 
 
+                # labels the figure and does some styling
+                labelfigs(ax, string_add = 'g', loc ='tl',size=20, style="b", inset_fraction=(0.05,0.95))
+                ax.set_ylabel("Scaled Hysteresis Results",fontsize=25)
+                ax.set_xlabel("")
+                
+                ax.tick_params(axis='x',labelsize=20)
+                ax.tick_params(axis='y',labelsize=20)
+
+                # Get the legend associated with the plot
+                legend = ax.get_legend()
+                legend.set_title("")
+                plt.setp(legend.get_texts(), fontsize=20) # Set the label size
+            
+            elif idx[0] == "switching_maps": 
+                    
+                fig_hysteresis = self.hysteresis_maps(pred_params, cycle=0, filename=None);
+                fig_scalar = FigDimConverter((1/2.5, 1/2.5))
+
+                
+                for row in range(2):
+                    for col in range(9):
+                        inset_ax = ax.inset_axes([-0.153+(col/8.99),1-(row+1.2)/2.4-row/12,1/2.4,1/2.4])
+                        inset_ax.imshow(fig_hysteresis.get_axes()[col+9*row].get_images()[0].get_array().data,cmap = 'viridis',
+                                            vmin = self.hysteresis_maps_clims[col][0], vmax = self.hysteresis_maps_clims[col][1])
+                        inset_ax.axis("off")
+                        
+                        if row == 1:
+                            bar_ax = []
+                            
+                            pos_inch = [(col/22.5), -0.008, 1/23, 1/300  ] #fills axes
+                            bar_ax.append(ax.inset_axes(fig_scalar.to_relative(pos_inch)))
+
+                            cbar = plt.colorbar(inset_ax.images[0],      
+                                                cax=bar_ax[0], format=FuncFormatter(self.hysteresis_maps_fmt),orientation = 'horizontal',
+                                                ticks = [self.hysteresis_maps_clims[col][0], self.hysteresis_maps_clims[col][1]])
+                            
+                            cbar.ax.get_xticklabels()[0].set_horizontalalignment('left')
+                            cbar.ax.get_xticklabels()[1].set_horizontalalignment('right')
+
+                            cbar.ax.tick_params(labelsize = 11)
+
+                            
+                            cbar.set_label(self.hysteresis_maps_colorbar_labels[col],size=15,loc='center')  # Add a label to the colorbar
+                            
+                                
+                        
+                labelfigs(ax,
+                        string_add="Least Squares Fit Method",
+                        loc='tl',size=25,inset_fraction = (0.05,0.5),style='b',
+                        horizontalalignment = 'center',verticalalignment='center')
+                labelfigs(ax,
+                        string_add="h",
+                        loc='tl',size=25,inset_fraction = (0.05,0.05),style='b',
+                        horizontalalignment = 'left',verticalalignment='center')
+            
+                labelfigs(ax,
+                        string_add="Neural Network with Trust Region CG",
+                        loc='tl',size=25,inset_fraction = (0.55,0.5),style='b',
+                        horizontalalignment = 'center',verticalalignment='center')
+                labelfigs(ax,
+                        string_add="i",
+                        loc='tl',size=25,inset_fraction = (0.55,0.05),style='b',
+                        horizontalalignment = 'left',verticalalignment='center')
+                            
+                ax.axis("off")         
+                plt.close(fig_hysteresis)
 
         # Adjust the spacing between the plots as needed
         plt.tight_layout()
@@ -3524,5 +3863,211 @@ class Viz(BE_model_utils):
         plt.show()
 
         self.printer.savefig(
+                        ax.figure, filename
+                    )
+
+
+    def plot_figure_5(self,
+                      model0, 
+                      X_data0, 
+                      NN_params0, 
+                      model2, 
+                      X_data2, 
+                      NN_params2, 
+                      model4,
+                      X_data4, 
+                      NN_params4, 
+                      model7, 
+                      X_data7, 
+                      NN_params7, 
+                      filename):
+        """
+        Plots the figure 5 of the paper.
+        """
+        
+        fig = plt.figure(figsize=(24, 24))
+
+
+        # Define the GridSpec layout
+        gs = GridSpec(60, 45, figure=fig)
+
+
+        order = [['violin_noise_0'],
+                ['violin_noise_2'],
+                ['violin_noise_7'],
+                ['switching_maps_noise_0'],
+                ['switching_maps_noise_2'],
+                ['switching_maps_noise_4'],
+                ['switching_maps_noise_7']
+                ]
+
+        subplot_specs = [(0, 17, 0, 13 ), # top left: violin noise level 0 
+                        (0, 17, 16, 29), # top middle: violin noise level 2
+                        (0, 17, 32, 45), # top right, violin noise level 7
+                        (20, 26, 0, 45), # noise = 0 
+                        (27, 33, 0, 45), # noise = 2
+                        (34, 40, 0, 45), # noise = 4
+                        (41, 47, 0, 45), # noise = 7
+                        ]
+
+       
+        violin_plot_noise_to_figlabel = {
+            'violin_noise_0': 'a',
+            'violin_noise_2': 'b',
+            'violin_noise_7': 'c',
+        }
+
+
+        for i, (r_start, r_end, c_start, c_end) in enumerate(subplot_specs):
+            ax = fig.add_subplot(gs[r_start:r_end, c_start:c_end])
+            
+            idx = order[i]
+            if idx[0].startswith('violin_noise'):
+                    # this print statement is a low-tech way to track progress
+                    # since each violin plot takes a while (~40 seconds) to render
+                    print(f"working on the violin plot for noise level {idx[0][-1]} ...")
+                
+                    self.noise = int(idx[0][-1])
+                    self.get_dataset(noise = self.noise)
+
+                    state_ = {'resampled': True,
+                        'raw_format': 'complex',
+                        'fitter': 'LSQF',
+                        'scaled': True,
+                        'output_shape': 'index',
+                        'measurement_state': 'all',
+                        'resampled_bins': 165,
+                        'LSQF_phase_shift': np.pi/2, #1.5707963267948966,
+                        'NN_phase_shift': np.pi/2,
+                        'noise': int(idx[0][-1])}
+                    
+                   
+                    self.violin_plot_comparison_SHO(
+                            state_,
+                            eval(f'model{idx[0][-1]}'),
+                            eval(f'X_data{idx[0][-1]}'),
+                            eval(f'NN_params{idx[0][-1]}'),
+                            filename=None,
+                            label="NN",
+                            ax=ax,
+                            figlabel=violin_plot_noise_to_figlabel[idx[0]],
+                            fig_label_size=20,
+                            inset_fraction = (0.05,0.95)
+                        )
+                    if idx[0] == 'violin_noise_0':
+                        ax.set_ylabel("Scaled SHO Results",fontsize=20)
+                        
+                            # Get the legend associated with the plot
+                        legend = ax.get_legend()
+                        legend.set_title("")
+                        plt.setp(legend.get_texts(), fontsize=20) # Set the label size
+                    
+                    else:
+                        ax.set_ylabel("")
+                        ax.get_legend().remove()
+                    
+                    ax.set_xlabel("")
+                        
+                    ax.tick_params(axis='x',labelsize=20)
+                    ax.tick_params(axis='y',labelsize=20)
+                    ax.set_yticks(np.linspace(-8,8,9))
+            
+            
+            elif idx[0].startswith('switching_maps_noise'):
+                    self.noise = int(idx[0][-1])
+                    self.get_dataset(noise = self.noise)
+                    
+                    if self.noise == 0:
+                        labelfigs(ax, string_add = "d", inset_fraction = (-0.1, 0.010),size=20,style='b')
+                        labelfigs(ax, string_add = "\u25CF", inset_fraction = (-0.1, 0.085),size=20,style='b')
+
+                        labelfigs(ax, string_add = "e", inset_fraction = (-0.1, 0.215),size=20,style='b')
+                        labelfigs(ax, string_add = "\u25BC", inset_fraction = (-0.1, 0.2915),size=20,style='b')
+
+                        labelfigs(ax, string_add = "f", inset_fraction = (-0.1, 0.424),size=20,style='b')
+                        labelfigs(ax, string_add = "\u25B2", inset_fraction = (-0.1, 0.496),size=20,style='b')
+
+                        labelfigs(ax, string_add = "g", inset_fraction = (-0.1, 0.63),size=20,style='b')
+                        labelfigs(ax, string_add = "\u25BA", inset_fraction = (-0.1, 0.705),size=20,style='b')
+
+
+                        labelfigs(ax, string_add = "h", inset_fraction = (-0.1, 0.835),size=20,style='b')
+                        labelfigs(ax, string_add = "\u25C0", inset_fraction = (-0.1, 0.91),size=20,style='b')
+
+                    LSQF_ = {'resampled': True,
+                        'raw_format': 'complex',
+                        'fitter': 'LSQF',
+                        'scaled': False,
+                        'output_shape': 'index',
+                        'measurement_state': 'all',
+                        'resampled_bins': 165,
+                        'LSQF_phase_shift': 1.5707963267948966,
+                        'NN_phase_shift': 1.5707963267948966,
+                        'noise': int(idx[0][-1])}
+                    
+                    LSQF_Params = self.SHO_fit_results(state = LSQF_)
+                    voltage_and_switching_maps_fig = self.SHO_switching_maps_test(
+                        SHO_ = [LSQF_Params,eval(f'NN_params{idx[0][-1]}')],
+                        labels = ["LSQF", "NN"], 
+                        filename=None,
+                        colorbars=False,
+                        )
+
+                    ax2 = voltage_and_switching_maps_fig.axes[1:]
+                    fig_scalar = FigDimConverter((1/6, 1/6))
+                    ax.set_xticks([])  # Remove x-axis ticks
+                    ax.set_yticks([])  # Remove y-axis ticks
+                    ax.spines["top"].set_visible(False)
+                    ax.spines["bottom"].set_visible(False)
+                    ax.spines["left"].set_color(None)
+                    ax.spines["right"].set_visible(False)
+                    ax.set_ylabel(f"NN Noise {self.noise}   LSQF Noise {self.noise}",fontsize=10)
+                    ax.yaxis.set_label_coords(-0.015, 0.5)
+                        
+                    for row in range(2):
+                        for col in range(20):
+                            if col > 11:
+                                col_used = col + 12
+                            else:
+                                col_used = col
+                            
+                            
+                            inset_ax = ax.inset_axes([-0.24+(col/20)+np.floor(col/4)/175,1-(row+1)/2-row/50,1/2,1/2])
+                            inset_ax.imshow(ax2[(12*row)+col_used].get_images()[0].get_array().data, clim = self.clims[0][int(np.floor(col % 4))])
+                            inset_ax.axis("off")
+
+
+                            if row == 1 and self.noise == 7:
+                                bar_ax = []
+                                pos_inch = [-0.0024+(col/120)+np.floor(col/4)/1050, -0.01, 1/124, 1/200  ] #fills axes
+                                bar_ax.append(ax.inset_axes(fig_scalar.to_relative(pos_inch)))
+
+                                if int(np.floor(col % 4) in [0,2]):
+                                    cbar = plt.colorbar(inset_ax.images[0],          #axs[1,col].images[0],
+                                                    cax=bar_ax[0], format=FuncFormatter(self.fmt),orientation = 'horizontal',
+                                                    ticks = [self.clims[0][int(np.floor(col % 4))][0], self.clims[0][int(np.floor(col % 4))][1]])
+                                elif int(np.floor(col % 4) == 1):
+                                    cbar = plt.colorbar(inset_ax.images[0],          #axs[1,col].images[0],
+                                                    cax=bar_ax[0], format=FuncFormatter(self.fmt_resonance),orientation = 'horizontal',
+                                                    ticks = [self.clims[0][int(np.floor(col % 4))][0], self.clims[0][int(np.floor(col % 4))][1]])
+                                else:
+                                    cbar = plt.colorbar(inset_ax.images[0],          #axs[1,col].images[0],
+                                                    cax=bar_ax[0], format=FuncFormatter(self.fmt),orientation = 'horizontal',
+                                                    ticks = [-3.0,3.0])    
+                                
+                                
+                                cbar.ax.get_xticklabels()[0].set_horizontalalignment('left')
+                                cbar.ax.get_xticklabels()[1].set_horizontalalignment('right')
+
+                                cbar.ax.tick_params(labelsize = 8)
+
+                    plt.close(voltage_and_switching_maps_fig)
+        plt.tight_layout()
+
+
+        # Show the layout
+        plt.show()
+        if filename is not None:
+            self.printer.savefig(
                         ax.figure, filename
                     )

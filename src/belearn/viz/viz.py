@@ -1077,7 +1077,7 @@ class Viz(BE_model_utils):
 
         # prints the figure
         if self.printer is not None and filename is not None:
-            self.printer.savefig(fig, filename, label_figs=axs, style="b")
+            self.printer.savefig(fig, filename, label_figs=axs, inset_fraction = (0.15, 0.85), style="b")
 
     def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
         """

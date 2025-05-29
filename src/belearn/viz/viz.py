@@ -2,11 +2,10 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Type, Callable
 
-from belearn.dataset.dataset import BE_Dataset
 from belearn.dataset.model_utils import BE_model_utils
 from belearn.util.wrappers import context_manager_decorator
 from belearn.dataset.analytics import MSE
-from belearn.dataset.fitters.sho import SHO_fit_func_nn
+from belearn.functions.sho import SHO_nn
 #from belearn.dataset.transformers import to_real_imag, to_complex
 
 from autophyslearn.spectroscopic.nn import Multiscale1DFitter, Model
@@ -2164,7 +2163,7 @@ class Viz(BE_model_utils):
                             ax[axis_start + j],
                             string_add=names[j],
                             loc="cb",
-                            size=5,
+                            label_size=5,
                             inset_fraction=(0.2, 0.2),
                         )
 
@@ -2174,7 +2173,7 @@ class Viz(BE_model_utils):
                         labelfigs(
                             ax[axis_start + j],
                             string_add=str(i + 1),
-                            size=5,
+                            label_size=5,
                             loc="bl",
                             inset_fraction=(0.2, 0.2),
                         )
@@ -2769,7 +2768,7 @@ class Viz(BE_model_utils):
 
     # @static_dataset_decorator
     @context_manager_decorator
-    def violin_plot_comparison_SHO(self, state, model, X_data, params=None, filename=None, label="NN",figlabel = 'a',inset_fraction = (0.075,0.95), ax=None,fig_label_size=8):
+    def violin_plot_comparison_SHO(self, state, model, X_data, params=None, filename=None, label="NN",figlabel = 'a', ax=None,**kwargs):
         """
         Generates a violin plot to compare true parameter values obtained from the SHO LSQF fit
         and predicted parameter values from a machine learning model.
@@ -2868,7 +2867,7 @@ class Viz(BE_model_utils):
 
         # Customize the appearance of the plot
         if figlabel is not None:
-            labelfigs(ax, string_add = figlabel, style="b",inset_fraction = inset_fraction,size=fig_label_size)  # Apply custom labeling style to the plot
+            labelfigs(ax, string_add = figlabel, style="b",**kwargs)  # Apply custom labeling style to the plot
         ax.set_ylabel("Scaled SHO Results")  # Set the y-axis label
         ax.set_xlabel("")  # No label for x-axis
 
@@ -3073,13 +3072,13 @@ class Viz(BE_model_utils):
         labelfigs(axs[0,0],
         string_add='a',
         loc ='tl',
-        size=8,
+        label_size=8,
         inset_fraction=(0.2, 0.2)
         )
         labelfigs(axs[1,0],
         string_add='b',
         loc ='tl',
-        size=8,
+        label_size=8,
         inset_fraction=(0.2, 0.2)
         )
 

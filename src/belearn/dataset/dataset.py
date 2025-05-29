@@ -911,7 +911,7 @@ class BE_Dataset:
         except:
             self.SHO_LSQF_data = {}
             
-        try: # maybe combine with other try except block since self.SHO_data and self.raw_data_reshaped are initialized together
+        try: # maybe combine with other try except block or remove this one entirely since self.SHO_data and self.raw_data_reshaped are initialized together
             self.raw_data_reshaped
         except:
             self.raw_data_reshaped = {}
@@ -924,17 +924,20 @@ class BE_Dataset:
         with h5py.File(self.file, "r+") as h5_f:
             try:
                 # Extract and store the SHO fit data
-                
-                self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(
-                    h5_f[f"{self.dataset_name}_{self.SHO_fit_relative_base_path[:-4]}/{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"][
-                        :
-                    ]
-                )[:, :, :-1]
+                try:
+                    self.SHO_LSQF_data[self.dataset_name]
+                    print("Data already extracted from HDF5 file for dataset: ", self.dataset_name)
+                except:
+                    self.SHO_LSQF_data[self.dataset_name] = structured_to_unstructured(
+                        h5_f[f"{self.dataset_name}_{self.SHO_fit_relative_base_path[:-4]}/{self.dataset_name}-{self.SHO_fit_relative_base_path}/Fit"][
+                            :
+                        ]
+                    )[:, :, :-1]
 
-                # Reshape and store the raw data
-                self.raw_data_reshaped[self.dataset_name] = h5_f[
-                    f"{self.basegroup}/{self.dataset_name}"
-                ][:].reshape(self.num_pix, self.voltage_steps, self.num_bins)
+                    # Reshape and store the raw data
+                    self.raw_data_reshaped[self.dataset_name] = h5_f[
+                        f"{self.basegroup}/{self.dataset_name}"
+                    ][:].reshape(self.num_pix, self.voltage_steps, self.num_bins)
             except KeyError as e:
                 raise KeyError(f"Dataset or path not found in HDF5 file: {e}")
 

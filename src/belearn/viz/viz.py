@@ -1121,7 +1121,7 @@ class Viz(BE_model_utils):
 
         # If a printer object is defined, save the figure with the specified filename and style
         if self.printer is not None:
-            self.printer.savefig(fig, filename, label_figs=axs, style="b")
+            self.printer.savefig(fig, filename, label_figs=axs, inset_fraction = (0.15, 0.85), style="b")
 
     ###### MOVIES #####
 
@@ -1743,240 +1743,6 @@ class Viz(BE_model_utils):
 
    
 
-    # @static_dataset_decorator
-    @context_manager_decorator
-    def SHO_switching_maps(
-        self,
-        SHO_,
-        colorbars=True,
-        clims=[
-            (0, 1.4e-4),  # amplitude
-            (1.31e6, 1.33e6),  # resonance frequency
-            (-230, -160),  # quality factor
-            (-np.pi, np.pi),  # phase
-        ],  # phase limits
-        measurement_state="off",  # sets the measurement state to extract the data
-        cycle=2,  # cycle number to extract
-        cols=3,  # number of columns in the plot grid
-        fig_width=6.5,  # width of the figure in inches
-        number_of_steps=9,  # number of voltage steps to display
-        voltage_plot_height=1.25,  # height of the voltage plot in inches
-        intra_gap=0.02,  # gap between individual plots in inches
-        inter_gap=0.05,  # gap between plot rows in inches
-        cbar_gap=0.4,  # gap between colorbars in inches
-        cbar_space=1.3,  # space reserved for colorbars on the right
-        filename=None,  # optional filename to save the figure
-        labels=None,
-    ):
-        """
-        Generates a plot of switching maps for SHO data (Amplitude, Resonance Frequency, Quality Factor, Phase)
-        across multiple voltage steps.
-
-        Args:
-            SHO_ (torch.Tensor or np.ndarray): SHO data containing amplitude, resonance frequency, quality factor, and phase.
-            colorbars (bool): If True, adds colorbars to the plots. Defaults to True.
-            clims (list): List of tuples representing color limits for each type of data (Amplitude, Resonance Frequency,
-                        Quality Factor, Phase). Defaults are provided.
-            measurement_state (str): State of the measurement to get the data ('on' or 'off'). Defaults to "off".
-            cycle (int): The measurement cycle number to extract the data from. Defaults to 2.
-            cols (int): Number of columns in the plot grid. Defaults to 3.
-            fig_width (float): Width of the figure in inches. Defaults to 6.5.
-            number_of_steps (int): Number of voltage steps to display. Defaults to 9.
-            voltage_plot_height (float): Height of the voltage plot in inches. Defaults to 1.25.
-            intra_gap (float): Gap between individual plots in inches. Defaults to 0.02.
-            inter_gap (float): Gap between plot rows in inches. Defaults to 0.05.
-            cbar_gap (float): Gap between colorbars in inches. Defaults to 0.5.
-            cbar_space (float): Space reserved on the right for colorbars in inches. Defaults to 1.3.
-            filename (str, optional): If provided, saves the figure to the specified filename. Defaults to None.
-
-        Returns:
-            fig (matplotlib.figure.Figure): The generated figure containing the switching maps.
-        """
-
-        # Set the measurement state and cycle in the dataset
-        self.measurement_state = measurement_state
-        self.cycle = cycle
-
-        # Initialize the list for storing the axes
-        ax = []
-
-        # Calculate the number of rows for the plot grid
-        rows = np.ceil(number_of_steps / 3)
-
-        # Calculate the size of the individual image embeddings in the figure
-        embedding_image_size = (
-            fig_width
-            - (inter_gap * (cols - 1))
-            - intra_gap * 3 * cols
-            - cbar_space * colorbars
-        ) / (cols * 4)
-
-        # Calculate the total height of the figure
-        fig_height = (
-            rows * (embedding_image_size + inter_gap) + voltage_plot_height + 0.33
-        )
-
-        # Convert figure dimensions to relative coordinates for axes positioning
-        fig_scalar = FigDimConverter((fig_width, fig_height))
-
-        # Create the figure with the specified dimensions
-        fig = plt.figure(figsize=(fig_width, fig_height))
-
-        # Define the position and size of the voltage plot
-        pos_inch = [
-            0.33,
-            fig_height - voltage_plot_height,
-            fig_width - 0.33,
-            voltage_plot_height,
-        ]
-
-        # Add the voltage plot to the figure
-        ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
-
-        # Reset the position for embedding plots
-        pos_inch[0] = 0
-        pos_inch[1] -= embedding_image_size + 0.33
-
-        # Set the size for each embedding plot
-        pos_inch[2] = embedding_image_size
-        pos_inch[3] = embedding_image_size
-
-        # Add embedding plots to the figure for each voltage step
-        for i in range(number_of_steps):
-            for j in range(4):  # Amplitude, Resonant Frequency, Quality Factor, Phase
-                ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
-                pos_inch[0] += embedding_image_size + intra_gap
-
-            # Move to the next row if necessary
-            if (i + 1) % cols == 0 and i != 0:
-                pos_inch[0] = 0
-                pos_inch[1] -= embedding_image_size + inter_gap
-            else:
-                pos_inch[0] += inter_gap
-
-        # # Retrieve the DC voltage data from the dataset
-        # voltage = self.dataset.dc_voltage
-
-        # # Select a specific cycle from the dataset, if applicable
-        # if hasattr(self.dataset, "cycle") and self.dataset.cycle is not None:
-        #     voltage = self.dataset.get_cycle(voltage)
-
-        # JGoddy doesn't understand why the voltage came from hysteresis
-        # since this is for the SHO switching maps. I replaced with get_voltage
-        # since I think it has the correct shape and voltage values but
-        # I'm not sure it's correct.
-        # also, see note in roll_hysteresis about how this is not the best
-        # long term solution
-        voltage = np.swapaxes(np.atleast_2d(self.get_voltage), 0, 1).astype(np.float64)
-        voltage = self.roll_hysteresis(voltage)
-
-        # _,voltage = self.get_hysteresis()
-        # voltage = self.roll_hysteresis(voltage)
-
-        # Get indices of the voltage steps to plot
-        inds = np.linspace(0, len(voltage) - 1, number_of_steps, dtype=int)
-
-        # Convert SHO_ data to numpy if it's a PyTorch tensor
-        if isinstance(SHO_, torch.Tensor):
-            SHO_ = SHO_.detach().numpy()
-
-        # Reshape SHO_ data to match the required format
-        SHO_ = SHO_.reshape(self.num_pix, self.voltage_steps, 4)
-
-        # Get the specific measurement cycle from the dataset
-        SHO_ = self.get_measurement_cycle(SHO_, axis=1)
-
-        # Plot the voltage data
-        ax[0].plot(voltage, "k")
-        ax[0].set_ylabel("Voltage (V)")
-        ax[0].set_xlabel("Step")
-
-        # Add markers and labels for each voltage step
-        for i, ind in enumerate(inds):
-            ax[0].plot(ind, voltage[ind], "o", color="k", markersize=10)
-            vshift = (ax[0].get_ylim()[1] - ax[0].get_ylim()[0]) * 0.25
-
-            # Adjust label position if necessary
-            if voltage[ind] - vshift - 0.15 < ax[0].get_ylim()[0]:
-                vshift = -vshift / 2
-
-            # Add step number labels to the voltage plot
-            ax[0].text(ind, voltage[ind] - vshift, str(i + 1), color="k", fontsize=12)
-
-        # Data names for each of the four properties
-        names = ["A", "\u03c9", "Q", "\u03c6"]
-
-        # Plot amplitude, resonant frequency, quality factor, and phase data
-        for i, ind in enumerate(inds):
-            for j in range(4):
-                imagemap(
-                    ax[i * 4 + j + 1],
-                    SHO_[:, ind, j],
-                    colorbars=False,
-                    cmap="viridis",
-                )
-
-                # Label figures if in the first row
-                if i // rows == 0:
-                    labelfigs(
-                        ax[i * 4 + j + 1],
-                        string_add=names[j],
-                        loc="cb",
-                        size=5,
-                        inset_fraction=(0.2, 0.2),
-                    )
-
-                # Set color limits for the plot
-                ax[i * 4 + j + 1].images[0].set_clim(clims[j])
-
-            # Add step number labels to the plots
-            labelfigs(
-                ax[1::4][i],
-                string_add=str(i + 1),
-                size=5,
-                loc="bl",
-                inset_fraction=(0.2, 0.2),
-            )
-
-        # Add colorbars to the plots if enabled
-        if colorbars:
-            bar_ax = []
-            voltage_ax_pos = fig_scalar.to_inches(
-                np.array(ax[0].get_position()).flatten()
-            )
-
-            for i in range(4):
-                # Calculate position and size of colorbars
-                cbar_h = (voltage_ax_pos[1] - inter_gap - 2 * intra_gap - 0.33) / 2
-                cbar_w = (cbar_space - inter_gap - 2 * cbar_gap) / 2
-                pos_inch = [
-                    voltage_ax_pos[2]
-                    - (2 - i % 2) * (cbar_gap + cbar_w)
-                    + inter_gap
-                    + 0.1,
-                    voltage_ax_pos[1] - (i // 2) * (inter_gap + cbar_h) - 0.33 - cbar_h,
-                    cbar_w - 0.02,
-                    cbar_h - 0.1,
-                ]
-
-                # Add colorbar to the figure
-                bar_ax.append(fig.add_axes(fig_scalar.to_relative(pos_inch)))
-                # cbar = plt.colorbar(ax[i + 1].images[0], cax=bar_ax[i], format="%.1e")
-                # cbar.set_label(names[i])  # Add label to the colorbar
-
-                # adds the colorbars to the plots
-                fmt = ScalarFormatter(useMathText=True)
-                fmt.set_powerlimits((0, 0))
-                cbar = plt.colorbar(ax[i + 1].images[0], cax=bar_ax[i], format=fmt)
-                cbar.set_label(names[i])  # Add a label to the colorbar
-
-        # Save the figure if a filename is provided
-        if self.printer is not None and filename is not None:
-            self.printer.savefig(
-                fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
-            )
-
-        return fig
 
     # @static_dataset_decorator
     @context_manager_decorator
@@ -2222,7 +1988,7 @@ class Viz(BE_model_utils):
             self.printer.savefig(
                 fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
             )
-
+        plt.close(fig)
         return fig
 
     # @static_dataset_decorator
@@ -2878,7 +2644,7 @@ class Viz(BE_model_utils):
         # Save the plot if a filename and printer are provided
         if self.printer is not None and filename is not None:
             self.printer.savefig(fig, filename)
-
+        plt.close(fig)
         return fig
 
 

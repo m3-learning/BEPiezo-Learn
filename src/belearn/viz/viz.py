@@ -693,7 +693,7 @@ class Viz(BE_model_utils):
         self.set_attributes(**true)
 
         # Initialize figure and axes for plotting
-        fig, axs = layout_fig(2, 2, figsize=(5.75, 1.25))
+        fig, axs = layout_fig(2, 2, figsize=(4.75, 1.25))
 
         if pixel is None:
             pixel = 130

@@ -1017,7 +1017,7 @@ class Viz(BE_model_utils):
 
     # @State.static_scale_decorator
     @context_manager_decorator
-    def SHO_hist(self, SHO_data, filename=None, scaled=False):
+    def SHO_hist(self, SHO_data, filename=None, scaled=False, loc='tr', inset_fraction=(0.15,0.15), style="b",**kwargs):
         """Plots the SHO hysteresis parameters
 
         Args:
@@ -1075,8 +1075,8 @@ class Viz(BE_model_utils):
                 self.extraction_state
 
         # prints the figure
-        if self.printer is not None and filename is not None:
-            self.printer.savefig(fig, filename, label_figs=axs, inset_fraction = (0.15, 0.85), style="b")
+        if self.printer is not None and filename is not None: 
+            self.printer.savefig(fig, filename, label_figs=axs, loc=loc, inset_fraction=inset_fraction, style=style, **kwargs)
 
     def SHO_loops(self, data=None, filename="Figure_2_random_SHO_fit_results"):
         """
@@ -1121,7 +1121,7 @@ class Viz(BE_model_utils):
 
         # If a printer object is defined, save the figure with the specified filename and style
         if self.printer is not None:
-            self.printer.savefig(fig, filename, label_figs=axs, inset_fraction = (0.15, 0.85), style="b")
+            self.printer.savefig(fig, filename, label_figs=axs, loc = 'tr',inset_fraction = (0.15, 0.15), style="b")
 
     ###### MOVIES #####
 
@@ -1746,7 +1746,7 @@ class Viz(BE_model_utils):
 
     # @static_dataset_decorator
     @context_manager_decorator
-    def SHO_switching_maps_test(
+    def SHO_switching_maps(
         self,
         SHO_,
         colorbars=True,
@@ -2534,7 +2534,7 @@ class Viz(BE_model_utils):
 
     # @static_dataset_decorator
     @context_manager_decorator
-    def violin_plot_comparison_SHO(self, state, model, X_data, params=None, filename=None, label="NN",figlabel = 'a', ax=None,**kwargs):
+    def violin_plot_comparison_SHO(self, state, model, X_data, params=None, filename=None, label="NN",figlabel = 'a', ax=None, loc='tr', inset_fraction=(0.05,0.05), style="b",**kwargs):
         """
         Generates a violin plot to compare true parameter values obtained from the SHO LSQF fit
         and predicted parameter values from a machine learning model.

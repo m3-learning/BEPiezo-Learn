@@ -581,7 +581,7 @@ class State(Preprocessing):
             compare_state = data_converter(compare_state)
 
             # this must take the scaled data
-            index1, mse1, d1, d2 = get_rankings(compare_state, prediction, n=n)
+            full_indices, index1, mse1, d1, d2 = get_rankings(compare_state, prediction, n=n)
         else:
             # this must take the scaled data
             if fit_type == "SHO":
@@ -1362,3 +1362,19 @@ class State(Preprocessing):
         middle_example['Original Index'] = int(middle_example['Original Index'])
 
         return best_example, middle_example, worst_example
+    
+    def MSE_compare(self, true_data, predictions, labels):
+        for pred, label in zip(predictions, labels):
+            if isinstance(pred, nn.Module):
+                pred_data, scaled_param, parm = pred.predict(true_data)
+
+            elif isinstance(pred, dict):
+                pred_data, _ = self.get_raw_data_from_LSQF_SHO(pred)
+
+                pred_data = torch.from_numpy(pred_data)
+
+            # Computes the MSE
+            out = nn.MSELoss()(true_data, pred_data)
+
+            # prints the MSE
+            print(f"{label} Mean Squared Error: {out:0.4f}")

@@ -1013,6 +1013,7 @@ class Viz(BE_model_utils):
         if self.printer is not None:
             self.printer.savefig(fig, filename, label_figs=ax, style="b")
 
+        plt.close(fig)
         return fig
 
     # @State.static_scale_decorator

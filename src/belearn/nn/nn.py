@@ -174,6 +174,7 @@ def create_models(
         **filtered_kwargs,
     )
 
+    #print("adam_df file_name", adam_df["file_name"])
     TR_df = get_model(
         df,
         optimized_result=optimized_result,
@@ -185,8 +186,11 @@ def create_models(
         **filtered_kwargs,
     )
 
+    #print("TR_df file_name", TR_df["file_name"])
+
     adam_path = os.path.join(basepath, adam_df["file_name"])
     TR_path = os.path.join(basepath, TR_df["file_name"])
+
 
     # Instantiate the model fitters
     adam_fitter = instantiate_fitter(function, dataset, postprocessor)

@@ -341,6 +341,17 @@ class BE_Dataset:
         with h5py.File(self.file, "r+") as h5_f:
             # TODO: Fix hardcoded values.
             return h5_f[self.basegroup]["UDVS"][::2][:, 1][24:120] * -1
+        
+    # @property
+    def get_hysteresis_voltage_len(self):
+        """
+        Get the length of the voltage vector for hysteresis measurements.
+
+        Returns:
+            int: Length of the voltage vector.
+        """
+        return self.get_voltage.shape[0]  # Return the length of the voltage vector
+
 
     @property
     def voltage_steps(self):
@@ -1120,6 +1131,7 @@ class BE_Dataset:
             main_dataset (str, optional): main dataset where loop fits are conducted from. Defaults to None.
             h5_target_group (str, optional): path where the data will be saved to. Defaults to None.
             max_cores (int, optional): number of cores the fitter will use, -1 will use all cores. Defaults to None.
+            force (bool, optional): force the fitter to run even if the fit already exists. Defaults to False.
             h5_sho_targ_grp (str, optional): path where the SHO fits are saved. Defaults to None.
 
         Raises:

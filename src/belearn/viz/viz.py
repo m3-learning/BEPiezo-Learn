@@ -2528,7 +2528,8 @@ class Viz(BE_model_utils):
         # prints the figure
         if self.printer is not None and filename is not None:
             self.printer.savefig(fig, filename, label_figs=ax, style="b")
-            
+        
+        plt.close(fig)
         return fig
 
 
@@ -2864,5 +2865,32 @@ class Viz(BE_model_utils):
             self.printer.savefig(
                 fig, filename, size=6, loc="tl", inset_fraction=(0.2, 0.2)
             )
-        
+        plt.close(fig)
         return fig
+    
+    def random_hysteresis(self,
+                          raw_hysteresis_loop,
+                          lsqf_hysteresis_loop,
+                          voltage,
+                          filename,
+                          size,
+                          row, col, cycle):
+
+
+        fig, ax = subfigures(1, 1, size=size)
+
+        ax[0].plot(voltage.squeeze(),
+                    raw_hysteresis_loop[row, col, cycle, :].squeeze(), 'o', label="Raw Data")
+
+
+        ax[0].plot(voltage.squeeze(),
+                    lsqf_hysteresis_loop[row, col, cycle, :].squeeze(), 'r', label='LSQF')
+
+        ax[0].set_xlabel('Voltage (V)')
+        ax[0].set_ylabel('Amplitude (Arb. U.)')
+        set_sci_notation_label(ax[0], axis = "y", corner = 'top left')
+        ax[0].legend()
+
+        # prints the figure
+        if self.printer is not None and filename is not None:
+            self.printer.savefig(fig, filename, label_figs=ax, style="b")

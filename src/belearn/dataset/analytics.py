@@ -182,7 +182,6 @@ def get_SHO_components(
 
 
 def print_mse(
-    model_obj: Any,
     model_predictor: Any,
     model_utils: Any,
     data: Any,

@@ -225,7 +225,7 @@ class BatchTrainer:
     datafed_path: Optional[str] = None
     script_path: Optional[str] = None
     kwargs: Dict[str, Any] = field(default_factory=dict)
-
+    device: Optional[str] = None
     combinations: List[Any] = field(init=False)
 
     def __post_init__(self):
@@ -271,7 +271,7 @@ class BatchTrainer:
 
             model_name = f"SHO_{optimizer_name}_noise_{noise}_batch_size_{batch_size}_seed_{seed}"
             print(f"Working on combination: {model_name}")
-
+            #TODO: add device to complex postprocessor
             postprocessor = ComplexPostProcessor(self.dataset)
 
             model_ = Multiscale1DFitter(
@@ -291,7 +291,7 @@ class BatchTrainer:
                 model_basename="SHO_Fitter",
                 datafed_path=self.datafed_path,
                 script_path=self.script_path,
-                dataset_id=self.dataset.dataset_id,
+                dataset_id=None #self.dataset.dataset_id
             )
 
             # fits the model
@@ -300,6 +300,7 @@ class BatchTrainer:
                 batch_size=batch_size,
                 optimizer=optimizer,
                 epochs=epochs,
+                save_all=True,
                 write_CSV=self.write_CSV,
                 seed=seed,
                 basepath=self.basepath,
@@ -307,6 +308,7 @@ class BatchTrainer:
                 early_stopping_count=self.early_stopping_count,
                 early_stopping_time=self.early_stopping_time,
                 i=i,
+                noise_level=noise,
                 **self.kwargs,
             )
 

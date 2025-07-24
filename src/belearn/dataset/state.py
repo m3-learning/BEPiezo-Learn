@@ -12,6 +12,7 @@ import pandas as pd
 from belearn.functions.sho import SHO_nn
 from belearn.dataset.dataset import BE_Dataset
 from belearn.dataset.preprocessing import Preprocessing
+from belearn.dataset.analytics import print_mse
 from belearn.util.wrappers import context_manager_decorator
 from belearn.dataset.transformers import to_real_imag, to_complex
 from belearn.dataset.analytics import get_rankings
@@ -1311,6 +1312,31 @@ class State(Preprocessing):
                 hysteresis_data = hysteresis_data[:, :, 0:hysteresis_data.shape[2]//2, :]
         
         return hysteresis_data
+    
+    
+    
+    def get_selected_hysteresis(self,
+                                data,
+                                row=None,
+                                col=None,
+                                cycle=None):
+        """
+         Function that extracts a dataset or chooses a random dataset from the hysteresis loop
+
+        Returns:
+            np.array: get selected hysteresis loop
+        """
+
+        if row is None:
+            row = np.random.randint(0, data.shape[0], 1)
+
+        if col is None:
+            col = np.random.randint(0, data.shape[1], 1)
+
+        if cycle is None:
+            cycle = np.random.randint(0, data.shape[2], 1)
+
+        return (row, col, cycle)
 
     def ranked_mse(self, true, sample_a, other_samples=None):
         """
@@ -1378,3 +1404,22 @@ class State(Preprocessing):
 
             # prints the MSE
             print(f"{label} Mean Squared Error: {out:0.4f}")
+            
+            
+    def hysteresis_tensor(self, data):
+        """
+        hysteresis_tensor utility function that converts data to a tensor
+
+        Args:
+            data (np.array): data to convert to a tensor
+
+        Returns:
+            torch.tensor: tensor of the data
+        """
+        return torch.atleast_3d(torch.tensor(data.reshape(-1, self.get_hysteresis_voltage_len())))
+    
+    def print_hysteresis_mse(self, model, data, labels):
+
+        data = tuple(self.hysteresis_tensor(item) for item in data)
+
+        print_mse(model, model, data, labels,is_SHO=False)

@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any, Type, Callable
+from typing import List, Dict, Optional, Any, Type#, Callable
 
 from belearn.dataset.model_utils import BE_model_utils
 from belearn.util.wrappers import context_manager_decorator
@@ -8,16 +8,16 @@ from belearn.dataset.analytics import MSE
 from belearn.functions.sho import SHO_nn
 #from belearn.dataset.transformers import to_real_imag, to_complex
 
-from autophyslearn.spectroscopic.nn import Multiscale1DFitter, Model
-from autophyslearn.postprocessing.complex import ComplexPostProcessor
+#from autophyslearn.spectroscopic.nn import Multiscale1DFitter, Model
+#from autophyslearn.postprocessing.complex import ComplexPostProcessor
 
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 from matplotlib.ticker import ScalarFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from matplotlib.ticker import FuncFormatter
-from matplotlib.gridspec import GridSpec
+#from matplotlib.ticker import FuncFormatter
+#from matplotlib.gridspec import GridSpec
 
 import pandas as pd
 import seaborn as sns
@@ -28,10 +28,10 @@ import torch
 from torch import nn
 
 
-from contextlib import contextmanager
-import inspect
+#from contextlib import contextmanager
+#import inspect
 
-from m3util.ml.rand import set_seeds
+#from m3util.ml.rand import set_seeds
 
 from m3util.viz.layout import (
     layout_fig,
@@ -2364,6 +2364,8 @@ class Viz(BE_model_utils):
         # Save the figure if filename is provided
         if self.printer is not None and filename is not None:
             self.printer.savefig(fig, filename, label_figs=ax, style="b")
+            
+        plt.close(fig)
 
         return fig,list_ax_,list_ax1_
 
@@ -2754,10 +2756,9 @@ class Viz(BE_model_utils):
         fig_width=10.5,  # figure width in inches
         filename=None,
     ):
-        # # reshape data:
-        # if data.shape != 3:
+        
 
-        # calculates the size of the embedding image
+        # sets the size of the combined image and embedding subplots
         embedding_image_size = 60
 
         fig, axs = plt.subplots(
@@ -2781,9 +2782,6 @@ class Viz(BE_model_utils):
         self.hysteresis_maps_clims = []
 
        
-
-        string_add = 'a'
-
         for i in range(9):
             self.hysteresis_maps_clims.append(
                 (
@@ -2836,7 +2834,7 @@ class Viz(BE_model_utils):
                 cbar.set_label(self.hysteresis_maps_colorbar_labels[i])  # Add a label to the colorbar
 
                 
-             
+        # add labels to the subplots   
         labelfigs(axs[0,0],
         string_add='a',
         loc ='tl',
@@ -2850,7 +2848,7 @@ class Viz(BE_model_utils):
         inset_fraction=(0.2, 0.2)
         )
 
-        # Calculate the vertical position for the row titles
+        # Set the vertical position for the row titles
         title_y_positions = [0.85, 0.5]  # You may need to adjust these values
 
         # Set the titles for each row using fig.text
@@ -2894,3 +2892,6 @@ class Viz(BE_model_utils):
         # prints the figure
         if self.printer is not None and filename is not None:
             self.printer.savefig(fig, filename, label_figs=ax, style="b")
+            
+        plt.close(fig)
+        return fig

@@ -2538,7 +2538,7 @@ class Viz(BE_model_utils):
 
     # @static_dataset_decorator
     @context_manager_decorator
-    def violin_plot_comparison_SHO(self, state, model, X_data, params=None, filename=None, label="NN",figlabel = 'a', ax=None, loc='tr', inset_fraction=(0.05,0.05), style="b",**kwargs):
+    def violin_plot_comparison_SHO(self, state, model, X_data, params=None, filename=None, label="NN",figlabel = None, ax=None, loc='tr', inset_fraction=(0.05,0.05), style="b",**kwargs):
         """
         Generates a violin plot to compare true parameter values obtained from the SHO LSQF fit
         and predicted parameter values from a machine learning model.

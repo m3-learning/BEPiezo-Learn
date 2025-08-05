@@ -68,27 +68,6 @@ class State(Preprocessing):
     def get_state(self):
         return self.__dict__.copy()
     
-    # @property
-    # def get_state(self):
-    #     """
-    #     get_state function that return the dictionary of the current state
-
-    #     Returns:
-    #         dict: dictionary of the current state
-    #     """
-    #     return {
-    #         "raw_format": self.raw_format,
-    #         "fitter": self.fitter,
-    #         "scaled": self.scaled,
-    #         "output_shape": self.output_shape,
-    #         "measurement_state": self.measurement_state,
-    #         "LSQF_phase_shift": self.LSQF_phase_shift,
-    #         "NN_phase_shift": self.NN_phase_shift,
-    #         "noise": self.noise,
-    #         "loop_interpolated": self.loop_interpolated,
-    #     }
-    
-   
 
     def set_attributes(self, **kwargs):
         """
@@ -110,16 +89,6 @@ class State(Preprocessing):
             This will set `obj.attr1` to `value1`, `obj.attr2` to `value2`, and `obj.noise`
             to `some_noise_value` (while invoking any custom logic in the `noise` setter).
         """
-
-        # JGoddy: fixed this to use self__dict__
-        
-        # # Iterate over each key-value pair in kwargs and set the corresponding attribute
-        # for key, value in kwargs.items():
-        #     setattr(self, key, value)
-
-        # # If 'noise' is present in kwargs, this explicitly calls the setter for 'noise'
-        # if "noise" in kwargs:
-        #     self.noise = kwargs["noise"]
         
         self.__dict__.update(kwargs)
         
@@ -622,10 +591,32 @@ class State(Preprocessing):
 
     # TODO: add comments and docstring
     def out_state(self, data, out_state):
+        """
+        Converts the data to a magnitude spectrum if specified in the out_state dictionary.
+
+        Args:
+            data (any): The data to be converted.
+            out_state (dict): A dictionary containing the state configuration.
+
+        Returns:
+            tuple:
+                data (numpy.ndarray): The converted data.
+                labels (list): The labels for the data.
+        """
         # holds the raw state
         current_state = self.get_state
 
         def convert_to_mag(data):
+            """
+            Converts the data to a magnitude spectrum.
+
+            Args:
+                data (any): The data to be converted.
+
+            Returns:
+                numpy.ndarray: The converted data.
+            """
+
             data = to_complex(data, axis=1)
             data = self.raw_data_scaler.inverse_transform(data)
             data = [
@@ -645,6 +636,7 @@ class State(Preprocessing):
                     labels = ["Amplitude", "Phase"]
 
             elif "scaled" in out_state.keys():
+                
                 if out_state["scaled"] == False:
                     data = self.raw_data_scaler.inverse_transform(data)
                     labels = ["Scaled " + s for s in labels]
@@ -698,6 +690,9 @@ class State(Preprocessing):
         This method creates a new waveform by repeating and tiling the elements of the
         `hysteresis_waveform` and `be_waveform` arrays, respectively. Each element of
         the hysteresis waveform is combined with all elements of the BE waveform.
+
+        Args:
+            None
 
         Returns:
             np.array:
@@ -780,8 +775,6 @@ class State(Preprocessing):
         Returns:
             int: The number of voltage steps corresponding to the current measurement state.
         """
-
-        # JGODDY commented out the if statement and replaced with voltage_step = self.voltage_steps
 
         # Check if the current measurement state is set to 'all'
         if self.measurement_state == "all":

@@ -39,8 +39,8 @@ class State(Preprocessing):
                 NN_phase_shift: Optional[float] = None,
                 verbose: bool = False,
                 resampled: bool = False,
-                resampled_bins =  None, #Optional[int] = field(default=None, init=False),
-                resampled_data = None, #Dict[str, Any] = field(default_factory=dict, init=False),
+                resampled_bins =  None,
+                resampled_data = None, 
             ):
         #super().__init__()
         super().__init__(resampled_bins=resampled_bins, resampled_data=resampled_data)
@@ -57,11 +57,6 @@ class State(Preprocessing):
         self.NN_phase_shift = NN_phase_shift
         self.verbose = verbose
         self.resampled = resampled
-        # self.resampled_bins = resampled_bins
-        # self.resampled_data = resampled_data
-        
-        
-    #self.set_raw_data()
 
     
     @property
@@ -245,9 +240,6 @@ class State(Preprocessing):
                 :, [voltage_step], :
             ]
         else:
-            # JGoddy commented out the h5py file opening because
-            # h5_f was not being used in the code
-            #with h5py.File(self.file, "r+") as h5_f:
             return self.resampled_data[self.dataset_name][:]
 
    
@@ -264,7 +256,7 @@ class State(Preprocessing):
 
         # only does this if getting the full dataset, will reduce to off and on state
         
-        # JGoddy added these if statements because for the resampled data, the shape is (1,1,3600,384,165)
+        # these if statements are because for the resampled data, the shape is (1,1,3600,384,165)
         # so the indexing is different
         if self.measurement_state == "all":
             data = data
@@ -403,6 +395,17 @@ class State(Preprocessing):
             return data 
 
     def get_bins_and_freq_bins(self):
+        """
+        get_bins_and_freq_bins function to get the bins and frequency bins
+
+        Args:
+            None
+
+        Returns:
+            bins (int): the number of bins
+            frequency_bins (np.array): the frequency bins
+        """
+         
         if self.resampled:
             bins = self.resampled_bins
             frequency_bins = self.get_freq_values(bins)
@@ -423,8 +426,44 @@ class State(Preprocessing):
         fit_type="SHO",
         **kwargs,
     ):
+        """
+        get_best_median_worst function to get the best, median, and worst data
+
+        Args:
+            true_state (any): The true state of the data.
+            prediction (any, optional): The predicted state of the data. Defaults to None   .
+            out_state (dict, optional): The output state of the data. Defaults to None.
+            n (int, optional): The number of data to get. Defaults to 1.
+            SHO_results (bool, optional): Whether to get the SHO results. Defaults to False.
+            index (int, optional): The index of the data. Defaults to None.
+            compare_state (any, optional): The state to compare the data to. Defaults to None.
+            fit_type (str, optional): The fit type of the data. Defaults to "SHO".
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            tuple:
+                d1 (numpy.ndarray): First set of reconstruction data.
+                d2 (numpy.ndarray): Second set of reconstruction data.
+                x1 (numpy.ndarray): First set of voltage values.
+                x2 (numpy.ndarray): Second set of voltage values.
+                labels (list): Labels for the data.
+                full_indices (numpy.ndarray): Indices of the full data.
+                index1 (numpy.ndarray): Indices of the set of best, median, and worst data.
+                mse1 (numpy.ndarray): MSE of the set of best, median, and worst data.
+                params (numpy.ndarray): Parameters of the set of best, median, and worst data (if SHO_results is True).
+                
+        """
+        
         def data_converter(data):
-            # converts to a standard form which is a list
+            """
+            data_converter function to convert the data to a standard form which is a list of real and imaginary parts as numpy arrays
+
+            Args:
+                data (any): The data to be converted.
+
+            Returns:
+                list: A list of real and imaginary parts as numpy arrays.
+            """
             data = to_real_imag(data)
 
             try:
@@ -487,7 +526,7 @@ class State(Preprocessing):
                 # sets the phase shift to zero for parameters
                 # This is important if doing the fits because the fits will be wrong if the phase is shifted.
                 self.NN_phase_shift = 0
-                self.LSQF_phase_shift = 0  # ********
+                self.LSQF_phase_shift = 0 
 
                 data = self.to_nn(true)
 
@@ -564,7 +603,6 @@ class State(Preprocessing):
                     n=n,
                     fit_type="hysteresis",
                 )
-            # index1, mse1, d1, d2 = get_rankings(data, pred_data.reshape(60,60,4,96), n=n)
 
         d1, labels = self.out_state(d1, out_state)
         d2, labels = self.out_state(d2, out_state)
@@ -589,7 +627,6 @@ class State(Preprocessing):
         else:
             return (d1, d2, x1, x2, labels, full_indices, index1, mse1)
 
-    # TODO: add comments and docstring
     def out_state(self, data, out_state):
         """
         Converts the data to a magnitude spectrum if specified in the out_state dictionary.
@@ -815,16 +852,11 @@ class State(Preprocessing):
                     (num_pix, num_voltage_steps, SHO_params), depending on the dataset configuration.
         """
 
-        # Note: Removed pixel and voltage step indexing here
 
         # If a neural network model is not provided, use the Least Squares Fitting (LSQF) method
         if model is None:
-            # Open the HDF5 file for reading the SHO fitting data
-            
-            # JGoddy commented out the h5py file opening because
-            # h5_f was not being used in the code
-            #with h5py.File(self.file, "r+") as h5_f:
-                # If a state is provided, set the dataset attributes accordingly
+           
+            # If a state is provided, set the dataset attributes accordingly
             if state is not None:
                 self.set_attributes(**state)
 
@@ -982,20 +1014,6 @@ class State(Preprocessing):
     
     ##### Decorators #####
 
-    
-    
-    # def context_manager_decorator(func):
-    #     """Decorator to temporarily modify an object's state for the duration of a method call."""
-    #     @wraps(func)
-    #     def wrapper(self, *args, **kwargs):
-    #         original_state = self.get_state.copy()  # Capture the original state
-
-    #         try:
-    #             return func(self, *args, **kwargs)  # Call the method with the modified state
-    #         finally:
-    #             self.set_attributes(**original_state)  # Restore the original state
-
-    #     return wrapper
 
     def static_dataset_decorator(func):
         """
@@ -1412,6 +1430,17 @@ class State(Preprocessing):
         return torch.atleast_3d(torch.tensor(data.reshape(-1, self.get_hysteresis_voltage_len())))
     
     def print_hysteresis_mse(self, model, data, labels):
+        """
+        Prints the Mean Squared Error (MSE) between the true data and the predicted data.
+
+        Args:
+            model (torch.nn.Module): The model used for prediction.
+            data (list): A list of numpy arrays containing the true data.
+            labels (list): A list of labels for the data.
+
+        Returns:
+            None
+        """
 
         data = tuple(self.hysteresis_tensor(item) for item in data)
 

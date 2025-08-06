@@ -16,6 +16,9 @@ from typing import Optional, Dict, Any
 import traceback
 from sklearn.preprocessing import StandardScaler
 
+import pyUSID as usid
+
+
 class Preprocessing(BE_Dataset):
 
     
@@ -57,19 +60,14 @@ class Preprocessing(BE_Dataset):
         """
 
         
-        # JGoddy commented out the h5py file opening because
-        # h5_f was not being used in the code
-
-        # Open the HDF5 file for reading and writing
-        #with h5py.File(self.file, "r+") as h5_f:
-            # Check if resampling is needed by comparing the number of bins
-            
-        # self.num_bins is a property of the dataset_new.py file
+        
+        # Check if resampling is needed by comparing the number of bins    
+        # self.num_bins is a property of the BE_Dataset class inherited by this Preprocessing class
         if self.resampled_bins != self.num_bins:
             # Loop through each dataset to perform resampling
             
             # self.raw_datasets and self.raw_data_reshaped are defined by 
-            # the set_raw_data function in dataset_new.py
+            # the set_raw_data function in the BE_Dataset class
             for data in self.raw_datasets:
                 # Resample the data using the provided resampler function
                 
@@ -79,19 +77,21 @@ class Preprocessing(BE_Dataset):
                 )
 
                 # Reshape the resampled data to match the original dimensions
-                
-                
-                # num_pix, voltage_steps, resampled_bins are properties of the dataset_new.py file
+                # num_pix, voltage_steps, resampled_bins are properties of the BE_Dataset class
                 self.resampled_data[data] = resampled_.reshape(
                     self.num_pix, self.voltage_steps, self.resampled_bins
                 )
         else:
             # If no resampling is needed, use the original reshaped data
+            # self.SHO_LSQF_data is a property of the BE_Dataset class
             self.resampled_data = self.SHO_LSQF_data
 
         # Write the resampled data to the specified location within the HDF5 file
         if kwargs.get("basepath"):
-            self.data_writer(kwargs.get("basepath"), save_loc, resampled_)
+            # JGoddy changed the function to write to the file because data_writer was not defined 
+            # but did NOT test the write_main_dataset function
+            usid.hdf_utils.write_main_dataset(self.file, kwargs.get("basepath"), save_loc, resampled_)
+            #self.data_writer(kwargs.get("basepath"), save_loc, resampled_)
 
     def resampler(self, data, axis=2):
         """
@@ -118,11 +118,6 @@ class Preprocessing(BE_Dataset):
                 being undefined or incorrectly specified.
         """
 
-        # JGoddy commented out the h5py file opening because
-        # h5_f was not being used in the code
-        
-        # Open the HDF5 file for reading and writing
-        # with h5py.File(self.file, "r+") as h5_f:
         try:
             # Perform the resampling operation on the data
             return resample(
@@ -163,7 +158,6 @@ class Preprocessing(BE_Dataset):
 
         return new_y
    
-    #@static_state_decorator
     @context_manager_decorator
     def SHO_Scaler(self, noise=0):
         """
@@ -187,8 +181,7 @@ class Preprocessing(BE_Dataset):
         self.SHO_scaler = StandardScaler()
 
         # Retrieve the SHO least squares fit (LSQF) data and reshape it for scaling
-        # I probably have to reorganize stuff because SHO_LSQF is in State.py, which inherits preprocessing.py
-        # this might be confusing
+        # SHO_LSQF is a property of the State class, which inherits from the Preprocessing class
         data = self.SHO_LSQF().reshape(-1, 4)
 
         # Fit the scaler to the SHO data
@@ -204,17 +197,16 @@ class Preprocessing(BE_Dataset):
 
     def SHO_preprocessing(self):
         """
-        SHO_preprocessing conducts the preprocessing on the SHO fit results
+        SHO_preprocessing conducts the preprocessing on the SHO fit results. It extracts the raw data and reshapes it.
         """
-
-        # extract the raw data and reshapes is
-        # in dataset_new.py for now because it reads the data from the h5 file
-       # self.set_raw_data() 
+      
        
        # first get the raw data directly from the h5 file
+       # set_SHO_LSQF is a property of the BE_Dataset class, which is inherited by the Preprocessing class
         self.set_SHO_LSQF()
 
-        # # resamples the data if necessary
+        # resamples the data if necessary
+        # set_raw_data_resampler is a property of the Preprocessing class
         self.set_raw_data_resampler()
 
         # computes the scalar on the raw data
@@ -222,37 +214,8 @@ class Preprocessing(BE_Dataset):
         
         # computes the SHO scaler
         self.SHO_Scaler(noise=self.noise)
-
-        # try:
-        #     # gets the LSQF results
-        #     self.set_SHO_LSQF()
-
-        #     # computes the SHO scaler
-        #     self.SHO_Scaler()
-        # except Exception as e:
-        #     print("SHO_preprocessing failed with exception:")
-        #     print(e)
-        #     print("*"*20)
-        #     print("Traceback:")
-        #     print(traceback.format_exc())
-        #     #raise e
             
 
-    def set_preprocessing(self):
-        """
-        set_preprocessing searches the dataset to see what preprocessing is required.
-        """
-
-        # does preprocessing for the SHO_fit results
-        if in_list(self.tree, "*SHO_Fit*"):
-            self.SHO_preprocessing()
-        else:
-            Warning("No SHO fit found")
-
-        # does preprocessing for the loop fit results
-        if in_list(self.tree, "*Fit-Loop_Fit*"):
-            self.loop_fit_preprocessing()
-        
         
     @property
     def hysteresis_scaler(self):
@@ -290,7 +253,25 @@ class Preprocessing(BE_Dataset):
             print("*"*10)
             print("Traceback:")
             print(traceback.format_exc())
-            print("*"*20)        
+            print("*"*20)
+            
+            
+    def set_preprocessing(self):
+        """
+        set_preprocessing searches the dataset to see what preprocessing is required.
+        """
+
+        # does preprocessing for the SHO_fit results
+        if in_list(self.tree, "*SHO_Fit*"):
+            self.SHO_preprocessing()
+        else:
+            Warning("No SHO fit found")
+
+        # does preprocessing for the loop fit results
+        if in_list(self.tree, "*Fit-Loop_Fit*"):
+            self.loop_fit_preprocessing()
+                
+                    
                 
     def raw_data(self, pixel=None, voltage_step=None):
         """
@@ -314,12 +295,8 @@ class Preprocessing(BE_Dataset):
             data = obj.raw_data(pixel=5, voltage_step=10)
             This will extract the data for the 5th pixel and the 10th voltage step.
         """
-        # JGoddy commented out the h5py file opening because
-        # h5_f was not being used in the code
         
-        # Open the HDF5 file in read+write mode
-        # with h5py.File(self.file, "r+") as h5_f:
-            # Extract data based on provided pixel and voltage_step indices
+        # Extract data based on provided pixel and voltage_step indices
         if pixel is not None and voltage_step is not None:
             # Specific pixel and voltage_step provided
             return self.raw_data_reshaped[self.dataset_name][[pixel], :, :][
@@ -328,79 +305,6 @@ class Preprocessing(BE_Dataset):
         else:
             # Return the entire dataset if pixel or voltage_step is not specified
             return self.raw_data_reshaped[self.dataset_name][:]
-        
-        
-    # def to_complex(self, data, axis=None):
-    #     """
-    #     to_complex function that converts data to complex
-
-    #     Args:
-    #         data (any): data to convert
-    #         axis (int, optional): axis which the data is structured. Defaults to None.
-
-    #     Returns:
-    #         np.array: complex array of the BE response
-    #     """
-
-    #     # converts to an array
-    #     if type(data) == list:
-    #         data = np.array(data)
-
-    #     # if the data is already in complex form return
-    #     if self.is_complex(data):
-    #         return data
-
-    #     # if axis is not provided take the last axis
-    #     if axis is None:
-    #         axis = data.ndim - 1
-
-    #     return np.take(data, 0, axis=axis) + 1j * np.take(data, 1, axis=axis)
-
-    # def is_complex(self, data):
-    #     """
-    #     is_complex function to check if data is complex. If not complex makes it a complex number
-
-    #     Args:
-    #         data (any): input data
-
-    #     Returns:
-    #         any: array or tensor as a complex number
-    #     """
-
-    #     data = data[0]
-
-    #     if type(data) == torch.Tensor:
-    #         complex_ = data.is_complex()
-
-    #     if type(data) == np.ndarray:
-    #         complex_ = np.iscomplex(data)
-    #         complex_ = complex_.any()
-
-    #     return complex_
-   
-    # def to_real_imag(self, data):
-    #     """
-    #     Extracts the real and imaginary components from band excitation (BE) data.
-
-    #     This function takes in BE data, which may be in either a NumPy array or a PyTorch
-    #     tensor format, converts it to its complex form, and then separates the real and
-    #     imaginary parts.
-
-    #     Args:
-    #         data (np.array or torch.Tensor): BE data, either as a NumPy array or a PyTorch tensor.
-
-    #     Returns:
-    #         list: A list containing two NumPy arrays: the first array represents the real
-    #             components, and the second array represents the imaginary components
-    #             of the BE response.
-    #     """
-
-    #     # Convert the data to its complex form using the to_complex method from the BE_Dataset class.
-    #     data = self.to_complex(data)
-
-    #     # Extract and return the real and imaginary components as a list of NumPy arrays.
-    #     return [np.real(data), np.imag(data)]
-
         
     
     def to_nn(self, data):

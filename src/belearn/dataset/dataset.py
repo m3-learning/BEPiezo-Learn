@@ -141,15 +141,6 @@ class BE_Dataset:
         """
         self.get_dataset(self.noise)
 
-        # TODO: remove this
-        # The following lines are commented out as they are not currently in use.
-        # They are intended for initializing resampled_bins and resampled_data attributes.
-        # self.resampled_bins = self.resampled_bins
-        # self.resampled_data = self.resampled_data
-        # # Initialize resampled_bins if it's None
-        # if self.resampled_bins is None:
-        #     self.resampled_bins = self.num_bins
-
     def get_dataset(self, noise: int):
         """
         Determines the current dataset name based on the noise level.
@@ -307,7 +298,7 @@ class BE_Dataset:
 
             # JGODDY comments this out for now
             # I need the number of cycles to be 4 not 2 (so the stuff below) 
-            # for the hysteresis model not I need it to be 2 for the SHO model
+            # for the hysteresis model but I need it to be 2 for the SHO model
             # so I think I will just change it elsewhere (see LSQF_hysteresis_params)
 
             # Check if the measurement was performed 'in and out-of-field'
@@ -600,7 +591,7 @@ class BE_Dataset:
                     compression="gzip",
                 )  # Compression type for storage
 
-    # TODO: move to SHOFitter class
+    # TODO: move to SHOFitter class if refactor code to use SHOFitter class
     def SHO_fit_all(self, *args: Any, **kwargs: Any):
         """
         Fits the Simple Harmonic Oscillator (SHO) model to all provided datasets.
@@ -709,7 +700,7 @@ class BE_Dataset:
             # Check if the dataset is cKPFMData and set relevant parameters
             self.check_ckpfm(parm_dict, expt_type)
 
-            # TODO: JGoddy doesn't remember why this code in commented out
+            # TODO: JGoddy doesn't remember why this code is commented out
             # Handle non-BELineData types
             # if expt_type != "BELineData":
             #     vs_mode = usid.hdf_utils.get_attr(h5_meas_grp, "VS_mode")
@@ -952,7 +943,7 @@ class BE_Dataset:
             except KeyError as e:
                 raise KeyError(f"Dataset or path not found in HDF5 file: {e}")
 
-    # JGoddy put this function here because it relates the the h5 files
+    # JGoddy put this function here because it relates to the h5 files
     # but it doesn't actually use the h5 file so maybe it should be elsewhere?
     def get_loop_path(self):
         """
@@ -995,7 +986,7 @@ class BE_Dataset:
             np.array: output hysteresis data, bias vector for the hysteresis loop
         """
 
-        # todo: can replace this to make this much nicer to get the data. Too many random transforms
+        # TODO: can replace this to make this much nicer to get the data. Too many random transforms
 
         if measurement_state is not None:
             self.measurement_state = measurement_state
@@ -1212,6 +1203,16 @@ class BE_Dataset:
         return h5_loop_fit, h5_loop_group
 
     def get_main_dataset(self, main_dataset, h5_file):
+        """
+        get_main_dataset gets the main dataset from the h5 file
+
+        Args:
+            main_dataset (str, optional): main dataset name where loop fits are conducted from. Defaults to None.
+            h5_file (h5py.File): h5 file where the data is saved.
+
+        Returns:
+            h5_main (h5py.Dataset): main dataset from the h5 file
+        """
         if main_dataset is None:
             h5_main = usid.hdf_utils.find_dataset(h5_file, "Raw_Data")[0]
         else:
